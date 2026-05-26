@@ -1,0 +1,30 @@
+# Development artifacts
+_create-tauri-app/
+_tauri-icons/
+node_modules/
+dist/
+build/
+.svelte-kit/
+
+# Rust / Tauri
+src-tauri/target/
+src-tauri/gen/
+*.pdb
+
+# OS / Editor
+.DS_Store
+Thumbs.db
+*.log
+.idea/
+.vscode/
+*.swp
+
+# Environment & secrets (never commit)
+.env
+.env.*
+*.pem
+*.key
+
+# Test / coverage
+coverage/
+.nyc_output/
