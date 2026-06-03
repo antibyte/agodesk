@@ -95,15 +95,20 @@
     offset: number,
   ): void {
     const { waveform, energy, speaking } = metrics;
-    const amplitude = height * amplitudeScale * (speaking ? 0.35 + energy * 0.75 : 0.04 + energy * 0.12);
+    const amplitude = height * amplitudeScale * (speaking ? 0.38 + energy * 0.72 : 0.035 + energy * 0.1);
 
     ctx.beginPath();
     ctx.lineWidth = lineWidth;
     ctx.strokeStyle = rgba(color, alpha);
-    ctx.shadowBlur = speaking ? 10 + energy * 18 : 4;
-    ctx.shadowColor = rgba(color, alpha * 0.8);
+    ctx.shadowBlur = speaking ? 12 + energy * 20 : 5;
+    ctx.shadowColor = rgba(color, alpha * 0.85);
 
-    for (let x = 0; x <= width; x += 2) {
+    // Smoother curve using quadratic segments for organic voice look
+    const step = Math.max(3, Math.floor(width / 90));
+    let prevX = 0;
+    let prevY = centerY + offset;
+
+    for (let x = 0; x <= width; x += step) {
       const position = x / width;
       const sampleIndex = Math.min(
         waveform.length - 1,
@@ -112,14 +117,20 @@
       const sample = waveform[sampleIndex] ?? 0;
       const neighbor =
         waveform[Math.min(waveform.length - 1, sampleIndex + 1)] ?? sample;
-      const smooth = sample * 0.65 + neighbor * 0.35;
-      const envelope = Math.sin(position * Math.PI);
+      const smooth = sample * 0.6 + neighbor * 0.4;
+      const envelope = Math.sin(position * Math.PI) * (0.92 + Math.sin(position * 6) * 0.08);
       const y = centerY + offset + smooth * amplitude * envelope;
 
       if (x === 0) {
         ctx.moveTo(x, y);
+        prevX = x;
+        prevY = y;
       } else {
-        ctx.lineTo(x, y);
+        const cx = (prevX + x) / 2;
+        const cy = (prevY + y) / 2;
+        ctx.quadraticCurveTo(prevX, prevY, cx, cy);
+        prevX = x;
+        prevY = y;
       }
     }
     ctx.stroke();
@@ -146,11 +157,11 @@
     let pulseStrength = 0;
     let lastEnergy = 0;
 
-    const particles = Array.from({ length: 24 }, (_, index) => ({
-      angle: (index / 24) * Math.PI * 2,
-      radius: 0.16 + (index % 5) * 0.05,
-      size: 1 + (index % 4) * 0.6,
-      wobble: index * 0.41,
+    const particles = Array.from({ length: 28 }, (_, index) => ({
+      angle: (index / 28) * Math.PI * 2,
+      radius: 0.155 + (index % 6) * 0.048,
+      size: 0.9 + (index % 5) * 0.55,
+      wobble: index * 0.39,
     }));
 
     function renderFrame(): void {
@@ -202,50 +213,86 @@
       const voiceDrive = speaking ? energy : energy * 0.25;
       const globalAlpha = fade * (0.35 + voiceDrive * 0.55);
 
-      const blobs = [
-        { x: 0.24, y: 0.3, color: accent, band: bass },
-        { x: 0.74, y: 0.36, color: secondary, band: mid },
-        { x: 0.48, y: 0.7, color: danger, band: mid * 0.7 + bass * 0.3 },
-        { x: 0.36, y: 0.56, color: accent, band: treble },
+      // Localized glowing orbs (more performant + beautiful than full-screen washes)
+      const orbs = [
+        { x: 0.22, y: 0.28, color: accent, band: bass, size: 0.32 },
+        { x: 0.78, y: 0.34, color: secondary, band: mid, size: 0.29 },
+        { x: 0.5, y: 0.72, color: danger, band: mid * 0.65 + bass * 0.35, size: 0.35 },
+        { x: 0.32, y: 0.52, color: accent, band: treble, size: 0.26 },
       ];
 
-      for (const blob of blobs) {
-        const bandPush = speaking ? blob.band * 0.14 : blob.band * 0.03;
-        const bx = blob.x * width + (metrics.waveform[8] ?? 0) * width * 0.035;
-        const by = blob.y * height + (metrics.waveform[24] ?? 0) * height * 0.04;
-        const radius =
-          Math.max(width, height) * (0.28 + bandPush + voiceDrive * 0.14);
+      for (const orb of orbs) {
+        const bandPush = speaking ? orb.band * 0.11 : orb.band * 0.025;
+        const ox = orb.x * width + (metrics.waveform[6] ?? 0) * width * 0.03;
+        const oy = orb.y * height + (metrics.waveform[22] ?? 0) * height * 0.035;
+        const radius = Math.min(width, height) * (orb.size + bandPush + voiceDrive * 0.11);
 
-        const gradient = ctx.createRadialGradient(bx, by, 0, bx, by, radius);
-        gradient.addColorStop(0, rgba(blob.color, (0.1 + blob.band * 0.18) * globalAlpha));
-        gradient.addColorStop(0.5, rgba(blob.color, (0.04 + blob.band * 0.08) * globalAlpha));
-        gradient.addColorStop(1, rgba(blob.color, 0));
+        const grad = ctx.createRadialGradient(ox, oy, radius * 0.1, ox, oy, radius);
+        grad.addColorStop(0, rgba(orb.color, (0.22 + orb.band * 0.25) * globalAlpha));
+        grad.addColorStop(0.55, rgba(orb.color, (0.07 + orb.band * 0.12) * globalAlpha));
+        grad.addColorStop(1, rgba(orb.color, 0));
 
-        ctx.fillStyle = gradient;
-        ctx.fillRect(0, 0, width, height);
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.arc(ox, oy, radius, 0, Math.PI * 2);
+        ctx.fill();
       }
 
-      const barCount = spectrum.length;
+      // Central voice core / orb - reacts strongly to energy + bass
+      const coreX = centerX + (metrics.waveform[12] ?? 0) * 18;
+      const coreY = centerY + (metrics.waveform[28] ?? 0) * 12;
+      const coreR = Math.min(width, height) * (0.065 + bass * 0.07 + voiceDrive * 0.09);
+      const coreGrad = ctx.createRadialGradient(coreX, coreY, coreR * 0.2, coreX, coreY, coreR * 1.6);
+      coreGrad.addColorStop(0, rgba(accent, (0.35 + energy * 0.3) * globalAlpha));
+      coreGrad.addColorStop(0.5, rgba(secondary, (0.12 + mid * 0.2) * globalAlpha));
+      coreGrad.addColorStop(1, rgba(danger, 0));
+      ctx.fillStyle = coreGrad;
+      ctx.beginPath();
+      ctx.arc(coreX, coreY, coreR * 1.6, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Inner bright core
+      const innerGrad = ctx.createRadialGradient(coreX, coreY, 0, coreX, coreY, coreR * 0.7);
+      innerGrad.addColorStop(0, rgba("#fff", 0.18 * globalAlpha));
+      innerGrad.addColorStop(1, rgba(accent, 0.06 * globalAlpha));
+      ctx.fillStyle = innerGrad;
+      ctx.beginPath();
+      ctx.arc(coreX, coreY, coreR * 0.7, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Beautiful reactive spectrum bars (bottom + subtle top mirror)
+      const barCount = Math.min(spectrum.length, 48); // slightly fewer for perf + elegance
       const barWidth = width / barCount;
       for (let index = 0; index < barCount; index += 1) {
         const raw = spectrum[index] ?? 0;
-        const barEnergy = raw * (speaking ? 0.55 + energy * 0.85 : 0.08 + energy * 0.2);
-        const barHeight = barEnergy * height * 0.32;
-        const x = index * barWidth + barWidth * 0.12;
+        const barEnergy = raw * (speaking ? 0.58 + energy * 0.82 : 0.07 + energy * 0.18);
+        const barHeight = barEnergy * height * 0.29;
+        const x = index * barWidth + barWidth * 0.18;
+        const bw = barWidth * 0.64;
 
-        const bottomGradient = ctx.createLinearGradient(0, height, 0, height - barHeight);
-        bottomGradient.addColorStop(0, rgba(accent, 0));
-        bottomGradient.addColorStop(0.4, rgba(accent, 0.08 * globalAlpha));
-        bottomGradient.addColorStop(1, rgba(danger, (0.12 + raw * 0.28) * globalAlpha));
-        ctx.fillStyle = bottomGradient;
-        ctx.fillRect(x, height - barHeight, barWidth * 0.76, barHeight);
+        // Bottom bars with nice gradient + "cap"
+        const bottomGrad = ctx.createLinearGradient(0, height, 0, height - barHeight);
+        bottomGrad.addColorStop(0, rgba(accent, 0.02 * globalAlpha));
+        bottomGrad.addColorStop(0.35, rgba(danger, (0.09 + raw * 0.22) * globalAlpha));
+        bottomGrad.addColorStop(1, rgba(danger, (0.18 + raw * 0.32) * globalAlpha));
+        ctx.fillStyle = bottomGrad;
+        ctx.fillRect(x, height - barHeight, bw, barHeight);
 
-        const topHeight = barHeight * (0.45 + treble * 0.35);
-        const topGradient = ctx.createLinearGradient(0, 0, 0, topHeight);
-        topGradient.addColorStop(0, rgba(secondary, (0.08 + raw * 0.22) * globalAlpha));
-        topGradient.addColorStop(1, rgba(accent, 0));
-        ctx.fillStyle = topGradient;
-        ctx.fillRect(x, 0, barWidth * 0.76, topHeight);
+        // Rounded-ish cap on top of bar
+        if (barHeight > 3) {
+          ctx.beginPath();
+          ctx.arc(x + bw / 2, height - barHeight, bw * 0.32, 0, Math.PI * 2);
+          ctx.fillStyle = rgba(danger, (0.22 + raw * 0.25) * globalAlpha);
+          ctx.fill();
+        }
+
+        // Subtle top "reflection" / treble sparkles
+        const topH = Math.max(2, barHeight * (0.38 + treble * 0.42));
+        const topGrad = ctx.createLinearGradient(0, 0, 0, topH);
+        topGrad.addColorStop(0, rgba(secondary, (0.06 + raw * 0.18) * globalAlpha));
+        topGrad.addColorStop(1, rgba(accent, 0.0));
+        ctx.fillStyle = topGrad;
+        ctx.fillRect(x, 0, bw, topH);
       }
 
       drawVoiceWaveform(ctx, metrics, width, height, centerY, danger, 0.42 * globalAlpha, 0.22, 3.2, 0);
@@ -274,38 +321,69 @@
         (metrics.waveform[64] ?? 0) * height * 0.012,
       );
 
+      // Particles + constellation connections for premium audio-reactive look
+      const particlePositions: Array<{ x: number; y: number; size: number }> = [];
       for (const particle of particles) {
-        const motion = speaking ? 0.004 + mid * 0.018 + treble * 0.012 : 0.0008;
+        const motion = speaking ? 0.0038 + mid * 0.016 + treble * 0.011 : 0.0007;
         particle.angle +=
           motion *
           (1 +
-            (metrics.waveform[Math.floor(particle.wobble) % metrics.waveform.length] ?? 0));
+            (metrics.waveform[Math.floor(particle.wobble) % metrics.waveform.length] ?? 0) * 0.6);
         const orbitRadius =
           Math.min(width, height) *
-          (particle.radius + bass * (speaking ? 0.08 : 0.015) + energy * (speaking ? 0.05 : 0.01));
+          (particle.radius + bass * (speaking ? 0.09 : 0.012) + energy * (speaking ? 0.055 : 0.012));
         const px = centerX + Math.cos(particle.angle) * orbitRadius;
         const py =
           centerY +
-          Math.sin(particle.angle * 1.12 + particle.wobble) * orbitRadius * 0.68;
-        const size = particle.size + voiceDrive * (speaking ? 5 : 1.2);
+          Math.sin(particle.angle * 1.15 + particle.wobble * 0.7) * orbitRadius * 0.65;
+        const size = particle.size + voiceDrive * (speaking ? 4.5 : 1.1);
 
-        const glow = ctx.createRadialGradient(px, py, 0, px, py, size * 3.5);
-        glow.addColorStop(0, rgba(danger, (0.2 + mid * 0.45) * globalAlpha));
-        glow.addColorStop(0.4, rgba(accent, (0.08 + treble * 0.18) * globalAlpha));
+        particlePositions.push({ x: px, y: py, size });
+
+        const glow = ctx.createRadialGradient(px, py, 0, px, py, size * 3.2);
+        glow.addColorStop(0, rgba(danger, (0.24 + mid * 0.42) * globalAlpha));
+        glow.addColorStop(0.45, rgba(accent, (0.09 + treble * 0.16) * globalAlpha));
         glow.addColorStop(1, rgba(accent, 0));
         ctx.fillStyle = glow;
         ctx.beginPath();
-        ctx.arc(px, py, size * 3.5, 0, Math.PI * 2);
+        ctx.arc(px, py, size * 3.2, 0, Math.PI * 2);
         ctx.fill();
       }
 
-      if (pulseStrength > 0.06 && speaking) {
-        const ringRadius = pulseRing * Math.min(width, height) * 0.48;
-        ctx.beginPath();
-        ctx.arc(centerX, centerY, ringRadius, 0, Math.PI * 2);
-        ctx.strokeStyle = rgba(danger, pulseStrength * 0.32 * globalAlpha);
-        ctx.lineWidth = 1.5 + pulseStrength * 2.5;
-        ctx.stroke();
+      // Draw elegant constellation lines between nearby particles
+      if (speaking || energy > 0.12) {
+        ctx.lineWidth = 0.9;
+        for (let i = 0; i < particlePositions.length; i += 1) {
+          const p1 = particlePositions[i];
+          for (let j = i + 1; j < particlePositions.length; j += 3) {  // every 3rd for perf
+            const p2 = particlePositions[j];
+            const dx = p1.x - p2.x;
+            const dy = p1.y - p2.y;
+            const dist = Math.hypot(dx, dy);
+            const maxDist = Math.min(width, height) * 0.22;
+            if (dist > 0 && dist < maxDist) {
+              const lineAlpha = (1 - dist / maxDist) * (0.18 + voiceDrive * 0.22) * globalAlpha;
+              ctx.strokeStyle = rgba(accent, lineAlpha * 0.7);
+              ctx.beginPath();
+              ctx.moveTo(p1.x, p1.y);
+              ctx.lineTo(p2.x, p2.y);
+              ctx.stroke();
+            }
+          }
+        }
+      }
+
+      if (pulseStrength > 0.05 && speaking) {
+        // Multiple elegant expanding rings on voice peaks
+        for (let r = 0; r < 2; r += 1) {
+          const ringR = (pulseRing + r * 0.09) * Math.min(width, height) * 0.47;
+          ctx.beginPath();
+          ctx.arc(centerX, centerY, ringR, 0, Math.PI * 2);
+          const ringA = pulseStrength * (0.28 - r * 0.09) * globalAlpha;
+          ctx.strokeStyle = rgba(danger, ringA);
+          ctx.lineWidth = 1.8 + pulseStrength * (2.2 - r * 0.6);
+          ctx.stroke();
+        }
       }
 
       const vignette = ctx.createRadialGradient(
@@ -406,29 +484,31 @@
 
   .speech-bg-shimmer {
     position: absolute;
-    inset: -40% -20%;
+    inset: -38% -18%;
     background: conic-gradient(
-      from 0deg at 50% 50%,
+      from 12deg at 50% 48%,
       transparent 0deg,
-      color-mix(in srgb, var(--color-accent) 16%, transparent) 70deg,
-      transparent 140deg,
-      color-mix(in srgb, var(--color-danger) 12%, transparent) 210deg,
-      transparent 280deg,
-      color-mix(in srgb, var(--color-accent) 10%, transparent) 330deg,
+      color-mix(in srgb, var(--color-accent) 22%, transparent) 62deg,
+      transparent 125deg,
+      color-mix(in srgb, var(--color-danger) 18%, transparent) 195deg,
+      transparent 260deg,
+      color-mix(in srgb, var(--color-accent) 14%, transparent) 310deg,
       transparent 360deg
     );
-    opacity: calc(0.08 + var(--speech-energy) * 0.42);
+    opacity: calc(0.07 + var(--speech-energy) * 0.38);
     mix-blend-mode: screen;
-    animation: aurora-spin calc(24s - var(--speech-energy) * 14s) linear infinite;
-    transform: scale(calc(1 + var(--speech-mid) * 0.08));
-    mask-image: radial-gradient(circle at 50% 45%, black 10%, transparent 72%);
+    animation: aurora-spin calc(26s - var(--speech-energy) * 15s) linear infinite;
+    transform: scale(calc(1 + var(--speech-mid) * 0.07));
+    mask-image: radial-gradient(circle at 50% 46%, black 8%, transparent 68%);
     transition:
-      opacity 0.12s linear,
-      transform 0.12s linear;
+      opacity 0.1s linear,
+      transform 0.1s linear;
+    filter: blur(0.5px);
   }
 
   .speech-bg.speaking .speech-bg-shimmer {
-    animation-duration: calc(18s - var(--speech-energy) * 12s);
+    animation-duration: calc(19s - var(--speech-energy) * 11s);
+    opacity: calc(0.11 + var(--speech-energy) * 0.46);
   }
 
   @keyframes aurora-spin {
