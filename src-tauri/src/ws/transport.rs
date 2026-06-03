@@ -20,6 +20,10 @@ use tokio_tungstenite::{
 use tokio::net::TcpStream;
 
 const RECONNECT_DELAYS_MS: [u64; 5] = [1000, 2000, 4000, 8000, 16000];
+/// AuraGo `agodeskMaxMessageBytes` (16 MiB). Keep client send cap in sync with the server.
+const AGODESK_MAX_MESSAGE_BYTES: usize = 16 * 1024 * 1024;
+/// Leave headroom for WebSocket framing and JSON envelope fields around `data_base64`.
+const AGODESK_SAFE_SEND_BYTES: usize = AGODESK_MAX_MESSAGE_BYTES - 64 * 1024;
 
 pub struct WsTransportState {
     cancel: Arc<AtomicBool>,
@@ -70,6 +74,25 @@ fn is_fatal_tls_code(code: &ClientErrorCode) -> bool {
             | ClientErrorCode::CertificateExpired
             | ClientErrorCode::WebSocketUpgradeFailed
     )
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn fetch_server_asset(
+    app: AppHandle,
+    server_url: String,
+    asset_url: String,
+) -> Result<crate::ws::asset_fetch::FetchedAsset, String> {
+    if server_url.trim().is_empty() {
+        return Err("serverUrl is required.".to_string());
+    }
+    if asset_url.trim().is_empty() {
+        return Err("assetUrl is required.".to_string());
+    }
+    tokio::task::spawn_blocking(move || {
+        crate::ws::asset_fetch::fetch_server_asset_impl(&app, &server_url, &asset_url)
+    })
+    .await
+    .map_err(|error| format!("Asset fetch task failed: {error}"))?
 }
 
 #[tauri::command(rename_all = "camelCase")]
@@ -208,6 +231,7 @@ pub async fn agodesk_connect(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn connect_and_run(
     app: &AppHandle,
     server_url: &str,
@@ -287,11 +311,10 @@ fn map_wss_connect_error(
     tls_mode_label: &str,
 ) -> (ClientErrorCode, String) {
     let message = error.to_string();
+    let lower = message.to_ascii_lowercase();
     let code = if message.contains("CertificateExpired") {
         ClientErrorCode::CertificateExpired
-    } else if message.to_ascii_lowercase().contains("certificate") {
-        ClientErrorCode::TlsUntrustedCertificate
-    } else if message.to_ascii_lowercase().contains("handshake") {
+    } else if lower.contains("certificate") || lower.contains("handshake") {
         ClientErrorCode::TlsUntrustedCertificate
     } else {
         ClientErrorCode::WebSocketUpgradeFailed
@@ -400,6 +423,14 @@ pub async fn agodesk_send(
     state: State<'_, WsTransportState>,
     envelope: String,
 ) -> Result<(), String> {
+    if envelope.len() > AGODESK_SAFE_SEND_BYTES {
+        return Err(format!(
+            "Message too large ({} bytes, limit {} bytes).",
+            envelope.len(),
+            AGODESK_SAFE_SEND_BYTES
+        ));
+    }
+
     let sender = state
         .outbound
         .lock()

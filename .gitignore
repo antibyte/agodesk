@@ -1,6 +1,7 @@
 # Development artifacts
 _create-tauri-app/
 _tauri-icons/
+_aurago-ref/
 node_modules/
 dist/
 build/

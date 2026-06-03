@@ -2,16 +2,24 @@ use super::super::types::{
     CaptureResult, CaptureScreenOptions, DisplayInfo, InputEvent, WindowInfo,
 };
 use base64::{engine::general_purpose::STANDARD, Engine as _};
-use image::{codecs::jpeg::JpegEncoder, ExtendedColorType, ImageEncoder};
+use image::{
+    codecs::jpeg::JpegEncoder, codecs::png::PngEncoder, imageops::FilterType, ExtendedColorType,
+    ImageBuffer, ImageEncoder, Rgb,
+};
+
+/// JPEG-Rohdaten vor Base64 — Screenshots werden zusätzlich auf max. Kantenlänge skaliert.
+const WS_CAPTURE_MAX_LONG_EDGE: u32 = 1280;
+const WS_CAPTURE_MAX_JPEG_BYTES: usize = 180_000;
 use std::ffi::c_void;
 use std::mem::{size_of, zeroed};
-use windows::Win32::Foundation::{BOOL, HWND, LPARAM, RECT, TRUE};
+use windows::Win32::Foundation::{GetLastError, BOOL, HWND, LPARAM, RECT, TRUE};
 use windows::Win32::Graphics::Gdi::{
     BitBlt, CreateCompatibleBitmap, CreateCompatibleDC, DeleteDC, DeleteObject, EnumDisplayMonitors,
     GetDC, GetDIBits, GetMonitorInfoW, MonitorFromWindow, ReleaseDC, SelectObject, BITMAPINFO,
     BITMAPINFOHEADER, BI_RGB, DIB_RGB_COLORS, HBITMAP, HDC, HMONITOR, MONITORINFOEXW,
     MONITOR_DEFAULTTONEAREST, SRCCOPY, HGDIOBJ,
 };
+use windows::Win32::Graphics::Dwm::{DwmGetWindowAttribute, DWMWA_EXTENDED_FRAME_BOUNDS};
 use windows::Win32::UI::HiDpi::{GetDpiForMonitor, MDT_EFFECTIVE_DPI};
 use windows::Win32::UI::Input::KeyboardAndMouse::{
     SendInput, INPUT, INPUT_0, INPUT_KEYBOARD, INPUT_MOUSE, KEYBDINPUT, KEYEVENTF_KEYUP,
@@ -19,6 +27,7 @@ use windows::Win32::UI::Input::KeyboardAndMouse::{
     MOUSEEVENTF_MIDDLEDOWN, MOUSEEVENTF_MIDDLEUP, MOUSEEVENTF_MOVE, MOUSEEVENTF_RIGHTDOWN,
     MOUSEEVENTF_RIGHTUP, MOUSEINPUT, MOUSE_EVENT_FLAGS, VIRTUAL_KEY, VK_BACK, VK_DOWN, VK_END,
     VK_ESCAPE, VK_HOME, VK_LEFT, VK_NEXT, VK_PRIOR, VK_RETURN, VK_RIGHT, VK_SPACE, VK_TAB, VK_UP,
+    VK_SHIFT, VK_CONTROL, VK_MENU, VK_LWIN,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
     EnumWindows, GetClassNameW, GetSystemMetrics, GetWindowRect, GetWindowTextLengthW,
@@ -146,6 +155,25 @@ unsafe extern "system" fn collect_monitor_proc(
     TRUE
 }
 
+fn get_window_rect_visual(hwnd: HWND) -> Result<RECT, String> {
+    let mut rect = RECT::default();
+    unsafe {
+        if DwmGetWindowAttribute(
+            hwnd,
+            DWMWA_EXTENDED_FRAME_BOUNDS,
+            &mut rect as *mut RECT as *mut _,
+            size_of::<RECT>() as u32,
+        )
+        .is_ok()
+        {
+            Ok(rect)
+        } else {
+            GetWindowRect(hwnd, &mut rect).map_err(|error| error.to_string())?;
+            Ok(rect)
+        }
+    }
+}
+
 unsafe extern "system" fn enum_window_proc(window: HWND, state: LPARAM) -> BOOL {
     let ctx = &mut *(state.0 as *mut WindowEnumState);
     if !IsWindowVisible(window).as_bool() {
@@ -169,10 +197,10 @@ unsafe extern "system" fn enum_window_proc(window: HWND, state: LPARAM) -> BOOL 
         return TRUE;
     }
 
-    let mut rect = RECT::default();
-    if GetWindowRect(window, &mut rect).is_err() {
-        return TRUE;
-    }
+    let rect = match get_window_rect_visual(window) {
+        Ok(r) => r,
+        Err(_) => return TRUE,
+    };
 
     let width = (rect.right - rect.left).max(0) as u32;
     let height = (rect.bottom - rect.top).max(0) as u32;
@@ -192,7 +220,7 @@ unsafe extern "system" fn enum_window_proc(window: HWND, state: LPARAM) -> BOOL 
     ctx.collected.push(WindowInfo {
         id: window_id_from_hwnd(window),
         title: wide_to_string(&title_buf),
-        class_name: wide_to_string(&class_buf[..class_len as usize + 1]),
+        class_name: wide_to_string(&class_buf[..class_len as usize]),
         width,
         height,
         x: rect.left,
@@ -343,8 +371,7 @@ fn capture_window(options: CaptureScreenOptions) -> Result<CaptureResult, String
             return Err("Target window is not visible.".to_string());
         }
 
-        let mut rect = RECT::default();
-        GetWindowRect(hwnd, &mut rect).map_err(|error| error.to_string())?;
+        let rect = get_window_rect_visual(hwnd)?;
         let width = (rect.right - rect.left).max(0) as i32;
         let height = (rect.bottom - rect.top).max(0) as i32;
         if width <= 0 || height <= 0 {
@@ -384,6 +411,17 @@ fn capture_window(options: CaptureScreenOptions) -> Result<CaptureResult, String
     }
 }
 
+fn win32_error_message(context: &str) -> String {
+    unsafe {
+        let code = GetLastError();
+        if code.0 == 0 {
+            return context.to_string();
+        }
+        format!("{context} (Win32 error {})", code.0)
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
 unsafe fn capture_from_bitblt(
     source_dc: HDC,
     x: i32,
@@ -398,13 +436,17 @@ unsafe fn capture_from_bitblt(
 ) -> Result<CaptureResult, String> {
     let memory_dc = CreateCompatibleDC(source_dc);
     if memory_dc.is_invalid() {
-        return Err("Failed to create compatible device context.".to_string());
+        return Err(win32_error_message(
+            "Failed to create compatible device context.",
+        ));
     }
 
     let bitmap = CreateCompatibleBitmap(source_dc, width, height);
     if bitmap.is_invalid() {
         let _ = DeleteDC(memory_dc);
-        return Err("Failed to create compatible bitmap.".to_string());
+        return Err(win32_error_message(
+            "Failed to create compatible bitmap.",
+        ));
     }
 
     let previous = SelectObject(memory_dc, HGDIOBJ(bitmap.0));
@@ -412,7 +454,7 @@ unsafe fn capture_from_bitblt(
         let _ = SelectObject(memory_dc, previous);
         let _ = DeleteObject(HGDIOBJ(bitmap.0));
         let _ = DeleteDC(memory_dc);
-        return Err("BitBlt screen capture failed.".to_string());
+        return Err(win32_error_message("BitBlt screen capture failed."));
     }
 
     let result = encode_dc_bitmap(
@@ -433,6 +475,7 @@ unsafe fn capture_from_bitblt(
     result
 }
 
+#[allow(clippy::too_many_arguments)]
 unsafe fn encode_dc_bitmap(
     dc: HDC,
     bitmap: HBITMAP,
@@ -492,51 +535,109 @@ struct EncodedImage {
     data_base64: String,
 }
 
+fn bgra_to_rgb_image(
+    bgra: &[u8],
+    width: u32,
+    height: u32,
+) -> Result<ImageBuffer<Rgb<u8>, Vec<u8>>, String> {
+    let expected = (width as usize)
+        .checked_mul(height as usize)
+        .and_then(|pixels| pixels.checked_mul(4))
+        .ok_or_else(|| "Invalid capture dimensions.".to_string())?;
+    if bgra.len() != expected {
+        return Err(format!(
+            "Unexpected pixel buffer size: got {}, expected {expected}",
+            bgra.len()
+        ));
+    }
+
+    let pixel_count = (width as usize) * (height as usize);
+    let mut rgb = Vec::with_capacity(pixel_count * 3);
+    for chunk in bgra.chunks_exact(4) {
+        rgb.push(chunk[2]);
+        rgb.push(chunk[1]);
+        rgb.push(chunk[0]);
+    }
+
+    ImageBuffer::from_raw(width, height, rgb)
+        .ok_or_else(|| "Failed to build RGB image.".to_string())
+}
+
+fn resize_for_ws_transport(
+    image: &ImageBuffer<Rgb<u8>, Vec<u8>>,
+    width: u32,
+    height: u32,
+) -> (ImageBuffer<Rgb<u8>, Vec<u8>>, u32, u32) {
+    let max_edge = width.max(height);
+    if max_edge <= WS_CAPTURE_MAX_LONG_EDGE {
+        return (image.clone(), width, height);
+    }
+
+    let scale = WS_CAPTURE_MAX_LONG_EDGE as f32 / max_edge as f32;
+    let new_w = ((width as f32 * scale).round() as u32).max(1);
+    let new_h = ((height as f32 * scale).round() as u32).max(1);
+    let resized = image::imageops::resize(image, new_w, new_h, FilterType::Triangle);
+    (resized, new_w, new_h)
+}
+
+fn encode_jpeg_rgb(
+    rgb: &[u8],
+    width: u32,
+    height: u32,
+    mut quality: u8,
+) -> Result<EncodedImage, String> {
+    quality = quality.clamp(40, 90);
+    loop {
+        let mut buffer = Vec::new();
+        let encoder = JpegEncoder::new_with_quality(&mut buffer, quality);
+        encoder
+            .write_image(rgb, width, height, ExtendedColorType::Rgb8)
+            .map_err(|error| format!("JPEG encode failed: {error}"))?;
+        if buffer.len() <= WS_CAPTURE_MAX_JPEG_BYTES || quality <= 40 {
+            return Ok(EncodedImage {
+                format: "jpeg".to_string(),
+                mime: "image/jpeg".to_string(),
+                data_base64: STANDARD.encode(buffer),
+            });
+        }
+        quality = quality.saturating_sub(10);
+    }
+}
+
+fn encode_png_rgb(rgb: &[u8], width: u32, height: u32) -> Result<EncodedImage, String> {
+    let mut buffer = Vec::new();
+    PngEncoder::new(&mut buffer)
+        .write_image(rgb, width, height, ExtendedColorType::Rgb8)
+        .map_err(|error| format!("PNG encode failed: {error}"))?;
+    Ok(EncodedImage {
+        format: "png".to_string(),
+        mime: "image/png".to_string(),
+        data_base64: STANDARD.encode(buffer),
+    })
+}
+
 fn encode_pixels(
     bgra: &[u8],
     width: u32,
     height: u32,
     options: &CaptureScreenOptions,
 ) -> Result<EncodedImage, String> {
-    let mut rgba = Vec::with_capacity(bgra.len());
-    for chunk in bgra.chunks_exact(4) {
-        rgba.push(chunk[2]);
-        rgba.push(chunk[1]);
-        rgba.push(chunk[0]);
-        rgba.push(chunk[3]);
-    }
+    let image = bgra_to_rgb_image(bgra, width, height)?;
+    let (image, width, height) = resize_for_ws_transport(&image, width, height);
+    let rgb = image.as_raw();
 
     let format = options
         .format
         .as_deref()
-        .unwrap_or("png")
+        .unwrap_or("jpeg")
         .to_ascii_lowercase();
 
     match format.as_str() {
         "jpeg" | "jpg" => {
-            let quality = options.quality.unwrap_or(80).clamp(1, 100);
-            let mut buffer = Vec::new();
-            let encoder = JpegEncoder::new_with_quality(&mut buffer, quality);
-            encoder
-                .write_image(&rgba, width, height, ExtendedColorType::Rgba8)
-                .map_err(|error| error.to_string())?;
-            Ok(EncodedImage {
-                format: "jpeg".to_string(),
-                mime: "image/jpeg".to_string(),
-                data_base64: STANDARD.encode(buffer),
-            })
+            let quality = options.quality.unwrap_or(70).clamp(40, 90);
+            encode_jpeg_rgb(rgb, width, height, quality)
         }
-        "png" => {
-            let mut buffer = Vec::new();
-            image::codecs::png::PngEncoder::new(&mut buffer)
-                .write_image(&rgba, width, height, ExtendedColorType::Rgba8)
-                .map_err(|error| error.to_string())?;
-            Ok(EncodedImage {
-                format: "png".to_string(),
-                mime: "image/png".to_string(),
-                data_base64: STANDARD.encode(buffer),
-            })
-        }
+        "png" => encode_png_rgb(rgb, width, height),
         other => Err(format!("Unsupported capture format: {other}")),
     }
 }
@@ -735,6 +836,10 @@ fn map_key_name(key: &str) -> Option<VIRTUAL_KEY> {
         "end" => Some(VK_END),
         "pageup" => Some(VK_PRIOR),
         "pagedown" => Some(VK_NEXT),
+        "shift" => Some(VK_SHIFT),
+        "control" | "ctrl" => Some(VK_CONTROL),
+        "alt" => Some(VK_MENU),
+        "meta" | "win" | "os" => Some(VK_LWIN),
         single if single.len() == 1 => {
             let ch = single.chars().next()?;
             if ch.is_ascii_alphanumeric() {
@@ -782,6 +887,10 @@ mod tests {
     fn maps_common_keys() {
         assert_eq!(map_key_name("enter"), Some(VK_RETURN));
         assert_eq!(map_key_name("a"), Some(VIRTUAL_KEY(b'A' as u16)));
+        assert_eq!(map_key_name("shift"), Some(VK_SHIFT));
+        assert_eq!(map_key_name("ctrl"), Some(VK_CONTROL));
+        assert_eq!(map_key_name("alt"), Some(VK_MENU));
+        assert_eq!(map_key_name("win"), Some(VK_LWIN));
     }
 
     #[test]
