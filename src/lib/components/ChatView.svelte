@@ -7,10 +7,12 @@
   import PairingBanner from "./PairingBanner.svelte";
   import RemoteControlBanner from "./RemoteControlBanner.svelte";
   import CertificateTrustModal from "./CertificateTrustModal.svelte";
+  import SpeechBackgroundVisualizer from "./SpeechBackgroundVisualizer.svelte";
   import { chatMessages } from "../stores/chat";
   import { settings } from "../stores/settings";
   import { sessionState } from "../stores/session";
   import { connectionStatus } from "../stores/connection";
+  import { speechState } from "../stores/speech";
   import { loadSettings, saveSettings } from "../services/settings";
   import { cycleTheme, destroyThemeListener } from "../services/theme";
   import { saveTrustedCertificate } from "../services/tls";
@@ -414,6 +416,10 @@
   />
 {:else}
   <div class="chat-view">
+  <SpeechBackgroundVisualizer
+    active={$speechState.isActive}
+    status={$speechState.status}
+  />
   <StatusBar
     serverUrl={$settings.serverUrl}
     theme={$settings.theme}
@@ -465,6 +471,14 @@
     flex-direction: column;
     flex: 1;
     min-height: 0;
+    position: relative;
+    overflow: hidden;
+  }
+
+  /* Ensure chat UI sits above the audio-reactive background visualizer */
+  .chat-view > :not(.speech-bg) {
+    position: relative;
+    z-index: 1;
   }
 
   .info-banner {

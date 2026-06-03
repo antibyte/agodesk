@@ -110,6 +110,7 @@ export interface ChatMessagePayload {
   session_id: string;
   text: string;
   role: "user";
+  source?: "user" | "speech" | "tool";
 }
 
 export interface ChatResponsePayload {
@@ -472,4 +473,28 @@ export function isTlsFatalError(code: string): boolean {
     code === "CERTIFICATE_PIN_MISMATCH" ||
     code === "CERTIFICATE_EXPIRED"
   );
+}
+
+export interface SpeechSettings {
+  enabled: boolean;
+  modelId: string;
+  voiceName?: string;
+  agentMode?: boolean;
+  voiceResponses?: boolean;
+  language?: string;
+}
+
+export interface FileAccessRoot {
+  rootId: string;
+  label: string;
+  canonicalPath: string;
+  readEnabled: boolean;
+  writeEnabled: boolean;
+}
+
+export interface FileAccessSettings {
+  enabled: boolean;
+  maxReadBytes: number;
+  maxWriteBytes: number;
+  roots: FileAccessRoot[];
 }

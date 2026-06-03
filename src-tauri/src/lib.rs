@@ -21,6 +21,7 @@ pub fn run() {
             commands::inject_input,
             commands::set_input_approval,
             commands::reset_desktop_session,
+            ws::transport::fetch_server_asset,
             ws::transport::probe_server_certificate,
             ws::transport::save_trusted_certificate,
             ws::transport::get_trusted_certificates,
