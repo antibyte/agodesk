@@ -1,0 +1,41 @@
+import { writable } from "svelte/store";
+import type { SpeechState, SpeechStatus } from "../types/speech";
+import { INITIAL_SPEECH_STATE } from "../types/speech";
+
+function createSpeechStore() {
+  const { subscribe, update, set } = writable<SpeechState>({
+    ...INITIAL_SPEECH_STATE,
+  });
+
+  return {
+    subscribe,
+    setStatus(status: SpeechStatus): void {
+      update((state) => ({
+        ...state,
+        status,
+        isActive: status === "connecting" || status === "listening" || status === "processing",
+        errorMessage: status === "error" ? state.errorMessage : "",
+      }));
+    },
+    setAgentMode(agentMode: boolean): void {
+      update((state) => ({ ...state, agentMode }));
+    },
+    setPartialTranscript(partialTranscript: string): void {
+      update((state) => ({ ...state, partialTranscript }));
+    },
+    setError(errorMessage: string): void {
+      update((state) => ({
+        ...state,
+        status: "error",
+        isActive: false,
+        errorMessage,
+        partialTranscript: "",
+      }));
+    },
+    reset(): void {
+      set({ ...INITIAL_SPEECH_STATE });
+    },
+  };
+}
+
+export const speechState = createSpeechStore();
