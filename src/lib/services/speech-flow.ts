@@ -100,7 +100,7 @@ export async function toggleSpeechSession(
 
 
 
-  speechState.setAgentMode(speech.agentMode);
+  speechState.setAgentMode(Boolean(speech.agentMode));
 
   speechState.setStatus("connecting");
 

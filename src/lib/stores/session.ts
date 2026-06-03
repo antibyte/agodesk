@@ -8,6 +8,7 @@ export interface SessionState {
   errorMessage: string;
   remoteControlPending: boolean;
   remoteControlActive: boolean;
+  advertisedCapabilities: string[];
 }
 
 const initialState: SessionState = {
@@ -17,6 +18,7 @@ const initialState: SessionState = {
   errorMessage: "",
   remoteControlPending: false,
   remoteControlActive: false,
+  advertisedCapabilities: [],
 };
 
 function createSessionStore() {
@@ -52,6 +54,9 @@ function createSessionStore() {
         remoteControlActive: active,
         remoteControlPending: active ? false : state.remoteControlPending,
       }));
+    },
+    setAdvertisedCapabilities(capabilities: string[]): void {
+      update((state) => ({ ...state, advertisedCapabilities: [...capabilities] }));
     },
   };
 }

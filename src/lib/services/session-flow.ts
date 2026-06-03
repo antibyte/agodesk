@@ -83,7 +83,7 @@ export async function sendPairingSessionStart(
 
   await savePairingToken(serverUrl, pairingToken);
   sessionState.setStatus("pairing");
-  await ws.send(buildPairingSessionStart(pairingToken));
+  await ws.send(await buildPairingSessionStart(pairingToken));
 }
 
 export async function sendReconnectSessionStart(
@@ -153,6 +153,9 @@ export async function handleSessionAccepted(
   }
 
   sessionState.setAcceptedSession(normalized.session_id, normalized.device_id);
+  sessionState.setAdvertisedCapabilities(
+    normalized.advertised_capabilities ?? normalized.capabilities ?? [],
+  );
   sessionState.setStatus("accepted");
 }
 

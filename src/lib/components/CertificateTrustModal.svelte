@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { i18n } from "../i18n";
   import type { CertificateProbeResult, ClientErrorCode } from "../types/protocol";
   import { browserOrigin, probeServerCertificate } from "../services/tls";
 
@@ -27,11 +28,11 @@
   const title = $derived.by(() => {
     switch (errorCode) {
       case "CERTIFICATE_PIN_MISMATCH":
-        return "Server-Zertifikat hat sich geaendert";
+        return $i18n("certModal.title.pinMismatch");
       case "CERTIFICATE_EXPIRED":
-        return "Server-Zertifikat ist abgelaufen";
+        return $i18n("certModal.title.expired");
       default:
-        return "Server-Zertifikat ist nicht vertrauenswuerdig";
+        return $i18n("certModal.title.untrusted");
     }
   });
 
@@ -55,9 +56,7 @@
         probeError =
           error instanceof Error
             ? error.message
-            : typeof error === "string"
-              ? error
-              : "Zertifikat konnte nicht gelesen werden.";
+            : $i18n("certModal.error.readFailed");
       })
       .finally(() => {
         loading = false;
@@ -71,7 +70,9 @@
   }
 
   function openBrowser(): void {
-    const httpsUrl = serverUrl.replace(/^wss:/, "https:").replace(/\/api\/agodesk\/ws.*$/, "/");
+    const httpsUrl = serverUrl
+      .replace(/^wss:/, "https:")
+      .replace(/\/api\/agodesk\/ws.*$/, "/");
     onOpenBrowser?.(httpsUrl);
   }
 </script>
@@ -80,49 +81,48 @@
   <div class="backdrop" role="presentation" onclick={() => onClose?.()}></div>
   <dialog class="modal" open aria-labelledby="cert-title">
     <h2 id="cert-title">{title}</h2>
-    <p class="intro">
-      Die Verbindung zu AuraGo konnte wegen eines TLS-Problems nicht hergestellt werden.
-      Pairing und Chat sind davon unabhaengig — zuerst muss das Zertifikat geprueft werden.
-    </p>
+    <p class="intro">{$i18n("certModal.intro")}</p>
 
     <dl class="details">
       <div>
-        <dt>Host</dt>
+        <dt>{$i18n("certModal.host.label")}</dt>
         <dd>{browserOrigin(serverUrl)}</dd>
       </div>
       {#if loading}
-        <div class="status">Zertifikat wird gelesen…</div>
+        <div class="status">{$i18n("certModal.loading")}</div>
       {:else if probeError}
         <div class="status error">{probeError}</div>
       {:else if probe}
         <div>
-          <dt>Subject</dt>
+          <dt>{$i18n("certModal.subject.label")}</dt>
           <dd>{probe.subject}</dd>
         </div>
         <div>
-          <dt>Issuer</dt>
+          <dt>{$i18n("certModal.issuer.label")}</dt>
           <dd>{probe.issuer}</dd>
         </div>
         <div>
-          <dt>Gueltig bis</dt>
+          <dt>{$i18n("certModal.validUntil.label")}</dt>
           <dd>{probe.not_after}</dd>
         </div>
         <div>
-          <dt>SHA-256 Fingerprint</dt>
+          <dt>{$i18n("certModal.fingerprint.label")}</dt>
           <dd class="mono">{probe.sha256_fingerprint}</dd>
         </div>
       {/if}
     </dl>
 
     <div class="actions">
-      <button type="button" class="secondary" onclick={() => onClose?.()}>Abbrechen</button>
+      <button type="button" class="secondary" onclick={() => onClose?.()}>
+        {$i18n("certModal.cancel")}
+      </button>
       {#if serverUrl.startsWith("wss://")}
         <button type="button" class="secondary" onclick={openBrowser}>
-          AuraGo im Browser oeffnen
+          {$i18n("certModal.openBrowser")}
         </button>
       {/if}
       <button type="button" disabled={!probe || loading} onclick={trust}>
-        Dieses Zertifikat fuer diesen Server vertrauen
+        {$i18n("certModal.trust")}
       </button>
     </div>
   </dialog>
@@ -130,14 +130,14 @@
 
 <style>
   .backdrop {
-    position: fixed;
+    position: absolute;
     inset: 0;
     background: var(--color-backdrop);
     z-index: 20;
   }
 
   .modal {
-    position: fixed;
+    position: absolute;
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);

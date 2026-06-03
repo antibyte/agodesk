@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { i18n } from "../i18n";
   import { getWsOrigin } from "../types/protocol";
   import { loadPairingToken, savePairingToken } from "../services/credentials";
 
@@ -21,6 +22,7 @@
   }: Props = $props();
 
   let pairingToken = $state("");
+  let showToken = $state(false);
   let loadedOrigin = $state("");
 
   $effect(() => {
@@ -53,34 +55,58 @@
 
 {#if visible}
   <section class="pairing-banner" aria-live="polite">
-    <div>
-      <strong>Geraet koppeln</strong>
-      <p>
-        Nach erfolgreicher Kopplung reconnectet agodesk automatisch. Der
-        Enrollment-Token wird bis dahin pro Server gespeichert.
-      </p>
+    <div class="intro">
+      <strong>{$i18n("pairing.title")}</strong>
+      <p>{$i18n("pairing.description")}</p>
+      <ol class="steps">
+        <li>{$i18n("pairing.step1")}</li>
+        <li>{$i18n("pairing.step2")}</li>
+      </ol>
       {#if errorMessage}
         <p class="error">{errorMessage}</p>
       {/if}
     </div>
     <div class="actions">
-      <input
-        type="password"
-        bind:value={pairingToken}
-        placeholder="Pairing-Token"
-        disabled={busy}
-        autocomplete="off"
-        onchange={() => {
-          if (serverUrl && pairingToken.trim()) {
-            void savePairingToken(getWsOrigin(serverUrl), pairingToken);
-          }
-        }}
-      />
+      <div class="token-row">
+        <input
+          type={showToken ? "text" : "password"}
+          bind:value={pairingToken}
+          placeholder={$i18n("pairing.token.placeholder")}
+          disabled={busy}
+          autocomplete="off"
+          onchange={() => {
+            if (serverUrl && pairingToken.trim()) {
+              void savePairingToken(getWsOrigin(serverUrl), pairingToken);
+            }
+          }}
+        />
+        <button
+          type="button"
+          class="secondary icon-btn"
+          aria-label={showToken
+            ? $i18n("pairing.token.hide.ariaLabel")
+            : $i18n("pairing.token.show.ariaLabel")}
+          title={showToken
+            ? $i18n("pairing.token.hide.title")
+            : $i18n("pairing.token.show.title")}
+          onclick={() => (showToken = !showToken)}
+        >
+          {showToken ? "◉" : "◎"}
+        </button>
+      </div>
       <button type="button" disabled={busy || !pairingToken.trim()} onclick={submit}>
-        {busy ? "Koppelt…" : "Koppeln"}
+        {busy ? $i18n("pairing.submit.busy") : $i18n("pairing.submit")}
       </button>
-      <button type="button" class="secondary" disabled={busy} onclick={() => onUnpair?.()}>
-        Geraet entfernen
+      <button
+        type="button"
+        class="secondary"
+        disabled={busy}
+        onclick={() => {
+          pairingToken = "";
+          onUnpair?.();
+        }}
+      >
+        {$i18n("pairing.reset")}
       </button>
     </div>
   </section>
@@ -96,29 +122,44 @@
     background: color-mix(in srgb, var(--color-accent) 8%, var(--color-surface));
   }
 
-  p {
+  .intro p {
     margin: 0.35rem 0 0;
     color: var(--color-muted);
     font-size: 0.875rem;
     line-height: 1.5;
   }
 
+  .steps {
+    margin: 0.5rem 0 0;
+    padding-left: 1.25rem;
+    color: var(--color-muted);
+    font-size: 0.8125rem;
+  }
+
   .error {
-    color: var(--color-system-text);
-    background: var(--color-system-bg);
+    color: var(--color-danger);
+    background: var(--color-danger-soft);
     padding: 0.5rem 0.75rem;
     border-radius: 0.5rem;
+    margin-top: 0.5rem;
   }
 
   .actions {
     display: flex;
     gap: 0.5rem;
     flex-wrap: wrap;
+    align-items: center;
+  }
+
+  .token-row {
+    display: flex;
+    gap: 0.35rem;
+    flex: 1;
+    min-width: 12rem;
   }
 
   input {
     flex: 1;
-    min-width: 12rem;
     border: 1px solid var(--color-border);
     border-radius: 0.5rem;
     padding: 0.55rem 0.75rem;
@@ -144,5 +185,10 @@
     background: transparent;
     border: 1px solid var(--color-border);
     color: var(--color-text);
+  }
+
+  .icon-btn {
+    min-width: 2.5rem;
+    padding-inline: 0.5rem;
   }
 </style>

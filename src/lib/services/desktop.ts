@@ -1,3 +1,4 @@
+import { get } from "svelte/store";
 import { invoke } from "@tauri-apps/api/core";
 import type {
   CaptureScreenshotParams,
@@ -10,11 +11,19 @@ import type {
   DesktopInputParams,
   DesktopResultPayload,
   DisplayInfo,
+  FileCommandParams,
   HostInfo,
   WindowInfo,
   WsMessage,
 } from "../types/protocol";
 import { DESKTOP_STREAM_OPERATIONS } from "../types/protocol";
+import { settings } from "../stores/settings";
+import {
+  listRemoteFiles,
+  readRemoteFile,
+  writeRemoteFile,
+} from "./file-commands";
+import { fileAccessIsConfigured } from "./file-access";
 
 export type {
   CaptureScreenshotParams,
@@ -254,6 +263,75 @@ export async function executeDesktopCommand(
           payload: params,
         });
         result.success = true;
+        break;
+      }
+      case "file_list":
+      case "file_read":
+      case "file_write": {
+        const fileSettings = get(settings).fileAccess;
+        const fileParams = params as unknown as FileCommandParams;
+        if (!fileAccessIsConfigured(fileSettings)) {
+          desktopFailure(
+            result,
+            "FILE_ACCESS_DISABLED",
+            "Dateizugriff ist in den agodesk-Einstellungen deaktiviert.",
+          );
+          break;
+        }
+        try {
+          if (command.operation === "file_list") {
+            const listed = await listRemoteFiles(
+              fileSettings,
+              command.command_id,
+              fileParams.root_id,
+              fileParams.path,
+              fileParams.recursive === true,
+            );
+            result.success = true;
+            result.data = listed as unknown as Record<string, unknown>;
+          } else if (command.operation === "file_read") {
+            const read = await readRemoteFile(
+              fileSettings,
+              command.command_id,
+              fileParams.root_id,
+              fileParams.path,
+              fileSettings.maxReadBytes,
+            );
+            result.success = true;
+            result.data = read as unknown as Record<string, unknown>;
+          } else {
+            const content = fileParams.content ?? "";
+            const written = await writeRemoteFile(
+              fileSettings,
+              command.command_id,
+              fileParams.root_id,
+              fileParams.path,
+              content,
+              fileSettings.maxWriteBytes,
+              fileParams.expected_hash,
+              fileParams.create_only === true,
+            );
+            result.success = true;
+            result.data = written as unknown as Record<string, unknown>;
+          }
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          const code = message as DesktopErrorCode;
+          desktopFailure(
+            result,
+            [
+              "FILE_ROOT_UNKNOWN",
+              "FILE_PATH_DENIED",
+              "FILE_NOT_FOUND",
+              "FILE_TOO_LARGE",
+              "FILE_WRITE_DENIED",
+              "FILE_HASH_MISMATCH",
+            ].includes(code)
+              ? code
+              : "DESKTOP_OPERATION_UNSUPPORTED",
+            message,
+          );
+        }
         break;
       }
       default:

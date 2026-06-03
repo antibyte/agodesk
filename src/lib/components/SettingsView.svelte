@@ -1,19 +1,89 @@
 <script lang="ts">
   import type {
+    AppSettings,
     ConnectionStatus,
+    FileAccessRoot,
+    FileAccessSettings,
     SessionStatus,
+    SpeechSettings,
     ThemeMode,
+    UiSoundSettings,
+    UiSoundTheme,
   } from "../types/protocol";
-  import { getWsOrigin } from "../types/protocol";
+  import {
+    DEFAULT_FILE_ACCESS_SETTINGS,
+    DEFAULT_SPEECH_SETTINGS,
+    DEFAULT_UI_SOUND_SETTINGS,
+    UI_SOUND_THEMES,
+    getWsOrigin,
+  } from "../types/protocol";
+  import {
+    APP_LOCALES,
+    LOCALE_LABELS,
+    getTranslateFn,
+    i18n,
+    type UiLocaleSetting,
+  } from "../i18n";
+  import type { MessageKey } from "../i18n/types";
   import { loadDeviceId } from "../services/credentials";
+  import {
+    clearGeminiApiKey,
+    hasGeminiApiKey,
+    loadGeminiApiKey,
+    saveGeminiApiKey,
+  } from "../services/gemini-credentials";
+  import { testGeminiConnection } from "../services/speech-flow";
   import { collectHostInfo, type HostInfo } from "../services/desktop";
+  import {
+    buildPathDisplay,
+    cloneFileAccessSettings,
+    createFileAccessRootId,
+  } from "../services/file-access";
+  import {
+    canonicalizeFolderPath,
+    pickFolderPath,
+  } from "../services/file-commands";
+  import {
+    GEMINI_API_KEY_URL,
+    openExternalUrl,
+  } from "../services/open-external-url";
   import { SERVER_PRESETS } from "../services/settings-presets";
   import { normalizeServerUrl } from "../services/server-url";
-  import { THEME_LABELS } from "../services/theme";
+  import { previewUiSoundTheme } from "../services/ui-sounds";
+  import WindowControls from "./WindowControls.svelte";
+
+  export type SettingsSavePayload = Pick<
+    AppSettings,
+    | "serverUrl"
+    | "theme"
+    | "locale"
+    | "speech"
+    | "uiSounds"
+    | "minimizeToTray"
+    | "desktopControlEnabled"
+    | "fileAccess"
+  >;
+
+  const GEMINI_VOICE_OPTIONS = [
+    "Zephyr",
+    "Puck",
+    "Charon",
+    "Kore",
+    "Fenrir",
+    "Aoede",
+  ] as const;
+
+  const THEME_MODES: ThemeMode[] = ["system", "light", "dark"];
 
   interface Props {
     serverUrl?: string;
     theme?: ThemeMode;
+    locale?: UiLocaleSetting;
+    speech?: SpeechSettings;
+    uiSounds?: UiSoundSettings;
+    minimizeToTray?: boolean;
+    desktopControlEnabled?: boolean;
+    fileAccess?: FileAccessSettings;
     connectionStatus?: ConnectionStatus;
     sessionStatus?: SessionStatus;
     sessionId?: string;
@@ -21,7 +91,7 @@
     remoteControlActive?: boolean;
     appVersion?: string;
     onBack?: () => void;
-    onSave?: (settings: { serverUrl: string; theme: ThemeMode }) => void;
+    onSave?: (settings: SettingsSavePayload) => void | Promise<void>;
     onReconnect?: () => void;
     onRetryPairing?: () => void;
     onUnpair?: () => void;
@@ -31,6 +101,12 @@
   let {
     serverUrl = "",
     theme = "system",
+    locale = "system",
+    speech = DEFAULT_SPEECH_SETTINGS,
+    uiSounds = DEFAULT_UI_SOUND_SETTINGS,
+    minimizeToTray = false,
+    desktopControlEnabled = true,
+    fileAccess = DEFAULT_FILE_ACCESS_SETTINGS,
     connectionStatus = "disconnected",
     sessionStatus = "idle",
     sessionId = "",
@@ -45,53 +121,100 @@
     onOpenTlsTrust,
   }: Props = $props();
 
-  type SettingsSection = "connection" | "device" | "appearance" | "desktop" | "about";
+  type SettingsSection =
+    | "connection"
+    | "device"
+    | "appearance"
+    | "language"
+    | "desktop"
+    | "files"
+    | "speech"
+    | "about";
 
   let activeSection = $state<SettingsSection>("connection");
   let draftUrl = $state("");
   let draftTheme = $state<ThemeMode>("system");
+  let draftLocale = $state<UiLocaleSetting>("system");
+  let draftMinimizeToTray = $state(false);
+  let draftDesktopControlEnabled = $state(true);
+  let draftFileAccess = $state<FileAccessSettings>(cloneFileAccessSettings(DEFAULT_FILE_ACCESS_SETTINGS));
+  let draftSpeech = $state<SpeechSettings>({ ...DEFAULT_SPEECH_SETTINGS });
+  let draftUiSoundEnabled = $state(true);
+  let draftUiSoundTheme = $state<UiSoundTheme>("soft");
+  let draftUiSoundVolume = $state(0.2);
   let deviceId = $state<string | null>(null);
   let hostInfo = $state<HostInfo | null>(null);
   let dirty = $state(false);
+  let saving = $state(false);
 
-  const sections: { id: SettingsSection; label: string; hint: string }[] = [
-    { id: "connection", label: "Verbindung", hint: "Server & Netzwerk" },
-    { id: "device", label: "Gerät", hint: "Pairing & Session" },
-    { id: "appearance", label: "Darstellung", hint: "Theme & UI" },
-    { id: "desktop", label: "Desktop", hint: "Remote Control" },
-    { id: "about", label: "Info", hint: "Version & Hilfe" },
-  ];
+  let apiKeyInput = $state("");
+  let apiKeyStored = $state(false);
+  let apiKeyBusy = $state(false);
+  let apiKeyMessage = $state("");
+  let apiKeyMessageTone = $state<"success" | "error" | "">("");
 
-  const connectionLabels: Record<ConnectionStatus, string> = {
-    connected: "Verbunden",
-    connecting: "Verbinde…",
-    disconnected: "Getrennt",
-    error: "Fehler",
-  };
-
-  const sessionLabels: Record<SessionStatus, string> = {
-    idle: "Inaktiv",
-    awaiting_pairing: "Pairing erforderlich",
-    pairing: "Authentifiziere…",
-    accepted: "Aktiv",
-    loopback: "Loopback-Dev",
-    error: "Fehler",
-  };
+  const sections = $derived(
+    (
+      [
+        ["connection", "settings.section.connection.label", "settings.section.connection.hint"],
+        ["device", "settings.section.device.label", "settings.section.device.hint"],
+        ["appearance", "settings.section.appearance.label", "settings.section.appearance.hint"],
+        ["language", "settings.section.language.label", "settings.section.language.hint"],
+        ["desktop", "settings.section.desktop.label", "settings.section.desktop.hint"],
+        ["files", "settings.section.files.label", "settings.section.files.hint"],
+        ["speech", "settings.section.speech.label", "settings.section.speech.hint"],
+        ["about", "settings.section.about.label", "settings.section.about.hint"],
+      ] as const
+    ).map(([id, labelKey, hintKey]) => ({
+      id: id as SettingsSection,
+      label: $i18n(labelKey),
+      hint: $i18n(hintKey),
+    })),
+  );
 
   const serverOrigin = $derived.by(() => {
     try {
       return getWsOrigin(normalizeServerUrl(draftUrl));
     } catch {
-      return "—";
+      return getTranslateFn()("common.emDash");
     }
   });
 
   const isSecureServer = $derived(/^wss:/i.test(normalizeServerUrl(draftUrl)));
 
+  const uiSoundVolumePercent = $derived(Math.round(draftUiSoundVolume * 100));
+
+  const speechAgentConflict = $derived(
+    draftSpeech.enabled && draftSpeech.agentMode && !draftSpeech.autoSendToAuraGo,
+  );
+
+  function connectionLabel(status: ConnectionStatus): string {
+    return $i18n(`connection.status.${status}` as MessageKey);
+  }
+
+  function sessionLabel(status: SessionStatus): string {
+    return $i18n(`session.status.${status}` as MessageKey);
+  }
+
+  function themeIcon(mode: ThemeMode): string {
+    if (mode === "system") return "◐";
+    if (mode === "light") return "☀";
+    return "☾";
+  }
+
   $effect(() => {
-    draftUrl = serverUrl;
-    draftTheme = theme;
-    dirty = false;
+    if (!dirty) {
+      draftUrl = serverUrl;
+      draftTheme = theme;
+      draftLocale = locale;
+      draftMinimizeToTray = minimizeToTray;
+      draftDesktopControlEnabled = desktopControlEnabled;
+      draftFileAccess = cloneFileAccessSettings(fileAccess);
+      draftSpeech = { ...DEFAULT_SPEECH_SETTINGS, ...speech };
+      draftUiSoundEnabled = uiSounds.enabled;
+      draftUiSoundTheme = uiSounds.theme;
+      draftUiSoundVolume = uiSounds.volume;
+    }
   });
 
   $effect(() => {
@@ -107,6 +230,20 @@
       });
   });
 
+  $effect(() => {
+    void refreshApiKeyStatus();
+  });
+
+  async function refreshApiKeyStatus(): Promise<void> {
+    apiKeyStored = await hasGeminiApiKey();
+    if (!apiKeyInput.trim()) {
+      const stored = await loadGeminiApiKey();
+      if (stored) {
+        apiKeyInput = "";
+      }
+    }
+  }
+
   function markDirty(): void {
     dirty = true;
   }
@@ -116,44 +253,214 @@
     markDirty();
   }
 
-  function save(): void {
-    onSave?.({
+  function buildSavePayload(): SettingsSavePayload {
+    return {
       serverUrl: normalizeServerUrl(draftUrl.trim()),
       theme: draftTheme,
-    });
+      locale: draftLocale,
+      speech: { ...draftSpeech },
+      uiSounds: {
+        enabled: draftUiSoundEnabled,
+        theme: draftUiSoundTheme,
+        volume: draftUiSoundVolume,
+      },
+      minimizeToTray: draftMinimizeToTray,
+      desktopControlEnabled: draftDesktopControlEnabled,
+      fileAccess: cloneFileAccessSettings(draftFileAccess),
+    };
+  }
+
+  function discardChanges(): void {
     dirty = false;
-    onBack?.();
+  }
+
+  async function save(): Promise<void> {
+    if (!dirty || saving) {
+      return;
+    }
+
+    saving = true;
+    try {
+      await onSave?.(buildSavePayload());
+      dirty = false;
+      onBack?.();
+    } catch (error) {
+      console.error("[agodesk:settings] save failed", error);
+    } finally {
+      saving = false;
+    }
   }
 
   function truncate(value: string, max = 28): string {
     if (!value || value.length <= max) {
-      return value || "—";
+      return value || getTranslateFn()("common.emDash");
     }
     return `${value.slice(0, max)}…`;
+  }
+
+  function setSpeechAutoSend(enabled: boolean): void {
+    draftSpeech = {
+      ...draftSpeech,
+      autoSendToAuraGo: enabled,
+      agentMode: enabled ? false : draftSpeech.agentMode,
+    };
+    markDirty();
+  }
+
+  function setSpeechAgentMode(enabled: boolean): void {
+    draftSpeech = {
+      ...draftSpeech,
+      agentMode: enabled,
+      autoSendToAuraGo: enabled ? false : draftSpeech.autoSendToAuraGo,
+    };
+    markDirty();
+  }
+
+  async function addFileRoot(): Promise<void> {
+    const picked = await pickFolderPath();
+    if (!picked) {
+      return;
+    }
+
+    try {
+      const canonical = await canonicalizeFolderPath(picked);
+      const segments = canonical.replace(/\\/g, "/").split("/").filter(Boolean);
+      const label = segments[segments.length - 1] ?? canonical;
+      const root: FileAccessRoot = {
+        rootId: createFileAccessRootId(label),
+        label,
+        canonicalPath: canonical,
+        pathDisplay: buildPathDisplay(canonical),
+        readEnabled: true,
+        writeEnabled: false,
+      };
+      draftFileAccess = {
+        ...draftFileAccess,
+        roots: [...draftFileAccess.roots, root],
+      };
+      markDirty();
+    } catch (error) {
+      console.error("[agodesk:settings] add folder failed", error);
+    }
+  }
+
+  function removeFileRoot(rootId: string): void {
+    draftFileAccess = {
+      ...draftFileAccess,
+      roots: draftFileAccess.roots.filter((root) => root.rootId !== rootId),
+    };
+    markDirty();
+  }
+
+  function updateFileRoot(
+    rootId: string,
+    patch: Partial<Pick<FileAccessRoot, "label" | "readEnabled" | "writeEnabled">>,
+  ): void {
+    draftFileAccess = {
+      ...draftFileAccess,
+      roots: draftFileAccess.roots.map((root) =>
+        root.rootId === rootId ? { ...root, ...patch } : root,
+      ),
+    };
+    markDirty();
+  }
+
+  function setApiKeyFeedback(key: MessageKey, tone: "success" | "error"): void {
+    apiKeyMessage = $i18n(key);
+    apiKeyMessageTone = tone;
+  }
+
+  async function handleSaveApiKey(): Promise<void> {
+    const trimmed = apiKeyInput.trim();
+    if (!trimmed) {
+      setApiKeyFeedback("settings.speech.apiKey.error.empty", "error");
+      return;
+    }
+
+    apiKeyBusy = true;
+    try {
+      await saveGeminiApiKey(trimmed);
+      apiKeyStored = true;
+      apiKeyInput = "";
+      setApiKeyFeedback("settings.speech.apiKey.success.saved", "success");
+    } catch {
+      setApiKeyFeedback("settings.speech.apiKey.error.saveFailed", "error");
+    } finally {
+      apiKeyBusy = false;
+    }
+  }
+
+  async function handleRemoveApiKey(): Promise<void> {
+    apiKeyBusy = true;
+    try {
+      await clearGeminiApiKey();
+      apiKeyStored = false;
+      apiKeyInput = "";
+      setApiKeyFeedback("settings.speech.apiKey.success.removed", "success");
+    } catch {
+      setApiKeyFeedback("settings.speech.apiKey.error.removeFailed", "error");
+    } finally {
+      apiKeyBusy = false;
+    }
+  }
+
+  async function handleTestApiKey(): Promise<void> {
+    apiKeyBusy = true;
+    setApiKeyFeedback("settings.speech.apiKey.testing", "success");
+    try {
+      const key = apiKeyInput.trim() || (await loadGeminiApiKey());
+      if (!key) {
+        setApiKeyFeedback("settings.speech.apiKey.error.testNoKey", "error");
+        return;
+      }
+      await testGeminiConnection(draftSpeech, key);
+      setApiKeyFeedback("settings.speech.apiKey.success.test", "success");
+    } catch {
+      setApiKeyFeedback("settings.speech.apiKey.error.testFailed", "error");
+    } finally {
+      apiKeyBusy = false;
+    }
+  }
+
+  function handlePreviewUiSound(theme: UiSoundTheme): void {
+    previewUiSoundTheme(theme);
   }
 </script>
 
 <div class="settings-page">
   <header class="settings-header">
-    <button type="button" class="back-button" onclick={() => onBack?.()}>
-      ← Zurück
+    <button
+      type="button"
+      class="ui-btn ui-btn-secondary back-button"
+      onclick={() => onBack?.()}
+    >
+      {$i18n("settings.back")}
     </button>
+    <div class="header-drag" data-tauri-drag-region aria-hidden="true"></div>
     <div class="header-copy">
-      <h1>Einstellungen</h1>
-      <p>Konfiguration von Verbindung, Geraet und Darstellung</p>
+      <h1>{$i18n("settings.title")}</h1>
+      <p>{$i18n("settings.subtitle")}</p>
     </div>
     <div class="header-actions">
       {#if dirty}
-        <span class="dirty-badge">Ungespeichert</span>
+        <span class="dirty-badge ui-chip" data-tone="warning">
+          {$i18n("settings.unsavedBadge")}
+        </span>
       {/if}
-      <button type="button" class="primary" onclick={save} disabled={!dirty}>
-        Speichern & verbinden
+      <button
+        type="button"
+        class="ui-btn ui-btn-primary"
+        onclick={() => void save()}
+        disabled={!dirty || saving}
+      >
+        {$i18n("settings.saveAndConnect")}
       </button>
+      <WindowControls minimizeToTray={draftMinimizeToTray} />
     </div>
   </header>
 
   <div class="settings-layout">
-    <nav class="settings-nav" aria-label="Einstellungsbereiche">
+    <nav class="settings-nav" aria-label={$i18n("settings.navAriaLabel")}>
       {#each sections as section (section.id)}
         <button
           type="button"
@@ -168,235 +475,697 @@
     </nav>
 
     <div class="settings-content">
-      {#if activeSection === "connection"}
-        <section class="card">
-          <div class="card-header">
-            <h2>WebSocket-Server</h2>
-            <p>AuraGo-Endpunkt fuer Chat, Pairing und Desktop-Befehle.</p>
-          </div>
-
-          <label class="field">
-            <span class="field-label">Server-URL</span>
-            <input
-              type="url"
-              bind:value={draftUrl}
-              oninput={markDirty}
-              placeholder="wss://host:8443/api/agodesk/ws"
-            />
-          </label>
-
-          <p class="help">
-            Pfad muss auf <code>/api/agodesk/ws</code> enden. Loopback-Dev:
-            <code>?insecure_loopback=1</code>
-          </p>
-
-          <div class="preset-grid">
-            {#each SERVER_PRESETS as preset (preset.id)}
-              <button
-                type="button"
-                class="preset-card"
-                class:selected={draftUrl === preset.url}
-                onclick={() => applyPreset(preset.url)}
-              >
-                <strong>{preset.label}</strong>
-                <span>{preset.description}</span>
-              </button>
-            {/each}
-          </div>
-        </section>
-
-        <section class="card">
-          <div class="card-header">
-            <h2>Verbindungsstatus</h2>
-          </div>
-
-          <dl class="info-grid">
-            <div>
-              <dt>Status</dt>
-              <dd>
-                <span class="badge" data-tone={connectionStatus}>
-                  {connectionLabels[connectionStatus]}
-                </span>
-              </dd>
-            </div>
-            <div>
-              <dt>Origin</dt>
-              <dd><code>{serverOrigin}</code></dd>
-            </div>
-            <div>
-              <dt>Transport</dt>
-              <dd>{isSecureServer ? "WSS (TLS)" : "WS (ohne TLS)"}</dd>
-            </div>
-            <div>
-              <dt>Session</dt>
-              <dd>
-                <span class="badge" data-tone={sessionStatus}>
-                  {sessionLabels[sessionStatus]}
-                </span>
-              </dd>
-            </div>
-          </dl>
-
-          <div class="action-row">
-            <button type="button" class="secondary" onclick={() => onReconnect?.()}>
-              Neu verbinden
-            </button>
-            {#if isSecureServer}
-              <button type="button" class="secondary" onclick={() => onOpenTlsTrust?.()}>
-                TLS-Zertifikat pruefen
-              </button>
-            {/if}
-          </div>
-        </section>
-      {/if}
-
-      {#if activeSection === "device"}
-        <section class="card">
-          <div class="card-header">
-            <h2>Geraet & Pairing</h2>
-            <p>Gekoppelte Geraete authentifizieren sich per HMAC-Reconnect.</p>
-          </div>
-
-          <dl class="info-grid">
-            <div>
-              <dt>Device-ID</dt>
-              <dd><code>{deviceId ?? "Nicht gekoppelt"}</code></dd>
-            </div>
-            <div>
-              <dt>Session-ID</dt>
-              <dd><code title={sessionId}>{truncate(sessionId, 36)}</code></dd>
-            </div>
-            <div>
-              <dt>Pairing-Status</dt>
-              <dd>{sessionLabels[sessionStatus]}</dd>
-            </div>
-            {#if hostInfo}
-              <div>
-                <dt>Hostname</dt>
-                <dd>{hostInfo.hostname}</dd>
+      {#key activeSection}
+        <div class="section-panel">
+          {#if activeSection === "connection"}
+            <section class="card">
+              <div class="card-header">
+                <h2>{$i18n("settings.connection.websocket.title")}</h2>
+                <p>{$i18n("settings.connection.websocket.description")}</p>
               </div>
-              <div>
-                <dt>Plattform</dt>
-                <dd>{hostInfo.platform} / {hostInfo.arch}</dd>
-              </div>
-            {/if}
-          </dl>
 
-          {#if sessionError}
-            <p class="error-box">{sessionError}</p>
+              <label class="field">
+                <span class="field-label">{$i18n("settings.connection.serverUrl.label")}</span>
+                <input
+                  type="url"
+                  bind:value={draftUrl}
+                  oninput={markDirty}
+                  placeholder={$i18n("settings.connection.serverUrl.placeholder")}
+                />
+              </label>
+
+              <p class="help">{$i18n("settings.connection.serverUrl.help")}</p>
+
+              <div class="preset-grid">
+                {#each SERVER_PRESETS as preset (preset.id)}
+                  <button
+                    type="button"
+                    class="preset-card"
+                    class:selected={draftUrl === preset.url}
+                    onclick={() => applyPreset(preset.url)}
+                  >
+                    <strong>{$i18n(preset.labelKey as MessageKey)}</strong>
+                    <span>{$i18n(preset.descriptionKey as MessageKey)}</span>
+                  </button>
+                {/each}
+              </div>
+            </section>
+
+            <section class="card">
+              <div class="card-header">
+                <h2>{$i18n("settings.connection.status.title")}</h2>
+              </div>
+
+              <dl class="info-grid">
+                <div>
+                  <dt>{$i18n("settings.connection.status.label")}</dt>
+                  <dd>
+                    <span class="ui-chip" data-tone={connectionStatus}>
+                      {connectionLabel(connectionStatus)}
+                    </span>
+                  </dd>
+                </div>
+                <div>
+                  <dt>{$i18n("settings.connection.origin.label")}</dt>
+                  <dd><code>{serverOrigin}</code></dd>
+                </div>
+                <div>
+                  <dt>{$i18n("settings.connection.transport.label")}</dt>
+                  <dd>
+                    {isSecureServer
+                      ? $i18n("settings.connection.transport.wss")
+                      : $i18n("settings.connection.transport.ws")}
+                  </dd>
+                </div>
+                <div>
+                  <dt>{$i18n("settings.connection.session.label")}</dt>
+                  <dd>
+                    <span class="ui-chip" data-tone={sessionStatus}>
+                      {sessionLabel(sessionStatus)}
+                    </span>
+                  </dd>
+                </div>
+              </dl>
+
+              <div class="action-row">
+                <button
+                  type="button"
+                  class="ui-btn ui-btn-secondary"
+                  onclick={() => onReconnect?.()}
+                >
+                  {$i18n("settings.connection.reconnect")}
+                </button>
+                {#if isSecureServer}
+                  <button
+                    type="button"
+                    class="ui-btn ui-btn-secondary"
+                    onclick={() => onOpenTlsTrust?.()}
+                  >
+                    {$i18n("settings.connection.checkTlsCert")}
+                  </button>
+                {/if}
+              </div>
+            </section>
           {/if}
 
-          <div class="action-row">
-            <button type="button" class="secondary" onclick={() => onRetryPairing?.()}>
-              Session erneut starten
-            </button>
-            <button type="button" class="secondary danger" onclick={() => onUnpair?.()}>
-              Geraet entkoppeln
-            </button>
-          </div>
-        </section>
-      {/if}
+          {#if activeSection === "device"}
+            <section class="card">
+              <div class="card-header">
+                <h2>{$i18n("settings.device.title")}</h2>
+                <p>{$i18n("settings.device.description")}</p>
+              </div>
 
-      {#if activeSection === "appearance"}
-        <section class="card">
-          <div class="card-header">
-            <h2>Erscheinungsbild</h2>
-            <p>Theme fuer Chat, Banner und Einstellungen.</p>
-          </div>
+              <dl class="info-grid">
+                <div>
+                  <dt>{$i18n("settings.device.deviceId.label")}</dt>
+                  <dd>
+                    <code>
+                      {deviceId ?? $i18n("settings.device.deviceId.notPaired")}
+                    </code>
+                  </dd>
+                </div>
+                <div>
+                  <dt>{$i18n("settings.device.sessionId.label")}</dt>
+                  <dd><code title={sessionId}>{truncate(sessionId, 36)}</code></dd>
+                </div>
+                <div>
+                  <dt>{$i18n("settings.device.pairingStatus.label")}</dt>
+                  <dd>{sessionLabel(sessionStatus)}</dd>
+                </div>
+                {#if hostInfo}
+                  <div>
+                    <dt>{$i18n("settings.device.hostname.label")}</dt>
+                    <dd>{hostInfo.hostname}</dd>
+                  </div>
+                  <div>
+                    <dt>{$i18n("settings.device.platform.label")}</dt>
+                    <dd>{hostInfo.platform} / {hostInfo.arch}</dd>
+                  </div>
+                {/if}
+              </dl>
 
-          <div class="theme-grid">
-            {#each Object.entries(THEME_LABELS) as [value, label] (value)}
-              <label class="theme-card" class:selected={draftTheme === value}>
+              {#if sessionError}
+                <p class="error-box">{sessionError}</p>
+              {/if}
+
+              <div class="action-row">
+                <button
+                  type="button"
+                  class="ui-btn ui-btn-secondary"
+                  onclick={() => onRetryPairing?.()}
+                >
+                  {$i18n("settings.device.retrySession")}
+                </button>
+                <button
+                  type="button"
+                  class="ui-btn ui-btn-secondary ui-btn-danger"
+                  onclick={() => onUnpair?.()}
+                >
+                  {$i18n("settings.device.unpair")}
+                </button>
+              </div>
+            </section>
+          {/if}
+
+          {#if activeSection === "appearance"}
+            <section class="card">
+              <div class="card-header">
+                <h2>{$i18n("settings.appearance.title")}</h2>
+                <p>{$i18n("settings.appearance.description")}</p>
+              </div>
+
+              <div class="theme-grid">
+                {#each THEME_MODES as mode (mode)}
+                  <label class="theme-card" class:selected={draftTheme === mode} data-theme-preview={mode}>
+                    <input
+                      type="radio"
+                      bind:group={draftTheme}
+                      value={mode}
+                      onchange={markDirty}
+                    />
+                    <span class="theme-icon" aria-hidden="true">{themeIcon(mode)}</span>
+                    <strong>{$i18n(`theme.${mode}` as MessageKey)}</strong>
+                    <span>{$i18n(`theme.${mode}.description` as MessageKey)}</span>
+                  </label>
+                {/each}
+              </div>
+            </section>
+
+            <section class="card">
+              <div class="card-header">
+                <h2>{$i18n("settings.appearance.uiSounds.title")}</h2>
+                <p>{$i18n("settings.appearance.uiSounds.description")}</p>
+              </div>
+
+              <label class="field checkbox-field">
                 <input
-                  type="radio"
-                  bind:group={draftTheme}
-                  value={value}
+                  type="checkbox"
+                  bind:checked={draftUiSoundEnabled}
                   onchange={markDirty}
                 />
-                <span class="theme-icon">
-                  {value === "system" ? "◐" : value === "light" ? "☀" : "☾"}
-                </span>
-                <strong>{label}</strong>
-                <span>
-                  {value === "system"
-                    ? "Folgt Windows"
-                    : value === "light"
-                      ? "Helles Layout"
-                      : "Dunkles Layout"}
-                </span>
+                <span>{$i18n("settings.appearance.uiSounds.enable")}</span>
               </label>
-            {/each}
-          </div>
-        </section>
-      {/if}
 
-      {#if activeSection === "desktop"}
-        <section class="card">
-          <div class="card-header">
-            <h2>Desktop-Steuerung</h2>
-            <p>Screenshots und Eingaben werden nativ ueber Tauri ausgefuehrt.</p>
-          </div>
+              <div class="sound-theme-grid">
+                {#each UI_SOUND_THEMES as soundTheme (soundTheme)}
+                  <label class="sound-theme-card" class:selected={draftUiSoundTheme === soundTheme}>
+                    <input
+                      type="radio"
+                      bind:group={draftUiSoundTheme}
+                      value={soundTheme}
+                      onchange={markDirty}
+                    />
+                    <strong>{$i18n(`uiSoundTheme.${soundTheme}` as MessageKey)}</strong>
+                    <button
+                      type="button"
+                      class="ui-btn ui-btn-secondary sound-preview-btn"
+                      onclick={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        handlePreviewUiSound(soundTheme);
+                      }}
+                    >
+                      {$i18n("settings.appearance.uiSounds.preview")}
+                    </button>
+                  </label>
+                {/each}
+              </div>
 
-          <dl class="info-grid">
-            <div>
-              <dt>Screenshots</dt>
-              <dd>Monitor & Fenster (Multi-Monitor)</dd>
-            </div>
-            <div>
-              <dt>Maus / Tastatur</dt>
-              <dd>Nur nach lokaler Freigabe</dd>
-            </div>
-            <div>
-              <dt>Remote Control</dt>
-              <dd>
-                <span class="badge" data-tone={remoteControlActive ? "accepted" : "idle"}>
-                  {remoteControlActive ? "Freigegeben" : "Nicht aktiv"}
+              <label class="field">
+                <span class="field-label">
+                  {$i18n("settings.appearance.uiSounds.volume", {
+                    percent: uiSoundVolumePercent,
+                  })}
                 </span>
-              </dd>
-            </div>
-          </dl>
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.05"
+                  bind:value={draftUiSoundVolume}
+                  oninput={markDirty}
+                  disabled={!draftUiSoundEnabled}
+                />
+              </label>
+            </section>
 
-          <p class="help">
-            Screenshots und Eingaben erfordern eine lokale Freigabe im
-            Remote-Control-Banner (oben im Fenster).
-          </p>
-          <p class="help warn">
-            Wichtig: Das Geraet muss in AuraGo unter <strong>Remote Control</strong> freigegeben
-            werden. Ohne Freigabe antwortet der Agent mit „device is not approved“ und kann keine
-            Screenshots anfordern.
-          </p>
-        </section>
-      {/if}
+            <section class="card">
+              <label class="field checkbox-field">
+                <input
+                  type="checkbox"
+                  bind:checked={draftMinimizeToTray}
+                  onchange={markDirty}
+                />
+                <span>{$i18n("settings.appearance.minimizeToTray")}</span>
+              </label>
+              <p class="help">{$i18n("settings.appearance.minimizeToTray.help")}</p>
+            </section>
+          {/if}
 
-      {#if activeSection === "about"}
-        <section class="card">
-          <div class="card-header">
-            <h2>Ueber agodesk</h2>
-          </div>
+          {#if activeSection === "language"}
+            <section class="card">
+              <div class="card-header">
+                <h2>{$i18n("settings.language.title")}</h2>
+                <p>{$i18n("settings.language.description")}</p>
+              </div>
 
-          <dl class="info-grid">
-            <div>
-              <dt>Version</dt>
-              <dd>{appVersion}</dd>
-            </div>
-            <div>
-              <dt>Protokoll</dt>
-              <dd><code>agodesk.v1</code></dd>
-            </div>
-            <div>
-              <dt>Endpoint</dt>
-              <dd><code>/api/agodesk/ws</code></dd>
-            </div>
-          </dl>
+              <div class="locale-grid">
+                <label class="locale-card" class:selected={draftLocale === "system"}>
+                  <input
+                    type="radio"
+                    bind:group={draftLocale}
+                    value="system"
+                    onchange={markDirty}
+                  />
+                  <strong>{$i18n("locale.setting.system")}</strong>
+                </label>
+                {#each APP_LOCALES as appLocale (appLocale)}
+                  <label class="locale-card" class:selected={draftLocale === appLocale}>
+                    <input
+                      type="radio"
+                      bind:group={draftLocale}
+                      value={appLocale}
+                      onchange={markDirty}
+                    />
+                    <strong>{LOCALE_LABELS[appLocale]}</strong>
+                  </label>
+                {/each}
+              </div>
+            </section>
+          {/if}
 
-          <p class="help">
-            Dokumentation: <code>docs/BACKEND_PROTOCOL.md</code> und
-            <code>docs/BACKEND_FEATURE_PLANNING.md</code>
-          </p>
-        </section>
-      {/if}
+          {#if activeSection === "desktop"}
+            <section class="card">
+              <div class="card-header">
+                <h2>{$i18n("settings.desktop.title")}</h2>
+                <p>{$i18n("settings.desktop.description")}</p>
+              </div>
+
+              <label class="field checkbox-field">
+                <input
+                  type="checkbox"
+                  bind:checked={draftDesktopControlEnabled}
+                  onchange={markDirty}
+                />
+                <span>{$i18n("settings.desktop.enable")}</span>
+              </label>
+
+              <p class="help">{$i18n("settings.desktop.disabledHelp")}</p>
+
+              <dl class="info-grid">
+                <div>
+                  <dt>{$i18n("settings.desktop.status.label")}</dt>
+                  <dd>
+                    <span
+                      class="ui-chip"
+                      data-tone={draftDesktopControlEnabled ? "accepted" : "idle"}
+                    >
+                      {draftDesktopControlEnabled
+                        ? $i18n("settings.desktop.status.enabled")
+                        : $i18n("settings.desktop.status.disabled")}
+                    </span>
+                  </dd>
+                </div>
+                <div>
+                  <dt>{$i18n("settings.desktop.screenshots.label")}</dt>
+                  <dd>{$i18n("settings.desktop.screenshots.value")}</dd>
+                </div>
+                <div>
+                  <dt>{$i18n("settings.desktop.input.label")}</dt>
+                  <dd>{$i18n("settings.desktop.input.value")}</dd>
+                </div>
+                <div>
+                  <dt>{$i18n("settings.desktop.remoteControl.label")}</dt>
+                  <dd>
+                    <span
+                      class="ui-chip"
+                      data-tone={remoteControlActive ? "accepted" : "idle"}
+                    >
+                      {remoteControlActive
+                        ? $i18n("settings.desktop.remoteControl.granted")
+                        : $i18n("settings.desktop.remoteControl.inactive")}
+                    </span>
+                  </dd>
+                </div>
+              </dl>
+
+              <p class="help">{$i18n("settings.desktop.approvalHelp")}</p>
+              <p class="help warn">{$i18n("settings.desktop.auragoApprovalWarn")}</p>
+            </section>
+          {/if}
+
+          {#if activeSection === "files"}
+            <section class="card">
+              <div class="card-header">
+                <h2>{$i18n("settings.fileAccess.title")}</h2>
+                <p>{$i18n("settings.fileAccess.description")}</p>
+              </div>
+
+              <label class="field checkbox-field">
+                <input
+                  type="checkbox"
+                  bind:checked={draftFileAccess.enabled}
+                  onchange={markDirty}
+                />
+                <span>{$i18n("settings.fileAccess.enable")}</span>
+              </label>
+
+              <p class="help">{$i18n("settings.fileAccess.disabledHelp")}</p>
+
+              <div class="limits-row">
+                <label class="field">
+                  <span class="field-label">{$i18n("settings.fileAccess.limits.read")}</span>
+                  <input
+                    type="number"
+                    min="1"
+                    bind:value={draftFileAccess.maxReadBytes}
+                    oninput={markDirty}
+                    disabled={!draftFileAccess.enabled}
+                  />
+                </label>
+                <label class="field">
+                  <span class="field-label">{$i18n("settings.fileAccess.limits.write")}</span>
+                  <input
+                    type="number"
+                    min="1"
+                    bind:value={draftFileAccess.maxWriteBytes}
+                    oninput={markDirty}
+                    disabled={!draftFileAccess.enabled}
+                  />
+                </label>
+              </div>
+
+              {#if draftFileAccess.roots.length === 0}
+                <p class="help">{$i18n("settings.fileAccess.roots.empty")}</p>
+              {:else}
+                <ul class="file-roots-list">
+                  {#each draftFileAccess.roots as root (root.rootId)}
+                    <li class="file-root-row">
+                      <div class="file-root-fields">
+                        <label class="field compact">
+                          <span class="field-label">
+                            {$i18n("settings.fileAccess.roots.label")}
+                          </span>
+                          <input
+                            type="text"
+                            value={root.label}
+                            oninput={(event) =>
+                              updateFileRoot(root.rootId, {
+                                label: (event.currentTarget as HTMLInputElement).value,
+                              })}
+                          />
+                        </label>
+                        <div class="field compact">
+                          <span class="field-label">
+                            {$i18n("settings.fileAccess.roots.path")}
+                          </span>
+                          <code class="path-display" title={root.canonicalPath}>
+                            {buildPathDisplay(root.canonicalPath)}
+                          </code>
+                        </div>
+                      </div>
+                      <div class="file-root-perms">
+                        <label class="checkbox-field inline">
+                          <input
+                            type="checkbox"
+                            checked={root.readEnabled}
+                            onchange={(event) =>
+                              updateFileRoot(root.rootId, {
+                                readEnabled: (event.currentTarget as HTMLInputElement).checked,
+                              })}
+                          />
+                          <span>{$i18n("settings.fileAccess.roots.read")}</span>
+                        </label>
+                        <label class="checkbox-field inline">
+                          <input
+                            type="checkbox"
+                            checked={root.writeEnabled}
+                            onchange={(event) =>
+                              updateFileRoot(root.rootId, {
+                                writeEnabled: (event.currentTarget as HTMLInputElement).checked,
+                              })}
+                          />
+                          <span>{$i18n("settings.fileAccess.roots.write")}</span>
+                        </label>
+                        <button
+                          type="button"
+                          class="ui-btn ui-btn-secondary ui-btn-danger"
+                          onclick={() => removeFileRoot(root.rootId)}
+                        >
+                          {$i18n("settings.fileAccess.roots.remove")}
+                        </button>
+                      </div>
+                    </li>
+                  {/each}
+                </ul>
+              {/if}
+
+              <div class="action-row">
+                <button
+                  type="button"
+                  class="ui-btn ui-btn-secondary"
+                  onclick={() => void addFileRoot()}
+                  disabled={!draftFileAccess.enabled}
+                >
+                  {$i18n("settings.fileAccess.roots.add")}
+                </button>
+              </div>
+            </section>
+          {/if}
+
+          {#if activeSection === "speech"}
+            <section class="card">
+              <div class="card-header">
+                <h2>{$i18n("settings.speech.title")}</h2>
+                <p>{$i18n("settings.speech.description")}</p>
+              </div>
+
+              <label class="field checkbox-field">
+                <input
+                  type="checkbox"
+                  bind:checked={draftSpeech.enabled}
+                  onchange={markDirty}
+                />
+                <span>{$i18n("settings.speech.enable")}</span>
+              </label>
+
+              <label class="field checkbox-field">
+                <input
+                  type="checkbox"
+                  checked={draftSpeech.voiceResponses}
+                  onchange={(event) => {
+                    draftSpeech = {
+                      ...draftSpeech,
+                      voiceResponses: (event.currentTarget as HTMLInputElement).checked,
+                    };
+                    markDirty();
+                  }}
+                  disabled={!draftSpeech.enabled}
+                />
+                <span>{$i18n("settings.speech.voiceResponses")}</span>
+              </label>
+              <p class="help">{$i18n("settings.speech.voiceResponsesHelp")}</p>
+
+              <label class="field checkbox-field">
+                <input
+                  type="checkbox"
+                  checked={draftSpeech.autoSendToAuraGo}
+                  onchange={(event) =>
+                    setSpeechAutoSend((event.currentTarget as HTMLInputElement).checked)}
+                  disabled={!draftSpeech.enabled}
+                />
+                <span>{$i18n("settings.speech.autoSend")}</span>
+              </label>
+
+              {#if speechAgentConflict}
+                <p class="help warn">{$i18n("settings.speech.agentModeConflict")}</p>
+              {/if}
+
+              <label class="field checkbox-field">
+                <input
+                  type="checkbox"
+                  checked={draftSpeech.agentMode}
+                  onchange={(event) =>
+                    setSpeechAgentMode((event.currentTarget as HTMLInputElement).checked)}
+                  disabled={!draftSpeech.enabled}
+                />
+                <span>{$i18n("settings.speech.agentMode")}</span>
+              </label>
+              <p class="help">{$i18n("settings.speech.modeExclusionHelp")}</p>
+              <p class="help">{$i18n("settings.speech.agentModeHelp")}</p>
+              <p class="help">{$i18n("settings.speech.manualEditHelp")}</p>
+
+              <label class="field">
+                <span class="field-label">{$i18n("settings.speech.modelId.label")}</span>
+                <input
+                  type="text"
+                  bind:value={draftSpeech.modelId}
+                  oninput={markDirty}
+                  placeholder={$i18n("settings.speech.modelId.placeholder")}
+                  disabled={!draftSpeech.enabled}
+                />
+              </label>
+
+              <label class="field">
+                <span class="field-label">{$i18n("settings.speech.language.label")}</span>
+                <input
+                  type="text"
+                  bind:value={draftSpeech.language}
+                  oninput={markDirty}
+                  placeholder={$i18n("settings.speech.language.placeholder")}
+                  disabled={!draftSpeech.enabled}
+                />
+              </label>
+
+              <label class="field">
+                <span class="field-label">{$i18n("settings.speech.voiceName.label")}</span>
+                <select
+                  bind:value={draftSpeech.voiceName}
+                  onchange={markDirty}
+                  disabled={!draftSpeech.enabled}
+                >
+                  {#each GEMINI_VOICE_OPTIONS as voice (voice)}
+                    <option value={voice}>{voice}</option>
+                  {/each}
+                </select>
+              </label>
+            </section>
+
+            <section class="card">
+              <div class="card-header">
+                <h2>{$i18n("settings.speech.apiKey.title")}</h2>
+                <p>
+                  {$i18n("settings.speech.apiKeyHelp")}
+                </p>
+              </div>
+
+              <p class="help">
+                {$i18n("settings.speech.apiKey.freeKeyPrompt")}
+                <button
+                  type="button"
+                  class="ui-btn ui-btn-link"
+                  onclick={() => void openExternalUrl(GEMINI_API_KEY_URL)}
+                >
+                  {$i18n("settings.speech.apiKey.freeKeyLink")}
+                </button>
+              </p>
+
+              <dl class="info-grid compact">
+                <div>
+                  <dt>{$i18n("settings.speech.apiKey.statusLabel")}</dt>
+                  <dd>
+                    <span class="ui-chip" data-tone={apiKeyStored ? "accepted" : "idle"}>
+                      {apiKeyStored
+                        ? $i18n("settings.speech.apiKey.stored")
+                        : $i18n("settings.speech.apiKey.notStored")}
+                    </span>
+                  </dd>
+                </div>
+              </dl>
+
+              <label class="field">
+                <span class="field-label">{$i18n("settings.speech.apiKey.fieldLabel")}</span>
+                <input
+                  type="password"
+                  bind:value={apiKeyInput}
+                  placeholder={apiKeyStored
+                    ? $i18n("settings.speech.apiKey.placeholderReplace")
+                    : $i18n("settings.speech.apiKey.placeholderNew")}
+                  autocomplete="off"
+                />
+              </label>
+
+              {#if apiKeyMessage}
+                <p
+                  class="api-key-message"
+                  class:success={apiKeyMessageTone === "success"}
+                  class:error={apiKeyMessageTone === "error"}
+                >
+                  {apiKeyMessage}
+                </p>
+              {/if}
+
+              <div class="action-row">
+                <button
+                  type="button"
+                  class="ui-btn ui-btn-primary"
+                  onclick={() => void handleSaveApiKey()}
+                  disabled={apiKeyBusy}
+                >
+                  {$i18n("settings.speech.apiKey.save")}
+                </button>
+                <button
+                  type="button"
+                  class="ui-btn ui-btn-secondary"
+                  onclick={() => void handleTestApiKey()}
+                  disabled={apiKeyBusy}
+                >
+                  {$i18n("settings.speech.apiKey.test")}
+                </button>
+                <button
+                  type="button"
+                  class="ui-btn ui-btn-secondary ui-btn-danger"
+                  onclick={() => void handleRemoveApiKey()}
+                  disabled={apiKeyBusy || !apiKeyStored}
+                >
+                  {$i18n("settings.speech.apiKey.remove")}
+                </button>
+              </div>
+            </section>
+          {/if}
+
+          {#if activeSection === "about"}
+            <section class="card">
+              <div class="card-header">
+                <h2>{$i18n("settings.about.title")}</h2>
+              </div>
+
+              <dl class="info-grid">
+                <div>
+                  <dt>{$i18n("settings.about.version.label")}</dt>
+                  <dd>{appVersion}</dd>
+                </div>
+                <div>
+                  <dt>{$i18n("settings.about.protocol.label")}</dt>
+                  <dd><code>agodesk.v1</code></dd>
+                </div>
+                <div>
+                  <dt>{$i18n("settings.about.endpoint.label")}</dt>
+                  <dd><code>/api/agodesk/ws</code></dd>
+                </div>
+              </dl>
+
+              <p class="help">{$i18n("settings.about.docsHelp")}</p>
+            </section>
+          {/if}
+        </div>
+      {/key}
     </div>
   </div>
+
+  {#if dirty}
+    <footer class="settings-footer">
+      <span class="footer-copy">{$i18n("settings.footer.unsaved")}</span>
+      <div class="footer-actions">
+        <button
+          type="button"
+          class="ui-btn ui-btn-secondary"
+          onclick={discardChanges}
+          disabled={saving}
+        >
+          {$i18n("settings.footer.discard")}
+        </button>
+        <button
+          type="button"
+          class="ui-btn ui-btn-primary"
+          onclick={() => void save()}
+          disabled={saving}
+        >
+          {$i18n("settings.saveAndConnect")}
+        </button>
+      </div>
+    </footer>
+  {/if}
 </div>
 
 <style>
@@ -419,6 +1188,14 @@
     flex-wrap: wrap;
   }
 
+  .header-drag {
+    flex: 1;
+    min-width: 3rem;
+    min-height: 1.5rem;
+    -webkit-app-region: drag;
+    app-region: drag;
+  }
+
   .header-copy {
     flex: 1;
     min-width: 12rem;
@@ -439,11 +1216,11 @@
     display: flex;
     align-items: center;
     gap: 0.75rem;
+    flex-wrap: wrap;
   }
 
   .dirty-badge {
     font-size: 0.8125rem;
-    color: #d97706;
   }
 
   .settings-layout {
@@ -500,6 +1277,13 @@
     gap: 1rem;
     align-content: start;
     padding-right: 0.25rem;
+    padding-bottom: 0.5rem;
+  }
+
+  .section-panel {
+    display: grid;
+    gap: 1rem;
+    align-content: start;
   }
 
   .card {
@@ -528,17 +1312,45 @@
     margin-top: 1rem;
   }
 
+  .field.compact {
+    margin-top: 0;
+  }
+
   .field-label {
     font-size: 0.875rem;
     font-weight: 600;
   }
 
-  input[type="url"] {
+  .checkbox-field {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.55rem;
+    margin-top: 1rem;
+    cursor: pointer;
+  }
+
+  .checkbox-field.inline {
+    margin-top: 0;
+  }
+
+  .checkbox-field input {
+    margin-top: 0.15rem;
+  }
+
+  input[type="url"],
+  input[type="text"],
+  input[type="password"],
+  input[type="number"],
+  select {
     border: 1px solid var(--color-border);
     border-radius: 0.65rem;
     padding: 0.7rem 0.8rem;
     background: var(--color-input-bg);
     color: var(--color-text);
+  }
+
+  input[type="range"] {
+    width: 100%;
   }
 
   .help {
@@ -557,7 +1369,9 @@
   }
 
   .preset-grid,
-  .theme-grid {
+  .theme-grid,
+  .locale-grid,
+  .sound-theme-grid {
     display: grid;
     gap: 0.65rem;
     margin-top: 1rem;
@@ -567,8 +1381,19 @@
     grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
   }
 
+  .theme-grid,
+  .locale-grid {
+    grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  }
+
+  .sound-theme-grid {
+    grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr));
+  }
+
   .preset-card,
-  .theme-card {
+  .theme-card,
+  .locale-card,
+  .sound-theme-card {
     display: grid;
     gap: 0.25rem;
     text-align: left;
@@ -581,7 +1406,9 @@
   }
 
   .preset-card.selected,
-  .theme-card.selected {
+  .theme-card.selected,
+  .locale-card.selected,
+  .sound-theme-card.selected {
     border-color: var(--color-accent);
     background: color-mix(in srgb, var(--color-accent) 10%, var(--color-input-bg));
   }
@@ -592,11 +1419,9 @@
     color: var(--color-muted);
   }
 
-  .theme-grid {
-    grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
-  }
-
-  .theme-card input {
+  .theme-card input,
+  .locale-card input,
+  .sound-theme-card input {
     position: absolute;
     opacity: 0;
     pointer-events: none;
@@ -606,11 +1431,64 @@
     font-size: 1.25rem;
   }
 
+  .sound-preview-btn {
+    justify-self: start;
+    margin-top: 0.25rem;
+  }
+
+  .limits-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+    gap: 0.75rem;
+    margin-top: 0.5rem;
+  }
+
+  .file-roots-list {
+    list-style: none;
+    margin: 1rem 0 0;
+    padding: 0;
+    display: grid;
+    gap: 0.75rem;
+  }
+
+  .file-root-row {
+    border: 1px solid var(--color-border);
+    border-radius: 0.75rem;
+    padding: 0.75rem;
+    background: var(--color-input-bg);
+    display: grid;
+    gap: 0.75rem;
+  }
+
+  .file-root-fields {
+    display: grid;
+    gap: 0.65rem;
+  }
+
+  .file-root-perms {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.65rem;
+    align-items: center;
+  }
+
+  .path-display {
+    display: block;
+    padding: 0.55rem 0.65rem;
+    border-radius: 0.5rem;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+  }
+
   .info-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
     gap: 0.85rem 1rem;
     margin: 1rem 0 0;
+  }
+
+  .info-grid.compact {
+    margin-top: 0.75rem;
   }
 
   .info-grid dt {
@@ -626,7 +1504,7 @@
     font-size: 0.9375rem;
   }
 
-  .badge {
+  .ui-chip {
     display: inline-flex;
     align-items: center;
     border-radius: 999px;
@@ -636,22 +1514,28 @@
     border: 1px solid var(--color-border);
   }
 
-  .badge[data-tone="connected"],
-  .badge[data-tone="accepted"],
-  .badge[data-tone="loopback"] {
-    border-color: #22c55e;
-    color: #15803d;
-  }
-
-  .badge[data-tone="connecting"],
-  .badge[data-tone="pairing"],
-  .badge[data-tone="awaiting_pairing"] {
+  .ui-chip[data-tone="warning"] {
     border-color: #eab308;
     color: #a16207;
   }
 
-  .badge[data-tone="error"],
-  .badge[data-tone="disconnected"] {
+  .ui-chip[data-tone="connected"],
+  .ui-chip[data-tone="accepted"],
+  .ui-chip[data-tone="loopback"] {
+    border-color: #22c55e;
+    color: #15803d;
+  }
+
+  .ui-chip[data-tone="connecting"],
+  .ui-chip[data-tone="pairing"],
+  .ui-chip[data-tone="awaiting_pairing"] {
+    border-color: #eab308;
+    color: #a16207;
+  }
+
+  .ui-chip[data-tone="error"],
+  .ui-chip[data-tone="disconnected"],
+  .ui-chip[data-tone="idle"] {
     border-color: #ef4444;
     color: #b91c1c;
   }
@@ -672,9 +1556,21 @@
     font-size: 0.875rem;
   }
 
+  .api-key-message {
+    margin: 0.75rem 0 0;
+    font-size: 0.875rem;
+  }
+
+  .api-key-message.success {
+    color: #15803d;
+  }
+
+  .api-key-message.error {
+    color: #b91c1c;
+  }
+
   .back-button,
-  .primary,
-  .secondary {
+  :global(.ui-btn) {
     border-radius: 0.55rem;
     padding: 0.55rem 0.9rem;
     cursor: pointer;
@@ -682,26 +1578,59 @@
   }
 
   .back-button,
-  .secondary {
+  :global(.ui-btn-secondary) {
     border: 1px solid var(--color-border);
     background: transparent;
     color: inherit;
   }
 
-  .primary {
+  :global(.ui-btn-primary) {
     border: none;
     background: var(--color-accent);
     color: white;
   }
 
-  .primary:disabled {
+  :global(.ui-btn-primary:disabled),
+  .back-button:disabled {
     opacity: 0.55;
     cursor: not-allowed;
   }
 
-  .danger {
+  :global(.ui-btn-danger) {
     border-color: #ef4444;
     color: #ef4444;
+  }
+
+  :global(.ui-btn-link) {
+    border: none;
+    background: none;
+    padding: 0;
+    color: var(--color-accent);
+    text-decoration: underline;
+    cursor: pointer;
+  }
+
+  .settings-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.85rem 1.25rem;
+    border-top: 1px solid var(--color-border);
+    background: var(--color-surface);
+    box-shadow: var(--color-panel-shadow);
+    flex-wrap: wrap;
+  }
+
+  .footer-copy {
+    font-size: 0.875rem;
+    color: var(--color-muted);
+  }
+
+  .footer-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
   }
 
   code {
@@ -727,6 +1656,10 @@
     }
 
     .nav-hint {
+      display: none;
+    }
+
+    .header-drag {
       display: none;
     }
   }

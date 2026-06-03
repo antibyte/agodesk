@@ -1,4 +1,5 @@
 import type { SessionStartPayload, WsMessage } from "../types/protocol";
+import { buildSessionStartCommon } from "./session-start";
 
 function toHex(buffer: ArrayBuffer): string {
   return [...new Uint8Array(buffer)]
@@ -45,14 +46,16 @@ export async function computeSharedKeyProof(
   return toHex(signature);
 }
 
-export function buildPairingSessionStart(
+export async function buildPairingSessionStart(
   pairingToken: string,
-): WsMessage<SessionStartPayload> {
+): Promise<WsMessage<SessionStartPayload>> {
+  const common = await buildSessionStartCommon();
   return {
     id: crypto.randomUUID(),
     type: "session.start",
     timestamp: new Date().toISOString(),
     payload: {
+      ...common,
       pairing_token: pairingToken.trim(),
     },
   };
@@ -62,6 +65,7 @@ export async function buildReconnectSessionStart(
   deviceId: string,
   sharedKey: string,
 ): Promise<WsMessage<SessionStartPayload>> {
+  const common = await buildSessionStartCommon();
   const nonce = crypto.randomUUID();
   const timestamp = new Date().toISOString();
   const message: WsMessage<SessionStartPayload> = {
@@ -69,6 +73,7 @@ export async function buildReconnectSessionStart(
     type: "session.start",
     timestamp: new Date().toISOString(),
     payload: {
+      ...common,
       device_id: deviceId,
       shared_key_proof: {
         nonce,

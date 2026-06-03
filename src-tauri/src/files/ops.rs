@@ -15,6 +15,7 @@ use super::types::{
 const MAX_LIST_ENTRIES: usize = 500;
 const MAX_LIST_DEPTH: usize = 8;
 
+#[tauri::command]
 pub fn file_list(
     roots: Vec<FileAccessRootInput>,
     root_id: Option<String>,
@@ -96,6 +97,7 @@ fn collect_entries(
     Ok(())
 }
 
+#[tauri::command]
 pub fn file_read(
     roots: Vec<FileAccessRootInput>,
     root_id: Option<String>,
@@ -132,6 +134,7 @@ pub fn file_read(
     })
 }
 
+#[tauri::command]
 pub fn file_write(
     roots: Vec<FileAccessRootInput>,
     root_id: Option<String>,
@@ -227,11 +230,13 @@ fn format_system_time(time: std::time::SystemTime) -> Option<String> {
     Some(datetime.to_rfc3339())
 }
 
+#[tauri::command]
 pub fn pick_folder_path() -> Result<Option<String>, String> {
     let folder = rfd::FileDialog::new().pick_folder();
     Ok(folder.map(|path| path.to_string_lossy().to_string()))
 }
 
+#[tauri::command]
 pub fn canonicalize_folder_path(path: String) -> Result<String, String> {
     let trimmed = path.trim();
     if trimmed.is_empty() {

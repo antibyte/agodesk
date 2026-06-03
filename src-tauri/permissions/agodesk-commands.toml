@@ -1,6 +1,6 @@
-[[permission]]
+﻿[[permission]]
 identifier = "agodesk-commands"
-description = "Allows agodesk credential, desktop, and websocket commands."
+description = "Allows agodesk credential, desktop, file, tray, and websocket commands."
 commands.allow = [
   "store_shared_key",
   "get_shared_key",
@@ -13,10 +13,18 @@ commands.allow = [
   "inject_input",
   "set_input_approval",
   "reset_desktop_session",
+  "open_external_url",
   "probe_server_certificate",
   "save_trusted_certificate",
   "get_trusted_certificates",
   "agodesk_connect",
   "agodesk_send",
-  "agodesk_disconnect"
+  "agodesk_disconnect",
+  "file_list",
+  "file_read",
+  "file_write",
+  "pick_folder_path",
+  "canonicalize_folder_path",
+  "set_minimize_to_tray",
+  "fetch_server_asset"
 ]

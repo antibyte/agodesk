@@ -2,28 +2,28 @@ import { DEFAULT_SETTINGS } from "../types/protocol";
 
 export interface ServerPreset {
   id: string;
-  label: string;
-  description: string;
+  labelKey: string;
+  descriptionKey: string;
   url: string;
 }
 
 export const SERVER_PRESETS: ServerPreset[] = [
   {
     id: "loopback-mock",
-    label: "Loopback (Mock)",
-    description: "Lokaler Mock-Server ohne Pairing",
+    labelKey: "settingsPreset.loopbackMock.label",
+    descriptionKey: "settingsPreset.loopbackMock.description",
     url: "ws://127.0.0.1:8080/api/agodesk/ws?insecure_loopback=1",
   },
   {
     id: "loopback-default",
-    label: "Loopback (Standard)",
-    description: "Standard-Dev-URL aus den App-Einstellungen",
+    labelKey: "settingsPreset.loopbackDefault.label",
+    descriptionKey: "settingsPreset.loopbackDefault.description",
     url: DEFAULT_SETTINGS.serverUrl,
   },
   {
     id: "aurago-lan",
-    label: "AuraGo LAN",
-    description: "Produktiv mit TLS und Pairing",
+    labelKey: "settingsPreset.auragoLan.label",
+    descriptionKey: "settingsPreset.auragoLan.description",
     url: "wss://192.168.6.238:8443/api/agodesk/ws",
   },
 ];

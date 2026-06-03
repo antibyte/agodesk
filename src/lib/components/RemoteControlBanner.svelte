@@ -1,6 +1,10 @@
 <script lang="ts">
+  import { i18n } from "../i18n";
+
   interface Props {
     visible?: boolean;
+    pending?: boolean;
+    active?: boolean;
     operation?: string;
     onApprove?: () => void;
     onDeny?: () => void;
@@ -9,30 +13,65 @@
 
   let {
     visible = false,
+    pending = false,
+    active = false,
     operation = "",
     onApprove,
     onDeny,
     onStop,
   }: Props = $props();
+
+  const operationLabel = $derived.by(() => {
+    switch (operation) {
+      case "desktop_screenshot":
+        return $i18n("remoteControl.operation.screenshot");
+      case "desktop_input":
+        return $i18n("remoteControl.operation.input");
+      case "desktop_permission_request":
+        return $i18n("remoteControl.operation.permissionRequest");
+      default:
+        return operation
+          ? $i18n("remoteControl.operation.default")
+          : $i18n("remoteControl.operation.default");
+    }
+  });
 </script>
 
 {#if visible}
-  <div class="remote-banner" aria-live="assertive" role="dialog" aria-labelledby="remote-title">
+  <div
+    class="remote-banner"
+    class:active
+    aria-live="assertive"
+    role="dialog"
+    aria-labelledby="remote-title"
+  >
     <div>
-      <strong id="remote-title">Remote Control — Freigabe erforderlich</strong>
+      <strong id="remote-title">
+        {active
+          ? $i18n("remoteControl.title.active")
+          : $i18n("remoteControl.title.pending")}
+      </strong>
       <p>
-        Ein Agent moechte auf deinen Desktop zugreifen
+        {active
+          ? $i18n("remoteControl.description.active")
+          : $i18n("remoteControl.description.pending")}
         {#if operation}
-          (<code>{operation}</code>).
+          <span class="op">({operationLabel})</span>
         {/if}
-        Screenshots und Eingaben sind erst nach deiner Freigabe moeglich.
       </p>
     </div>
     <div class="actions">
-      <button type="button" onclick={() => onApprove?.()}>Freigeben</button>
-      <button type="button" class="secondary" onclick={() => onDeny?.()}>Ablehnen</button>
-      {#if operation === "desktop_input" || operation === "desktop_screenshot"}
-        <button type="button" class="danger" onclick={() => onStop?.()}>Stoppen</button>
+      {#if active}
+        <button type="button" class="danger" onclick={() => onStop?.()}>
+          {$i18n("remoteControl.stop")}
+        </button>
+      {:else if pending}
+        <button type="button" onclick={() => onApprove?.()}>
+          {$i18n("remoteControl.approve")}
+        </button>
+        <button type="button" class="secondary" onclick={() => onDeny?.()}>
+          {$i18n("remoteControl.deny")}
+        </button>
       {/if}
     </div>
   </div>
@@ -50,7 +89,13 @@
     z-index: 20;
   }
 
-  code {
+  .remote-banner.active {
+    border-bottom-color: #22c55e;
+    background: color-mix(in srgb, #22c55e 14%, var(--color-surface));
+  }
+
+  .op {
+    color: var(--color-muted);
     font-size: 0.8125rem;
   }
 

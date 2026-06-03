@@ -201,4 +201,10 @@ export function isDesktopCommand(
   return message.type === "desktop.command";
 }
 
+export function isPersonaAssets(
+  message: WsMessage,
+): message is WsMessage<import("../types/protocol").PersonaAssetsPayload> {
+  return message.type === "persona.assets";
+}
+
 export { NativeWebSocketService as WebSocketService };

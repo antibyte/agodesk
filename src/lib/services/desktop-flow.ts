@@ -1,3 +1,4 @@
+import { get } from "svelte/store";
 import type {
   DesktopCommandContext,
   DesktopCommandPayload,
@@ -8,10 +9,12 @@ import type {
 import {
   canExecuteDesktopCommands,
   isDesktopInputOperation,
+  isFileOperation,
   normalizeDesktopCommandPayload,
   requiresLocalDesktopApproval,
   requiresRemoteControlBanner,
 } from "../types/protocol";
+import { settings } from "../stores/settings";
 import { sessionState } from "../stores/session";
 import { executeDesktopCommand, type DesktopResultSender } from "./desktop";
 import { handleDesktopCommand } from "./session-flow";
@@ -80,6 +83,17 @@ export async function handleIncomingDesktopCommand(
       command,
       "SESSION_NOT_ACCEPTED",
       "Desktop-Befehle sind erst nach session.accepted erlaubt.",
+      desktopContext,
+    );
+    return;
+  }
+
+  if (!get(settings).desktopControlEnabled && !isFileOperation(command.operation)) {
+    await rejectCommand(
+      context.wsSend,
+      command,
+      "DESKTOP_CONTROL_DISABLED",
+      "Desktop-Steuerung ist in den agodesk-Einstellungen deaktiviert.",
       desktopContext,
     );
     return;

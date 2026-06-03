@@ -1,13 +1,12 @@
 import { mount } from "svelte";
 import App from "./App.svelte";
 import "./app.css";
-import { applyTheme } from "./lib/services/theme";
-import { DEFAULT_SETTINGS } from "./lib/types/protocol";
-
-applyTheme(DEFAULT_SETTINGS.theme);
+import { loadSettings } from "./lib/services/settings";
 
 const target = document.getElementById("app");
 
 if (target) {
-  mount(App, { target });
+  void loadSettings().then(() => {
+    mount(App, { target });
+  });
 }

@@ -1,3 +1,5 @@
+import type { UiLocaleSetting } from "../i18n/locales";
+
 export type ConnectionStatus =
   | "connecting"
   | "connected"
@@ -34,6 +36,8 @@ export type MessageType =
   | "session.start"
   | "session.accepted"
   | "session.clear"
+  | "persona.assets.request"
+  | "persona.assets"
   | "desktop.command"
   | "desktop.result";
 
@@ -54,8 +58,18 @@ export interface SystemConnectedPayload {
   capabilities?: string[];
 }
 
-export interface SessionStartPairingPayload {
-  pairing_token: string;
+export interface SessionStartHost {
+  hostname: string;
+  os: string;
+  arch: string;
+  ip?: string;
+}
+
+export interface SessionStartCommon {
+  client_version: string;
+  client_capabilities: string[];
+  host: SessionStartHost;
+  file_access?: FileAccessSessionPayload;
 }
 
 export interface SharedKeyProofPayload {
@@ -64,7 +78,11 @@ export interface SharedKeyProofPayload {
   hmac: string;
 }
 
-export interface SessionStartReconnectPayload {
+export interface SessionStartPairingPayload extends SessionStartCommon {
+  pairing_token: string;
+}
+
+export interface SessionStartReconnectPayload extends SessionStartCommon {
   device_id: string;
   shared_key_proof: SharedKeyProofPayload;
 }
@@ -77,6 +95,8 @@ export interface SessionAcceptedPayload {
   session_id: string;
   device_id: string;
   shared_key?: string;
+  advertised_capabilities?: string[];
+  capabilities?: string[];
 }
 
 export function normalizeSessionAcceptedPayload(
@@ -99,10 +119,18 @@ export function normalizeSessionAcceptedPayload(
       ? sharedKeyRaw
       : undefined;
 
+  const capsRaw = record.advertised_capabilities ?? record.capabilities;
+  const advertisedCapabilities = Array.isArray(capsRaw)
+    ? capsRaw.filter((cap): cap is string => typeof cap === "string")
+    : undefined;
+
   return {
     session_id: sessionId,
     device_id: deviceId,
     shared_key: sharedKey,
+    ...(advertisedCapabilities?.length
+      ? { advertised_capabilities: advertisedCapabilities }
+      : {}),
   };
 }
 
@@ -227,7 +255,14 @@ export type DesktopOperation =
   | "desktop_stream_start"
   | "desktop_stream_stop"
   | "desktop_permission_request"
-  | "desktop_input";
+  | "desktop_input"
+  | "file_list"
+  | "file_read"
+  | "file_write";
+
+export const FILE_OPERATIONS = ["file_list", "file_read", "file_write"] as const;
+
+export type FileOperation = (typeof FILE_OPERATIONS)[number];
 
 export const DESKTOP_V1_OPERATIONS: DesktopOperation[] = [
   "desktop_screenshot",
@@ -247,12 +282,34 @@ export type DesktopErrorCode =
   | "DESKTOP_INPUT_DENIED"
   | "DESKTOP_STREAM_UNSUPPORTED"
   | "DESKTOP_OPERATION_UNSUPPORTED"
-  | "DESKTOP_COMMAND_INVALID";
+  | "DESKTOP_COMMAND_INVALID"
+  | "DESKTOP_CONTROL_DISABLED"
+  | "FILE_ACCESS_DISABLED"
+  | "FILE_ROOT_UNKNOWN"
+  | "FILE_PATH_DENIED"
+  | "FILE_NOT_FOUND"
+  | "FILE_TOO_LARGE"
+  | "FILE_WRITE_DENIED"
+  | "FILE_HASH_MISMATCH";
+
+export interface FileCommandParams {
+  root_id?: string;
+  path: string;
+  recursive?: boolean;
+  encoding?: "utf-8";
+  content?: string;
+  expected_hash?: string;
+  create_only?: boolean;
+}
 
 export interface DesktopCommandPayload {
   command_id: string;
   operation: DesktopOperation;
-  params?: DesktopScreenshotParams | DesktopInputParams | Record<string, unknown>;
+  params?:
+    | DesktopScreenshotParams
+    | DesktopInputParams
+    | FileCommandParams
+    | Record<string, unknown>;
 }
 
 export interface DesktopResultPayload {
@@ -337,6 +394,8 @@ export function normalizeDesktopCommandPayload(
     params = normalizeDesktopScreenshotParams(paramsRecord);
   } else if (operation === "desktop_input") {
     params = normalizeDesktopInputParams(paramsRecord);
+  } else if (isFileOperation(operation)) {
+    params = normalizeFileCommandParams(paramsRecord);
   } else if (Object.keys(paramsRecord).length > 0) {
     params = paramsRecord;
   }
@@ -354,6 +413,24 @@ export function canExecuteDesktopCommands(sessionStatus: SessionStatus): boolean
 
 export function isDesktopInputOperation(operation: string): boolean {
   return operation === "desktop_input";
+}
+
+export function isFileOperation(operation: string): operation is FileOperation {
+  return FILE_OPERATIONS.includes(operation as FileOperation);
+}
+
+export function normalizeFileCommandParams(
+  raw: Record<string, unknown>,
+): FileCommandParams {
+  return {
+    root_id: readString(raw, "root_id", "rootId"),
+    path: readString(raw, "path") ?? "",
+    recursive: raw.recursive === true,
+    encoding: raw.encoding === "utf-8" ? "utf-8" : undefined,
+    content: readString(raw, "content"),
+    expected_hash: readString(raw, "expected_hash", "expectedHash"),
+    create_only: raw.create_only === true || raw.createOnly === true,
+  };
 }
 
 export function requiresLocalDesktopApproval(operation: string): boolean {
@@ -393,21 +470,155 @@ export interface ChatMessage {
   text: string;
   timestamp: string;
   requestId?: string;
+  /** i18n key for system messages (re-translated on locale change). */
+  messageKey?: string;
+  messageParams?: Record<string, string | number>;
+  tone?: "info" | "success" | "error";
 }
 
 export type ThemeMode = "system" | "light" | "dark";
 
+export type UiSoundTheme = "soft" | "classic" | "modern" | "warm";
+
+export type UiSoundEvent = "send" | "receive" | "success" | "error" | "notice";
+
+export interface UiSoundSettings {
+  enabled: boolean;
+  theme: UiSoundTheme;
+  /** 0–1, Default ~0.2 für dezente Wirkung */
+  volume: number;
+}
+
+export interface SpeechSettings {
+  enabled: boolean;
+  modelId: string;
+  language: string;
+  autoSendToAuraGo: boolean;
+  agentMode: boolean;
+  voiceResponses: boolean;
+  voiceName: string;
+}
+
+export const DEFAULT_SPEECH_SETTINGS: SpeechSettings = {
+  enabled: true,
+  modelId: "gemini-2.5-flash-native-audio-preview-12-2025",
+  language: "de-DE",
+  autoSendToAuraGo: false,
+  agentMode: false,
+  voiceResponses: true,
+  voiceName: "Zephyr",
+};
+
+export const DEFAULT_UI_SOUND_SETTINGS: UiSoundSettings = {
+  enabled: true,
+  theme: "soft",
+  volume: 0.2,
+};
+
+export const UI_SOUND_THEMES: readonly UiSoundTheme[] = [
+  "soft",
+  "classic",
+  "modern",
+  "warm",
+] as const;
+
+export const UI_SOUND_THEME_LABELS: Record<UiSoundTheme, string> = {
+  soft: "Soft",
+  classic: "Classic",
+  modern: "Modern",
+  warm: "Warm",
+};
+
+export type FileAccessPermission = "read" | "write";
+
+export interface FileAccessRoot {
+  rootId: string;
+  label: string;
+  canonicalPath: string;
+  pathDisplay: string;
+  readEnabled: boolean;
+  writeEnabled: boolean;
+}
+
+export interface FileAccessSettings {
+  enabled: boolean;
+  maxReadBytes: number;
+  maxWriteBytes: number;
+  roots: FileAccessRoot[];
+}
+
+export interface FileAccessSessionRoot {
+  root_id: string;
+  label: string;
+  path_display: string;
+  permissions: FileAccessPermission[];
+}
+
+export interface FileAccessSessionPayload {
+  enabled: boolean;
+  max_read_bytes: number;
+  max_write_bytes: number;
+  roots: FileAccessSessionRoot[];
+}
+
+export const DEFAULT_FILE_ACCESS_SETTINGS: FileAccessSettings = {
+  enabled: false,
+  maxReadBytes: 8_388_608,
+  maxWriteBytes: 8_388_608,
+  roots: [],
+};
+
 export interface AppSettings {
   serverUrl: string;
   theme: ThemeMode;
+  /** UI-Sprache (`system` folgt der Betriebssystem-Sprache). */
+  locale: UiLocaleSetting;
+  speech: SpeechSettings;
+  /** Dezente UI-Sounds (Nachrichten, Verbindung). */
+  uiSounds: UiSoundSettings;
+  /** Fenster in den Infobereich minimieren statt beenden. */
+  minimizeToTray: boolean;
+  /** Screenshots und Remote-Eingaben über desktop.command erlauben. */
+  desktopControlEnabled: boolean;
+  /** Lokale Ordnerfreigaben für Remote-Dateizugriff. */
+  fileAccess: FileAccessSettings;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
   serverUrl: "ws://127.0.0.1:8080/api/agodesk/ws?insecure_loopback=1",
   theme: "system",
+  locale: "system",
+  speech: { ...DEFAULT_SPEECH_SETTINGS },
+  uiSounds: { ...DEFAULT_UI_SOUND_SETTINGS },
+  minimizeToTray: false,
+  desktopControlEnabled: true,
+  fileAccess: { ...DEFAULT_FILE_ACCESS_SETTINGS },
 };
 
 export const PROTOCOL_VERSION = "agodesk.v1";
+
+export const AGODESK_CLIENT_VERSION = "0.1.0";
+
+export const AGODESK_BASE_CAPABILITIES = [
+  "chat.full_response",
+  "persona.assets",
+] as const;
+
+export const AGODESK_DESKTOP_CAPABILITIES = [
+  "remote.desktop.capture",
+  "remote.desktop.permission_request",
+  "remote.desktop.input",
+] as const;
+
+/** Capabilities advertised to AuraGo when desktop control is fully enabled. */
+export const AGODESK_CLIENT_CAPABILITIES = [
+  "chat.full_response",
+  ...AGODESK_DESKTOP_CAPABILITIES,
+  "persona.assets",
+] as const;
+
+export const AGODESK_FILE_READ_CAPABILITY = "remote.files.read";
+export const AGODESK_FILE_WRITE_CAPABILITY = "remote.files.write";
 
 export function isLoopbackHost(host: string): boolean {
   return host === "localhost" || host === "127.0.0.1" || host === "::1" || host === "[::1]";
@@ -475,26 +686,138 @@ export function isTlsFatalError(code: string): boolean {
   );
 }
 
-export interface SpeechSettings {
-  enabled: boolean;
-  modelId: string;
-  voiceName?: string;
-  agentMode?: boolean;
-  voiceResponses?: boolean;
-  language?: string;
+export interface PersonaAssetsRequestPayload {
+  session_id: string;
 }
 
-export interface FileAccessRoot {
-  rootId: string;
-  label: string;
-  canonicalPath: string;
-  readEnabled: boolean;
-  writeEnabled: boolean;
+export interface PersonaAssetsPayload {
+  session_id: string;
+  persona: string;
+  icon_key: string;
+  avatar_image_url: string;
+  icon_url: string;
+  asset_version: string;
+  persona_prompt?: string;
 }
 
-export interface FileAccessSettings {
-  enabled: boolean;
-  maxReadBytes: number;
-  maxWriteBytes: number;
-  roots: FileAccessRoot[];
+export function normalizePersonaAssetsPayload(
+  payload: unknown,
+): PersonaAssetsPayload | null {
+  if (!payload || typeof payload !== "object") {
+    return null;
+  }
+
+  const record = payload as Record<string, unknown>;
+  const sessionId = record.session_id ?? record.sessionId;
+  const persona = record.persona;
+  const iconKey = record.icon_key ?? record.iconKey;
+  const avatarImageUrl = record.avatar_image_url ?? record.avatarImageUrl;
+  const iconUrl = record.icon_url ?? record.iconUrl;
+  const assetVersion = record.asset_version ?? record.assetVersion;
+  const personaPromptRaw = record.persona_prompt ?? record.personaPrompt;
+
+  if (
+    typeof sessionId !== "string" ||
+    typeof persona !== "string" ||
+    typeof iconKey !== "string" ||
+    typeof avatarImageUrl !== "string" ||
+    typeof iconUrl !== "string" ||
+    typeof assetVersion !== "string"
+  ) {
+    return null;
+  }
+
+  const personaPrompt =
+    typeof personaPromptRaw === "string" && personaPromptRaw.length > 0
+      ? personaPromptRaw
+      : undefined;
+
+  return {
+    session_id: sessionId,
+    persona,
+    icon_key: iconKey,
+    avatar_image_url: avatarImageUrl,
+    icon_url: iconUrl,
+    asset_version: assetVersion,
+    persona_prompt: personaPrompt,
+  };
+}
+
+export function resolvePersonaAssetUrl(serverUrl: string, assetUrl: string): string {
+  if (!assetUrl.trim()) {
+    return "";
+  }
+  if (assetUrl.startsWith("http://") || assetUrl.startsWith("https://")) {
+    return assetUrl;
+  }
+  try {
+    const origin = getWsOrigin(serverUrl);
+    const path = assetUrl.startsWith("/") ? assetUrl : `/${assetUrl}`;
+    return `${origin}${path}`;
+  } catch {
+    return assetUrl;
+  }
+}
+
+export function hasAdvertisedRemoteDesktopCapture(
+  capabilities: readonly string[],
+): boolean {
+  return capabilities.includes("remote.desktop.capture");
+}
+
+export function buildFileAccessSessionPayload(
+  fileAccess: FileAccessSettings,
+): FileAccessSessionPayload | undefined {
+  if (!fileAccess.enabled) {
+    return undefined;
+  }
+
+  const roots = fileAccess.roots
+    .filter((root) => root.readEnabled || root.writeEnabled)
+    .map((root) => ({
+      root_id: root.rootId,
+      label: root.label,
+      path_display: root.pathDisplay,
+      permissions: [
+        ...(root.readEnabled ? (["read"] as const) : []),
+        ...(root.writeEnabled ? (["write"] as const) : []),
+      ],
+    }));
+
+  if (roots.length === 0) {
+    return undefined;
+  }
+
+  return {
+    enabled: true,
+    max_read_bytes: fileAccess.maxReadBytes,
+    max_write_bytes: fileAccess.maxWriteBytes,
+    roots,
+  };
+}
+
+export function agodeskClientCapabilities(
+  desktopControlEnabled = true,
+  fileAccess: FileAccessSettings = DEFAULT_FILE_ACCESS_SETTINGS,
+): string[] {
+  const caps: string[] = ["chat.full_response"];
+
+  if (desktopControlEnabled) {
+    caps.push(...AGODESK_DESKTOP_CAPABILITIES);
+  }
+
+  const filePayload = buildFileAccessSessionPayload(fileAccess);
+  if (filePayload) {
+    const hasRead = filePayload.roots.some((root) => root.permissions.includes("read"));
+    const hasWrite = filePayload.roots.some((root) => root.permissions.includes("write"));
+    if (hasRead) {
+      caps.push(AGODESK_FILE_READ_CAPABILITY);
+    }
+    if (hasWrite) {
+      caps.push(AGODESK_FILE_WRITE_CAPABILITY);
+    }
+  }
+
+  caps.push("persona.assets");
+  return caps;
 }

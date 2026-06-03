@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { get } from "svelte/store";
   import { onDestroy, onMount } from "svelte";
   import InputBox from "./InputBox.svelte";
   import MessageList from "./MessageList.svelte";
@@ -8,14 +9,28 @@
   import RemoteControlBanner from "./RemoteControlBanner.svelte";
   import CertificateTrustModal from "./CertificateTrustModal.svelte";
   import SpeechBackgroundVisualizer from "./SpeechBackgroundVisualizer.svelte";
+  import SpeechBanner from "./SpeechBanner.svelte";
   import { chatMessages } from "../stores/chat";
   import { settings } from "../stores/settings";
   import { sessionState } from "../stores/session";
   import { connectionStatus } from "../stores/connection";
   import { speechState } from "../stores/speech";
+  import { getTranslateFn } from "../i18n/store";
+  import type { MessageKey } from "../i18n/types";
   import { loadSettings, saveSettings } from "../services/settings";
   import { cycleTheme, destroyThemeListener } from "../services/theme";
   import { saveTrustedCertificate } from "../services/tls";
+  import { openExternalUrl } from "../services/open-external-url";
+  import { applyMinimizeToTraySetting } from "../services/tray";
+  import { sendChatMessage } from "../services/chat-outbound";
+  import { deliverSpeechTranscript } from "../services/speech-delivery";
+  import { stopSpeechSession, toggleSpeechSession } from "../services/speech-flow";
+  import type { SpeechToolContext } from "../services/speech-tool-router";
+  import {
+    applyPersonaAssets,
+    clearPersonaAssets,
+    requestPersonaAssets,
+  } from "../services/persona-flow";
   import {
     handleSessionAccepted,
     handleSessionError,
@@ -32,11 +47,14 @@
     resetDesktopCommandState,
   } from "../services/desktop-flow";
   import { resetDesktopSession, setInputApproval } from "../services/desktop";
+  import { playUiSound } from "../services/ui-sounds";
+  import { notifyIncomingMessageIfHidden } from "../services/message-notifications";
   import {
     WebSocketService,
     isChatError,
     isChatResponse,
     isDesktopCommand,
+    isPersonaAssets,
     isSessionAccepted,
     isSystemConnected,
   } from "../services/websocket";
@@ -46,8 +64,11 @@
     ClientErrorCode,
     WsMessage,
   } from "../types/protocol";
-  import { canSendChat, isTlsFatalError } from "../types/protocol";
-  import { formatInvokeError } from "../services/errors";
+  import {
+    canSendChat,
+    hasAdvertisedRemoteDesktopCapture,
+    isTlsFatalError,
+} from "../types/protocol";
 
   let pending = $state(false);
   let settingsOpen = $state(false);
@@ -55,7 +76,9 @@
   let remoteOperation = $state("");
   let certModalOpen = $state(false);
   let tlsErrorCode = $state<ClientErrorCode | null>(null);
+  let composerDraft = $state("");
   let wsService = new WebSocketService();
+  let prevConnection = $state<string | null>(null);
 
   const chatAllowed = $derived(
     canSendChat(
@@ -65,27 +88,58 @@
     ) && !pending,
   );
 
+  const speechAllowed = $derived($settings.speech.enabled);
+
+  const remoteBannerVisible = $derived(
+    $settings.desktopControlEnabled &&
+      ($sessionState.remoteControlPending || $sessionState.remoteControlActive),
+  );
+
   const inputHint = $derived.by(() => {
+    const t = getTranslateFn();
     if (certModalOpen) {
-      return "TLS-Zertifikat muss bestaetigt werden.";
+      return t("chatView.hint.tlsRequired");
     }
     if ($connectionStatus !== "connected") {
-      return "Keine Verbindung zum Server.";
+      return t("chatView.hint.noConnection");
     }
     if ($sessionState.status === "awaiting_pairing") {
-      return "Bitte Geraet koppeln, bevor du chatten kannst.";
+      return t("chatView.hint.pairRequired");
     }
     if ($sessionState.status === "pairing") {
-      return "Session wird authentifiziert…";
+      return t("chatView.hint.authenticating");
     }
     if ($sessionState.status === "error") {
-      return $sessionState.errorMessage || "Session-Fehler.";
+      return $sessionState.errorMessage || t("chatView.hint.sessionError");
     }
     if (pending) {
-      return "Warte auf Antwort…";
+      return t("chatView.hint.awaitingResponse");
     }
     return "";
   });
+
+  function addSystemMessage(
+    key: MessageKey,
+    params?: Record<string, string | number>,
+    tone: "info" | "success" | "error" = "info",
+  ): void {
+    const t = getTranslateFn();
+    chatMessages.addMessage({
+      id: crypto.randomUUID(),
+      role: "system",
+      text: t(key, params),
+      timestamp: new Date().toISOString(),
+      messageKey: key,
+      messageParams: params,
+      tone,
+    });
+  }
+
+  function createDesktopResultSender() {
+    return async (resultMessage: WsMessage) => {
+      await wsService.send(resultMessage);
+    };
+  }
 
   function handleTlsError(code: ClientErrorCode): void {
     if (!isTlsFatalError(code)) {
@@ -99,12 +153,17 @@
     if (isSessionAccepted(message)) {
       pairingBusy = false;
       await handleSessionAccepted(message.payload, $settings.serverUrl);
+      const sessionId = get(sessionState).sessionId;
+      if (sessionId) {
+        void requestPersonaAssets(wsService, sessionId);
+      }
       return;
     }
 
     if (isSystemConnected(message)) {
       pairingBusy = true;
       sessionState.reset();
+      clearPersonaAssets();
       try {
         await handleSystemConnected(
           wsService,
@@ -119,6 +178,11 @@
       return;
     }
 
+    if (isPersonaAssets(message)) {
+      await applyPersonaAssets(message.payload, $settings.serverUrl);
+      return;
+    }
+
     if (isChatResponse(message)) {
       pending = false;
       chatMessages.addMessage({
@@ -128,6 +192,8 @@
         timestamp: message.timestamp,
         requestId: message.payload.request_id,
       });
+      playUiSound("receive");
+      void notifyIncomingMessageIfHidden(message.payload.text);
       return;
     }
 
@@ -145,11 +211,15 @@
         text: message.payload.message,
         timestamp: message.timestamp,
         requestId: message.payload.request_id,
+        tone: "error",
       });
       return;
     }
 
     if (isDesktopCommand(message)) {
+      if (!$settings.desktopControlEnabled) {
+        return;
+      }
       remoteOperation = String(
         (message.payload as { operation?: string })?.operation ?? "",
       );
@@ -158,27 +228,19 @@
         remoteControlActive: $sessionState.remoteControlActive,
         sessionId: $sessionState.sessionId,
         deviceId: $sessionState.deviceId,
-        onRemoteControlPrompt: (operation) => {
-          chatMessages.addMessage({
-            id: crypto.randomUUID(),
-            role: "system",
-            text: `Remote Control angefragt (${operation}). Bitte oben auf „Freigeben“ klicken.`,
-            timestamp: new Date().toISOString(),
-          });
+        onRemoteControlPrompt: () => {
+          addSystemMessage("chatView.remoteControl.prompt", undefined, "info");
         },
         wsSend: async (resultMessage) => {
           try {
             await wsService.send(resultMessage);
           } catch (error) {
-            chatMessages.addMessage({
-              id: crypto.randomUUID(),
-              role: "system",
-              text: formatInvokeError(
-                error,
-                "desktop.result konnte nicht gesendet werden (Verbindung unterbrochen?).",
-              ),
-              timestamp: new Date().toISOString(),
-            });
+            addSystemMessage(
+              "chatView.error.desktopResultSendFailed",
+              undefined,
+              "error",
+            );
+            void error;
           }
         },
       });
@@ -190,12 +252,15 @@
     options?: { pinnedFingerprint?: string },
   ): Promise<void> {
     await wsService.disconnect().catch(() => {});
+    await stopSpeechSession().catch(() => {});
     await resetDesktopSession().catch(() => {});
     resetDesktopCommandState();
     clearRemoteControlState();
+    clearPersonaAssets();
     sessionState.reset();
     certModalOpen = false;
     tlsErrorCode = null;
+    pending = false;
 
     wsService = new WebSocketService();
     wsService.onMessage((message) => {
@@ -211,31 +276,42 @@
         role: "system",
         text: message,
         timestamp: new Date().toISOString(),
+        tone: "error",
       });
     });
 
     try {
       await wsService.connect(url, options);
     } catch (error) {
-      chatMessages.addMessage({
-        id: crypto.randomUUID(),
-        role: "system",
-        text: formatInvokeError(
-          error,
-          "Verbindung konnte nicht gestartet werden.",
-        ),
-        timestamp: new Date().toISOString(),
-      });
+      addSystemMessage(
+        "chatView.error.connectFailed",
+        undefined,
+        "error",
+      );
+      void error;
     }
   }
 
   async function init(): Promise<void> {
     const loaded = await loadSettings();
+    await applyMinimizeToTraySetting(loaded.minimizeToTray);
     await connect(loaded.serverUrl);
   }
 
   async function handleSaveSettings(next: AppSettings): Promise<void> {
     await saveSettings(next);
+    await applyMinimizeToTraySetting(next.minimizeToTray);
+    if (!next.speech.enabled) {
+      await stopSpeechSession();
+    }
+    if (!next.desktopControlEnabled) {
+      await setInputApproval(false).catch(() => {});
+      clearRemoteControlState();
+      await rejectPendingInputCommands(createDesktopResultSender(), {
+        sessionId: $sessionState.sessionId,
+        deviceId: $sessionState.deviceId,
+      }).catch(() => {});
+    }
     await connect(next.serverUrl);
   }
 
@@ -251,7 +327,9 @@
     } catch (error) {
       pairingBusy = false;
       await handleSessionError(
-        error instanceof Error ? error.message : "Pairing fehlgeschlagen.",
+        error instanceof Error
+          ? error.message
+          : getTranslateFn()("chatView.error.pairingFailed"),
       );
     }
   }
@@ -263,7 +341,9 @@
     } catch (error) {
       pairingBusy = false;
       await handleSessionError(
-        error instanceof Error ? error.message : "Reconnect fehlgeschlagen.",
+        error instanceof Error
+          ? error.message
+          : getTranslateFn()("chatView.error.reconnectFailed"),
       );
     }
   }
@@ -287,38 +367,123 @@
   }
 
   function handleOpenBrowser(url: string): void {
-    window.open(url, "_blank", "noopener,noreferrer");
+    void openExternalUrl(url);
+  }
+
+  function buildSpeechToolContext(): SpeechToolContext {
+    return {
+      sessionId: $sessionState.sessionId,
+      connectionStatus: $connectionStatus,
+      sessionStatus: $sessionState.status,
+      remoteControlActive: $sessionState.remoteControlActive,
+      remoteControlPending: $sessionState.remoteControlPending,
+      canSendChat: chatAllowed,
+      sendToAuraGo: async (text) => {
+        await sendChatMessage(
+          (message) => wsService.send(message),
+          $sessionState.sessionId,
+          text,
+        );
+      },
+      onStopListening: () => stopSpeechSession(),
+      onSystemNotice: (text) => {
+        chatMessages.addMessage({
+          id: crypto.randomUUID(),
+          role: "system",
+          text,
+          timestamp: new Date().toISOString(),
+        });
+      },
+    };
+  }
+
+  async function handleSpeechTranscript(text: string): Promise<void> {
+    if ($settings.speech.agentMode) {
+      return;
+    }
+    try {
+      await deliverSpeechTranscript(text, {
+        autoSendToAuraGo: $settings.speech.autoSendToAuraGo,
+        canSendChat: chatAllowed,
+        sessionId: $sessionState.sessionId,
+        sendMessage: (message) => wsService.send(message),
+        onComposerDraft: (draft) => {
+          composerDraft = draft;
+        },
+        onSystemNotice: (notice) => {
+          chatMessages.addMessage({
+            id: crypto.randomUUID(),
+            role: "system",
+            text: notice,
+            timestamp: new Date().toISOString(),
+          });
+        },
+        onPending: () => {
+          pending = true;
+        },
+      });
+    } catch (error) {
+      addSystemMessage(
+        "chatView.error.speechTranscriptFailed",
+        undefined,
+        "error",
+      );
+      void error;
+    }
+  }
+
+  async function handleSpeechToggle(): Promise<void> {
+    await toggleSpeechSession($settings.speech, {
+      onFinalTranscript: (text) => handleSpeechTranscript(text),
+      getToolContext: () => buildSpeechToolContext(),
+      getAgentContext: () => ({
+        connectionStatus: $connectionStatus,
+        sessionStatus: $sessionState.status,
+        remoteControlActive: $sessionState.remoteControlActive,
+        remoteControlPending: $sessionState.remoteControlPending,
+        canSendChat: chatAllowed,
+      }),
+      onAssistantText: (text) => {
+        chatMessages.addMessage({
+          id: crypto.randomUUID(),
+          role: "assistant",
+          text,
+          timestamp: new Date().toISOString(),
+        });
+        playUiSound("receive");
+      },
+    });
   }
 
   async function handleApproveRemote(): Promise<void> {
-    await setInputApproval(true);
-    sessionState.setRemoteControlActive(true);
-    sessionState.setRemoteControlPending(false);
-    chatMessages.addMessage({
-      id: crypto.randomUUID(),
-      role: "system",
-      text: "Remote Control freigegeben. Der Agent kann jetzt Screenshots anfordern.",
-      timestamp: new Date().toISOString(),
-    });
-    await flushPendingInputCommands(
-      async (resultMessage) => {
-        await wsService.send(resultMessage);
-      },
-      true,
-      {
+    try {
+      await setInputApproval(true);
+      sessionState.setRemoteControlActive(true);
+      sessionState.setRemoteControlPending(false);
+      const hasCapture = hasAdvertisedRemoteDesktopCapture(
+        $sessionState.advertisedCapabilities,
+      );
+      addSystemMessage(
+        hasCapture
+          ? "chatView.remoteControl.approvedWithCapture"
+          : "chatView.remoteControl.approvedNoCapture",
+        undefined,
+        "success",
+      );
+      await flushPendingInputCommands(createDesktopResultSender(), true, {
         sessionId: $sessionState.sessionId,
         deviceId: $sessionState.deviceId,
-      },
-    );
+      });
+    } catch {
+      addSystemMessage("chatView.error.localApprovalFailed", undefined, "error");
+    }
   }
 
   async function handleDenyRemote(): Promise<void> {
     await setInputApproval(false);
     sessionState.setRemoteControlPending(false);
     sessionState.setRemoteControlActive(false);
-    await rejectPendingInputCommands(async (resultMessage) => {
-      await wsService.send(resultMessage);
-    }, {
+    await rejectPendingInputCommands(createDesktopResultSender(), {
       sessionId: $sessionState.sessionId,
       deviceId: $sessionState.deviceId,
     });
@@ -328,9 +493,7 @@
     await setInputApproval(false);
     sessionState.setRemoteControlActive(false);
     sessionState.setRemoteControlPending(false);
-    await rejectPendingInputCommands(async (resultMessage) => {
-      await wsService.send(resultMessage);
-    }, {
+    await rejectPendingInputCommands(createDesktopResultSender(), {
       sessionId: $sessionState.sessionId,
       deviceId: $sessionState.deviceId,
     });
@@ -340,28 +503,14 @@
     if (!chatAllowed) {
       return;
     }
-
-    const message: WsMessage = {
-      id: crypto.randomUUID(),
-      type: "chat.message",
-      timestamp: new Date().toISOString(),
-      payload: {
-        session_id: $sessionState.sessionId,
-        text,
-        role: "user",
-      },
-    };
-
-    chatMessages.addMessage({
-      id: message.id,
-      role: "user",
-      text,
-      timestamp: message.timestamp,
-    });
-
     try {
-      await wsService.send(message);
+      await sendChatMessage(
+        (message) => wsService.send(message),
+        $sessionState.sessionId,
+        text,
+      );
       pending = true;
+      playUiSound("send");
     } catch (error) {
       pending = false;
       chatMessages.addMessage({
@@ -370,11 +519,22 @@
         text:
           error instanceof Error
             ? error.message
-            : "Nachricht konnte nicht gesendet werden.",
+            : getTranslateFn()("chatView.error.messageSendFailed"),
         timestamp: new Date().toISOString(),
+        tone: "error",
       });
     }
   }
+
+  $effect(() => {
+    const conn = $connectionStatus;
+    const prev = prevConnection;
+    if (prev === "connected" && conn !== "connected" && pending) {
+      pending = false;
+      addSystemMessage("chatView.connectionLost", undefined, "error");
+    }
+    prevConnection = conn;
+  });
 
   onMount(() => {
     void init();
@@ -382,71 +542,111 @@
 
   onDestroy(() => {
     void wsService.disconnect();
+    void stopSpeechSession();
     destroyThemeListener();
   });
 </script>
 
 <div class="app-shell">
-<RemoteControlBanner
-  visible={$sessionState.remoteControlPending || $sessionState.remoteControlActive}
-  operation={remoteOperation}
-  onApprove={() => void handleApproveRemote()}
-  onDeny={() => void handleDenyRemote()}
-  onStop={() => void handleStopRemote()}
-/>
-
-{#if settingsOpen}
-  <SettingsView
-    serverUrl={$settings.serverUrl}
-    theme={$settings.theme}
-    connectionStatus={$connectionStatus}
-    sessionStatus={$sessionState.status}
-    sessionId={$sessionState.sessionId}
-    sessionError={$sessionState.errorMessage}
-    remoteControlActive={$sessionState.remoteControlActive}
-    appVersion="0.1.0"
-    onBack={() => (settingsOpen = false)}
-    onSave={(next) => void handleSaveSettings({ ...$settings, ...next })}
-    onReconnect={() => void connect($settings.serverUrl)}
-    onRetryPairing={() => void handleRetryPairing()}
-    onUnpair={() => void handleUnpair()}
-    onOpenTlsTrust={() => {
-      certModalOpen = true;
-    }}
-  />
-{:else}
-  <div class="chat-view">
-  <SpeechBackgroundVisualizer
-    active={$speechState.isActive}
-    status={$speechState.status}
-  />
-  <StatusBar
-    serverUrl={$settings.serverUrl}
-    theme={$settings.theme}
-    sessionStatus={$sessionState.status}
-    onOpenSettings={() => (settingsOpen = true)}
-    onReconnect={() => void connect($settings.serverUrl)}
-    onToggleTheme={() => void handleToggleTheme()}
+  <RemoteControlBanner
+    visible={remoteBannerVisible}
+    pending={$sessionState.remoteControlPending}
+    active={$sessionState.remoteControlActive}
+    operation={remoteOperation}
+    onApprove={() => void handleApproveRemote()}
+    onDeny={() => void handleDenyRemote()}
+    onStop={() => void handleStopRemote()}
   />
 
-  <PairingBanner
-    visible={$sessionState.status === "awaiting_pairing" ||
-      $sessionState.status === "error"}
-    busy={pairingBusy}
-    serverUrl={$settings.serverUrl}
-    errorMessage={$sessionState.errorMessage}
-    onPair={(token) => void handlePair(token)}
-    onUnpair={() => void handleUnpair()}
-  />
+  {#if settingsOpen}
+    <SettingsView
+      serverUrl={$settings.serverUrl}
+      theme={$settings.theme}
+      locale={$settings.locale}
+      speech={$settings.speech}
+      uiSounds={$settings.uiSounds}
+      minimizeToTray={$settings.minimizeToTray}
+      desktopControlEnabled={$settings.desktopControlEnabled}
+      fileAccess={$settings.fileAccess}
+      connectionStatus={$connectionStatus}
+      sessionStatus={$sessionState.status}
+      sessionId={$sessionState.sessionId}
+      sessionError={$sessionState.errorMessage}
+      remoteControlActive={$sessionState.remoteControlActive}
+      appVersion="0.1.0"
+      onBack={() => (settingsOpen = false)}
+      onSave={async (next) => {
+        await handleSaveSettings({ ...get(settings), ...next });
+      }}
+      onReconnect={() => void connect($settings.serverUrl)}
+      onRetryPairing={() => void handleRetryPairing()}
+      onUnpair={() => void handleUnpair()}
+      onOpenTlsTrust={() => {
+        certModalOpen = true;
+      }}
+    />
+  {:else}
+    <div class="chat-view">
+      <SpeechBackgroundVisualizer
+        active={$speechState.isActive}
+        status={$speechState.status}
+      />
+      <StatusBar
+        serverUrl={$settings.serverUrl}
+        theme={$settings.theme}
+        sessionStatus={$sessionState.status}
+        connectionStatus={$connectionStatus}
+        advertisedCapabilities={$sessionState.advertisedCapabilities}
+        desktopControlEnabled={$settings.desktopControlEnabled}
+        minimizeToTray={$settings.minimizeToTray}
+        onOpenSettings={() => (settingsOpen = true)}
+        onReconnect={() => void connect($settings.serverUrl)}
+        onToggleTheme={() => void handleToggleTheme()}
+      />
 
-  {#if $sessionState.status === "pairing"}
-    <section class="info-banner">Session wird authentifiziert…</section>
+      <PairingBanner
+        visible={$sessionState.status === "awaiting_pairing" ||
+          $sessionState.status === "error"}
+        busy={pairingBusy}
+        serverUrl={$settings.serverUrl}
+        errorMessage={$sessionState.errorMessage}
+        onPair={(token) => void handlePair(token)}
+        onUnpair={() => void handleUnpair()}
+      />
+
+      {#if $sessionState.status === "pairing"}
+        <section class="info-banner">
+          {getTranslateFn()("chatView.pairing.authenticating")}
+        </section>
+      {/if}
+
+      <SpeechBanner
+        partialTranscript={$speechState.partialTranscript}
+        errorMessage={$speechState.errorMessage}
+        autoSendToAuraGo={$settings.speech.autoSendToAuraGo}
+        agentMode={$settings.speech.agentMode}
+        speechActive={$speechState.isActive}
+      />
+
+      <MessageList
+        awaitingResponse={pending}
+        sessionStatus={$sessionState.status}
+        connectionStatus={$connectionStatus}
+        speechActive={$speechState.isActive}
+        onOpenSettings={() => (settingsOpen = true)}
+      />
+
+      <InputBox
+        disabled={!chatAllowed}
+        hint={inputHint}
+        bind:draft={composerDraft}
+        speechStatus={$speechState.status}
+        speechEnabled={speechAllowed}
+        onSpeechToggle={() => void handleSpeechToggle()}
+        onSubmit={(text) => void handleSubmit(text)}
+      />
+    </div>
   {/if}
-
-  <MessageList />
-  <InputBox disabled={!chatAllowed} hint={inputHint} onSubmit={(text) => void handleSubmit(text)} />
-  </div>
-{/if}
 </div>
 
 <CertificateTrustModal
@@ -464,6 +664,7 @@
     flex-direction: column;
     height: 100%;
     min-height: 0;
+    position: relative;
   }
 
   .chat-view {
@@ -475,7 +676,6 @@
     overflow: hidden;
   }
 
-  /* Ensure chat UI sits above the audio-reactive background visualizer */
   .chat-view > :not(.speech-bg) {
     position: relative;
     z-index: 1;

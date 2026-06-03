@@ -128,3 +128,9 @@ pub fn set_input_approval(approved: bool) -> Result<(), String> {
 pub fn reset_desktop_session() -> Result<(), String> {
     set_input_approved(false)
 }
+
+#[tauri::command]
+pub fn open_external_url(url: String) -> Result<(), String> {
+    open::that(&url).map_err(|error| error.to_string())
+}
+
