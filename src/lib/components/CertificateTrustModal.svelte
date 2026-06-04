@@ -79,7 +79,7 @@
 
 {#if open}
   <div class="backdrop" role="presentation" onclick={() => onClose?.()}></div>
-  <dialog class="modal" open aria-labelledby="cert-title">
+  <dialog class="modal ui-card glass-panel" open aria-labelledby="cert-title">
     <h2 id="cert-title">{title}</h2>
     <p class="intro">{$i18n("certModal.intro")}</p>
 
@@ -113,15 +113,20 @@
     </dl>
 
     <div class="actions">
-      <button type="button" class="secondary" onclick={() => onClose?.()}>
+      <button type="button" class="ui-btn ui-btn-secondary" onclick={() => onClose?.()}>
         {$i18n("certModal.cancel")}
       </button>
       {#if serverUrl.startsWith("wss://")}
-        <button type="button" class="secondary" onclick={openBrowser}>
+        <button type="button" class="ui-btn ui-btn-secondary" onclick={openBrowser}>
           {$i18n("certModal.openBrowser")}
         </button>
       {/if}
-      <button type="button" disabled={!probe || loading} onclick={trust}>
+      <button
+        type="button"
+        class="ui-btn ui-btn-primary"
+        disabled={!probe || loading}
+        onclick={trust}
+      >
         {$i18n("certModal.trust")}
       </button>
     </div>
@@ -133,6 +138,8 @@
     position: absolute;
     inset: 0;
     background: var(--color-backdrop);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
     z-index: 20;
   }
 
@@ -144,20 +151,19 @@
     z-index: 21;
     width: min(92vw, 36rem);
     margin: 0;
-    border: 1px solid var(--color-border);
-    border-radius: 1rem;
-    padding: 1.25rem;
-    background: var(--color-surface);
+    border: none;
+    padding: var(--space-5);
     color: var(--color-text);
+    box-shadow: var(--shadow-3);
   }
 
   h2 {
-    margin: 0 0 0.75rem;
+    margin: 0 0 var(--space-3);
     font-size: 1.125rem;
   }
 
   .intro {
-    margin: 0 0 1rem;
+    margin: 0 0 var(--space-4);
     font-size: 0.875rem;
     color: var(--color-muted);
     line-height: 1.5;
@@ -165,13 +171,13 @@
 
   .details {
     display: grid;
-    gap: 0.75rem;
+    gap: var(--space-3);
     margin: 0;
   }
 
   .details > div {
     display: grid;
-    gap: 0.25rem;
+    gap: var(--space-1);
   }
 
   dt {
@@ -198,34 +204,14 @@
   }
 
   .status.error {
-    color: #ef4444;
+    color: var(--color-danger);
   }
 
   .actions {
     display: flex;
     justify-content: flex-end;
-    gap: 0.5rem;
+    gap: var(--space-2);
     flex-wrap: wrap;
-    margin-top: 1.25rem;
-  }
-
-  button {
-    border: none;
-    border-radius: 0.5rem;
-    padding: 0.55rem 0.9rem;
-    cursor: pointer;
-    background: var(--color-accent);
-    color: white;
-  }
-
-  button:disabled {
-    opacity: 0.55;
-    cursor: not-allowed;
-  }
-
-  .secondary {
-    background: transparent;
-    border: 1px solid var(--color-border);
-    color: var(--color-text);
+    margin-top: var(--space-5);
   }
 </style>

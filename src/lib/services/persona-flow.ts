@@ -10,6 +10,15 @@ import {
 } from "../types/protocol";
 import { fetchPersonaAssetDisplayUrl } from "./persona-asset-fetch";
 
+let personaLoadingTimeout: ReturnType<typeof setTimeout> | null = null;
+
+function clearPersonaLoadingTimeout(): void {
+  if (personaLoadingTimeout) {
+    clearTimeout(personaLoadingTimeout);
+    personaLoadingTimeout = null;
+  }
+}
+
 export function buildPersonaAssetsRequest(
   sessionId: string,
 ): WsMessage<PersonaAssetsRequestPayload> {
@@ -27,6 +36,7 @@ export async function applyPersonaAssets(
 ): Promise<boolean> {
   const normalized = normalizePersonaAssetsPayload(payload);
   if (!normalized) {
+    clearPersonaLoadingTimeout();
     personaState.setLoading(false);
     return false;
   }
@@ -50,6 +60,7 @@ export async function applyPersonaAssets(
     personaPrompt: normalized.persona_prompt ?? "",
     assetVersion: normalized.asset_version,
   });
+  clearPersonaLoadingTimeout();
   return true;
 }
 
@@ -60,10 +71,21 @@ export async function requestPersonaAssets(
   if (!sessionId.trim()) {
     return;
   }
+  clearPersonaLoadingTimeout();
   personaState.setLoading(true);
-  await ws.send(buildPersonaAssetsRequest(sessionId));
+  personaLoadingTimeout = setTimeout(() => {
+    personaState.setLoading(false);
+    personaLoadingTimeout = null;
+  }, 15_000);
+  try {
+    await ws.send(buildPersonaAssetsRequest(sessionId));
+  } catch {
+    clearPersonaLoadingTimeout();
+    personaState.setLoading(false);
+  }
 }
 
 export function clearPersonaAssets(): void {
+  clearPersonaLoadingTimeout();
   personaState.reset();
 }

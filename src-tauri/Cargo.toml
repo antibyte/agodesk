@@ -4,10 +4,20 @@ version = "0.1.0"
 description = "Desktop chat client for agentic frameworks"
 authors = ["you"]
 edition = "2021"
+default-run = "agodesk"
 
 [lib]
 name = "agodesk_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
+
+[[bin]]
+name = "agodesk-worker"
+path = "src/bin/agodesk_worker.rs"
+
+[features]
+default = []
+browser-automation = ["dep:chromiumoxide"]
+computer-use-sidecar = []
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
@@ -33,6 +43,9 @@ base64 = "0.22"
 open = "5"
 rfd = "0.15"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
+active-win-pos-rs = "0.8"
+enigo = "0.6"
+chromiumoxide = { version = "0.7", optional = true, default-features = false, features = ["tokio-runtime"] }
 
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.58", features = [
@@ -42,7 +55,20 @@ windows = { version = "0.58", features = [
   "Win32_UI_WindowsAndMessaging",
   "Win32_UI_Input_KeyboardAndMouse",
   "Win32_UI_HiDpi",
+  "Win32_UI_Accessibility",
+  "Win32_System_Com",
+  "Win32_System_Ole",
+  "Win32_System_Variant",
 ] }
+uiautomation = { version = "0.22", default-features = false, features = ["input", "control"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+xcap = "0.0.14"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+xcap = "0.0.14"
+objc2 = "0.5"
+objc2-foundation = "0.2"
 
 [profile.release]
 codegen-units = 1

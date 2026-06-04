@@ -184,6 +184,10 @@ export function normalizeAppSettings(
       typeof saved?.desktopControlEnabled === "boolean"
         ? saved.desktopControlEnabled
         : DEFAULT_SETTINGS.desktopControlEnabled,
+    browserControlEnabled:
+      typeof saved?.browserControlEnabled === "boolean"
+        ? saved.browserControlEnabled
+        : DEFAULT_SETTINGS.browserControlEnabled,
     fileAccess: normalizeFileAccessSettings(saved?.fileAccess),
   };
 }

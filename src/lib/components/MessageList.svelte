@@ -55,13 +55,17 @@
     }
   }
 
-  async function scrollToBottom(): Promise<void> {
+  async function stickToBottom(): Promise<void> {
     await tick();
-    if (container) {
+    if (container && shouldStickToBottom) {
       container.scrollTop = container.scrollHeight;
-      lastSeenCount = $chatMessages.length;
-      shouldStickToBottom = true;
     }
+  }
+
+  async function scrollToBottom(): Promise<void> {
+    shouldStickToBottom = true;
+    lastSeenCount = $chatMessages.length;
+    await stickToBottom();
   }
 
   function dayLabelFor(timestamp: string, index: number): string {
@@ -78,10 +82,11 @@
     const messages = $chatMessages;
     void messages.length;
     void awaitingResponse;
-    if (shouldStickToBottom) {
-      lastSeenCount = messages.length;
+    if (!shouldStickToBottom) {
+      return;
     }
-    void scrollToBottom();
+    lastSeenCount = messages.length;
+    void stickToBottom();
   });
 </script>
 
@@ -91,7 +96,7 @@
       <div class="empty">
         <div class="empty-avatar" class:pulse={speechActive}>
           <PersonaAvatar
-            imageUrl={$personaState.avatarUrl}
+            imageUrl={$personaState.avatarUrl || $personaState.iconUrl}
             label={$personaState.persona}
             size="lg"
             loading={$personaState.loading}
@@ -100,13 +105,13 @@
         <h2>{$i18n("messageList.empty.title")}</h2>
         <p>{$i18n("messageList.empty.description")}</p>
         {#if sessionStatus === "awaiting_pairing"}
-          <button type="button" class="cta" onclick={() => onOpenSettings?.()}>
+          <button type="button" class="ui-btn ui-btn-primary cta" onclick={() => onOpenSettings?.()}>
             {$i18n("messageList.empty.pairDevice")}
           </button>
         {:else if connectionStatus !== "connected"}
           <p class="hint">{$i18n("chatView.hint.noConnection")}</p>
         {/if}
-        <ul class="tips">
+        <ul class="tips glass-panel-subtle">
           <li>
             <kbd>Enter</kbd> — {$i18n("messageList.tip.sendMessage")}
           </li>
@@ -127,7 +132,7 @@
             <span>{dayLabel}</span>
           </div>
         {/if}
-        <MessageBubble {message} />
+        <MessageBubble {message} {index} />
       {/each}
       {#if awaitingResponse}
         <div class="typing" aria-label={$i18n("messageList.typing.ariaLabel")}>
@@ -174,23 +179,24 @@
     overflow-y: auto;
     display: flex;
     flex-direction: column;
-    gap: 0.75rem;
-    padding: 1rem 1.25rem;
+    gap: var(--space-3);
+    padding: var(--space-4) var(--space-5);
+    scroll-behavior: smooth;
   }
 
   .empty {
     margin: auto;
-    max-width: 28rem;
+    max-width: 30rem;
     text-align: center;
     color: var(--color-muted);
-    line-height: 1.6;
-    padding: 2rem 0;
+    line-height: 1.65;
+    padding: var(--space-6) var(--space-4);
   }
 
   .empty-avatar {
     display: inline-flex;
-    margin-bottom: 1rem;
-    filter: drop-shadow(0 0 24px color-mix(in srgb, var(--color-accent) 35%, transparent));
+    margin-bottom: var(--space-4);
+    filter: drop-shadow(0 0 32px color-mix(in srgb, var(--color-accent) 40%, transparent));
   }
 
   .empty-avatar.pulse {
@@ -198,53 +204,54 @@
   }
 
   .empty h2 {
-    margin: 0 0 0.5rem;
+    margin: 0 0 var(--space-2);
     color: var(--color-text);
-    font-size: 1.25rem;
+    font-size: 1.375rem;
+    font-weight: 650;
+    letter-spacing: -0.02em;
   }
 
   .empty p {
-    margin: 0 0 1rem;
+    margin: 0 0 var(--space-4);
+    font-size: 0.9375rem;
   }
 
   .cta {
-    margin-bottom: 1rem;
-    border: none;
-    border-radius: var(--radius-md);
-    padding: 0.55rem 1rem;
-    background: var(--color-accent);
-    color: white;
-    cursor: pointer;
+    margin-bottom: var(--space-4);
   }
 
   .tips {
     list-style: none;
-    padding: 0;
-    margin: 0;
+    padding: var(--space-4);
+    margin: var(--space-4) 0 0;
     text-align: left;
     font-size: 0.8125rem;
+    border-radius: var(--radius-xl);
   }
 
   .tips li {
-    margin: 0.35rem 0;
+    margin: var(--space-2) 0;
   }
 
   kbd {
-    font-family: inherit;
-    font-size: 0.75rem;
-    padding: 0.1rem 0.35rem;
-    border-radius: 0.25rem;
-    border: 1px solid var(--color-border);
-    background: var(--color-input-bg);
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    padding: 0.12rem 0.4rem;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--color-border-subtle);
+    background: color-mix(in srgb, var(--glass-surface) 80%, transparent);
   }
 
   .day-divider {
     display: flex;
     align-items: center;
-    gap: 0.75rem;
-    margin: 0.5rem 0;
+    gap: var(--space-3);
+    margin: var(--space-2) 0;
     color: var(--color-muted);
-    font-size: 0.75rem;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
   }
 
   .day-divider::before,
@@ -252,22 +259,34 @@
     content: "";
     flex: 1;
     height: 1px;
-    background: var(--color-border-subtle);
+    background: linear-gradient(
+      90deg,
+      transparent,
+      var(--color-border-subtle) 20%,
+      var(--color-border-subtle) 80%,
+      transparent
+    );
   }
 
   .day-divider span {
-    padding: 0 0.25rem;
+    padding: 0.15rem 0.65rem;
     white-space: nowrap;
+    border-radius: var(--radius-full);
+    background: color-mix(in srgb, var(--glass-surface) 70%, transparent);
+    border: 1px solid var(--color-border-subtle);
   }
 
   .typing {
     align-self: flex-start;
     display: inline-flex;
     gap: 0.35rem;
-    padding: 0.65rem 0.9rem;
-    border-radius: 1rem;
+    padding: var(--space-3) var(--space-4);
+    border-radius: var(--radius-xl);
     background: var(--color-assistant-bg);
     border: 1px solid var(--color-assistant-border);
+    backdrop-filter: blur(calc(var(--blur) * 0.5));
+    -webkit-backdrop-filter: blur(calc(var(--blur) * 0.5));
+    box-shadow: var(--shadow-1);
   }
 
   .typing span {
@@ -288,19 +307,29 @@
 
   .scroll-fab {
     position: absolute;
-    right: 1.25rem;
-    bottom: 1rem;
+    right: var(--space-5);
+    bottom: var(--space-4);
     display: grid;
     place-items: center;
-    width: 2.5rem;
-    height: 2.5rem;
-    border: 1px solid var(--color-border);
+    width: 2.625rem;
+    height: 2.625rem;
+    border: 1px solid var(--glass-border);
     border-radius: var(--radius-full);
-    background: var(--color-surface);
+    background: var(--glass-surface);
     color: var(--color-text);
-    box-shadow: var(--shadow-md);
+    box-shadow: var(--shadow-2);
+    backdrop-filter: blur(var(--blur));
+    -webkit-backdrop-filter: blur(var(--blur));
     cursor: pointer;
     z-index: 2;
+    transition:
+      transform var(--transition-fast),
+      box-shadow var(--transition-fast);
+  }
+
+  .scroll-fab:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--accent-glow);
   }
 
   .scroll-fab .badge {

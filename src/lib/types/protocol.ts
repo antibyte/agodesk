@@ -211,6 +211,7 @@ export interface ControlPermissionStatus {
   screen_capture: boolean;
   input_injection: boolean;
   approved_session: boolean;
+  ui_automation?: boolean;
 }
 
 export interface HostInfo {
@@ -219,11 +220,74 @@ export interface HostInfo {
   arch: string;
 }
 
+export interface ActiveWindowInfo {
+  id: string;
+  title: string;
+  process_name: string;
+  process_path: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  display_id: string;
+}
+
+export interface UiBounds {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export interface UiNode {
+  id: string;
+  role: string;
+  name?: string;
+  automation_id?: string;
+  bounds: UiBounds;
+  interactive: boolean;
+  enabled: boolean;
+  visible: boolean;
+  children?: UiNode[];
+}
+
+export interface UiTreeResult {
+  window_id: string;
+  root: UiNode;
+  truncated: boolean;
+  element_count: number;
+}
+
+export interface UiActionParams {
+  action: "click" | "invoke" | "focus" | "set_value" | string;
+  element_id: string;
+  value?: string;
+  window_id?: string;
+}
+
+export interface BrowserConnectParams {
+  endpoint?: string;
+}
+
+export interface BrowserSnapshotParams {
+  selector?: string;
+  include_html?: boolean;
+}
+
+export interface BrowserActionParams {
+  action: string;
+  selector: string;
+  value?: string;
+}
+
 export type DesktopInputKind =
   | "mouse_move"
   | "mouse_click"
+  | "mouse_scroll"
+  | "mouse_drag"
   | "key_down"
   | "key_up"
+  | "key_combo"
   | "text";
 
 export interface DesktopInputEvent {
@@ -242,6 +306,13 @@ export interface DesktopInputParams {
   kind: DesktopInputKind | string;
   x?: number;
   y?: number;
+  from_x?: number;
+  from_y?: number;
+  to_x?: number;
+  to_y?: number;
+  delta?: number;
+  direction?: "up" | "down" | "left" | "right";
+  keys?: string[];
   button?: "left" | "right" | "middle";
   action?: "down" | "up" | "click";
   key?: string;
@@ -256,6 +327,16 @@ export type DesktopOperation =
   | "desktop_stream_stop"
   | "desktop_permission_request"
   | "desktop_input"
+  | "desktop_list_displays"
+  | "desktop_list_windows"
+  | "desktop_active_window"
+  | "desktop_host_info"
+  | "desktop_ui_tree"
+  | "desktop_ui_action"
+  | "desktop_browser_connect"
+  | "desktop_browser_snapshot"
+  | "desktop_browser_action"
+  | "desktop_browser_disconnect"
   | "file_list"
   | "file_read"
   | "file_write";
@@ -268,7 +349,42 @@ export const DESKTOP_V1_OPERATIONS: DesktopOperation[] = [
   "desktop_screenshot",
   "desktop_permission_request",
   "desktop_input",
+  "desktop_list_displays",
+  "desktop_list_windows",
+  "desktop_active_window",
+  "desktop_host_info",
+  "desktop_ui_tree",
+  "desktop_ui_action",
+  "desktop_browser_connect",
+  "desktop_browser_snapshot",
+  "desktop_browser_action",
+  "desktop_browser_disconnect",
 ];
+
+export const DESKTOP_DISCOVERY_OPERATIONS = [
+  "desktop_list_displays",
+  "desktop_list_windows",
+  "desktop_active_window",
+  "desktop_host_info",
+] as const;
+
+export const DESKTOP_UI_OPERATIONS = [
+  "desktop_ui_tree",
+  "desktop_ui_action",
+] as const;
+
+export const DESKTOP_BROWSER_OPERATIONS = [
+  "desktop_browser_connect",
+  "desktop_browser_snapshot",
+  "desktop_browser_action",
+  "desktop_browser_disconnect",
+] as const;
+
+export const DESKTOP_INPUT_OPERATIONS = [
+  "desktop_input",
+  "desktop_ui_action",
+  "desktop_browser_action",
+] as const;
 
 export const DESKTOP_STREAM_OPERATIONS: DesktopOperation[] = [
   "desktop_stream_start",
@@ -290,7 +406,11 @@ export type DesktopErrorCode =
   | "FILE_NOT_FOUND"
   | "FILE_TOO_LARGE"
   | "FILE_WRITE_DENIED"
-  | "FILE_HASH_MISMATCH";
+  | "FILE_HASH_MISMATCH"
+  | "DESKTOP_UI_UNAVAILABLE"
+  | "DESKTOP_ELEMENT_NOT_FOUND"
+  | "DESKTOP_ACCESSIBILITY_DENIED"
+  | "DESKTOP_BROWSER_UNAVAILABLE";
 
 export interface FileCommandParams {
   root_id?: string;
@@ -315,11 +435,13 @@ export interface DesktopCommandPayload {
 export interface DesktopResultPayload {
   command_id: string;
   success: boolean;
+  /** AuraGo-kompatibles Statusfeld neben `success`. */
+  status?: "ok" | "error";
   session_id?: string;
   device_id?: string;
-  data?: Record<string, unknown>;
-  error?: string;
-  error_code?: DesktopErrorCode;
+  data?: Record<string, unknown> | null;
+  error?: string | null;
+  error_code?: DesktopErrorCode | null;
 }
 
 export interface DesktopCommandContext {
@@ -394,6 +516,34 @@ export function normalizeDesktopCommandPayload(
     params = normalizeDesktopScreenshotParams(paramsRecord);
   } else if (operation === "desktop_input") {
     params = normalizeDesktopInputParams(paramsRecord);
+  } else if (operation === "desktop_ui_tree") {
+    params = {
+      window_id: readString(paramsRecord, "window_id", "windowId"),
+    };
+  } else if (operation === "desktop_ui_action") {
+    params = {
+      action: readString(paramsRecord, "action") ?? "click",
+      element_id:
+        readString(paramsRecord, "element_id", "elementId") ?? "",
+      value: readString(paramsRecord, "value"),
+      window_id: readString(paramsRecord, "window_id", "windowId"),
+    };
+  } else if (operation === "desktop_browser_connect") {
+    params = {
+      endpoint: readString(paramsRecord, "endpoint"),
+    };
+  } else if (operation === "desktop_browser_snapshot") {
+    params = {
+      selector: readString(paramsRecord, "selector"),
+      include_html:
+        paramsRecord.include_html === true || paramsRecord.includeHtml === true,
+    };
+  } else if (operation === "desktop_browser_action") {
+    params = {
+      action: readString(paramsRecord, "action") ?? "click",
+      selector: readString(paramsRecord, "selector") ?? "",
+      value: readString(paramsRecord, "value"),
+    };
   } else if (isFileOperation(operation)) {
     params = normalizeFileCommandParams(paramsRecord);
   } else if (Object.keys(paramsRecord).length > 0) {
@@ -412,7 +562,11 @@ export function canExecuteDesktopCommands(sessionStatus: SessionStatus): boolean
 }
 
 export function isDesktopInputOperation(operation: string): boolean {
-  return operation === "desktop_input";
+  return (DESKTOP_INPUT_OPERATIONS as readonly string[]).includes(operation);
+}
+
+export function isDesktopBrowserOperation(operation: string): boolean {
+  return (DESKTOP_BROWSER_OPERATIONS as readonly string[]).includes(operation);
 }
 
 export function isFileOperation(operation: string): operation is FileOperation {
@@ -434,12 +588,12 @@ export function normalizeFileCommandParams(
 }
 
 export function requiresLocalDesktopApproval(operation: string): boolean {
-  return operation === "desktop_screenshot" || operation === "desktop_input";
+  return (DESKTOP_INPUT_OPERATIONS as readonly string[]).includes(operation);
 }
 
 export function requiresRemoteControlBanner(operation: string): boolean {
   return (
-    requiresLocalDesktopApproval(operation) ||
+    (DESKTOP_INPUT_OPERATIONS as readonly string[]).includes(operation) ||
     operation === "desktop_permission_request"
   );
 }
@@ -580,6 +734,8 @@ export interface AppSettings {
   minimizeToTray: boolean;
   /** Screenshots und Remote-Eingaben über desktop.command erlauben. */
   desktopControlEnabled: boolean;
+  /** Browser-Automatisierung (CDP) separat freigeben. */
+  browserControlEnabled: boolean;
   /** Lokale Ordnerfreigaben für Remote-Dateizugriff. */
   fileAccess: FileAccessSettings;
 }
@@ -592,6 +748,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   uiSounds: { ...DEFAULT_UI_SOUND_SETTINGS },
   minimizeToTray: false,
   desktopControlEnabled: true,
+  browserControlEnabled: false,
   fileAccess: { ...DEFAULT_FILE_ACCESS_SETTINGS },
 };
 
@@ -608,7 +765,11 @@ export const AGODESK_DESKTOP_CAPABILITIES = [
   "remote.desktop.capture",
   "remote.desktop.permission_request",
   "remote.desktop.input",
+  "remote.desktop.discovery",
+  "remote.desktop.ui_automation",
 ] as const;
+
+export const AGODESK_BROWSER_CAPABILITY = "remote.desktop.browser";
 
 /** Capabilities advertised to AuraGo when desktop control is fully enabled. */
 export const AGODESK_CLIENT_CAPABILITIES = [
@@ -655,6 +816,18 @@ export function appendInsecureLoopbackIfNeeded(url: string): string {
 export function getWsOrigin(url: string): string {
   const parsed = new URL(url);
   return `${parsed.protocol}//${parsed.host}`;
+}
+
+/** HTTP(S)-Origin for asset fetches — maps ws/wss server URLs to http/https. */
+export function getHttpOrigin(url: string): string {
+  const parsed = new URL(url);
+  const protocol =
+    parsed.protocol === "wss:"
+      ? "https:"
+      : parsed.protocol === "ws:"
+        ? "http:"
+        : parsed.protocol;
+  return `${protocol}//${parsed.host}`;
 }
 
 export function isPairingRequired(payload: SystemConnectedPayload): boolean {
@@ -744,18 +917,24 @@ export function normalizePersonaAssetsPayload(
 }
 
 export function resolvePersonaAssetUrl(serverUrl: string, assetUrl: string): string {
-  if (!assetUrl.trim()) {
+  const trimmed = assetUrl.trim();
+  if (!trimmed) {
     return "";
   }
-  if (assetUrl.startsWith("http://") || assetUrl.startsWith("https://")) {
-    return assetUrl;
+  if (
+    trimmed.startsWith("data:") ||
+    trimmed.startsWith("blob:") ||
+    trimmed.startsWith("http://") ||
+    trimmed.startsWith("https://")
+  ) {
+    return trimmed;
   }
   try {
-    const origin = getWsOrigin(serverUrl);
-    const path = assetUrl.startsWith("/") ? assetUrl : `/${assetUrl}`;
+    const origin = getHttpOrigin(serverUrl);
+    const path = trimmed.startsWith("/") ? trimmed : `/${trimmed}`;
     return `${origin}${path}`;
   } catch {
-    return assetUrl;
+    return trimmed;
   }
 }
 
@@ -799,11 +978,16 @@ export function buildFileAccessSessionPayload(
 export function agodeskClientCapabilities(
   desktopControlEnabled = true,
   fileAccess: FileAccessSettings = DEFAULT_FILE_ACCESS_SETTINGS,
+  browserControlEnabled = false,
 ): string[] {
   const caps: string[] = ["chat.full_response"];
 
   if (desktopControlEnabled) {
     caps.push(...AGODESK_DESKTOP_CAPABILITIES);
+  }
+
+  if (desktopControlEnabled && browserControlEnabled) {
+    caps.push(AGODESK_BROWSER_CAPABILITY);
   }
 
   const filePayload = buildFileAccessSessionPayload(fileAccess);

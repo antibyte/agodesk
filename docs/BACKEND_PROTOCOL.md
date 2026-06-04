@@ -2,6 +2,8 @@
 
 This document is the backend contract for the agodesk desktop client.
 
+**Computer-Use (AuraGo Agent):** See [AURAGO_COMPUTER_USE_AGENT.md](./AURAGO_COMPUTER_USE_AGENT.md) for capability negotiation, all desktop ops, frontend approval model, and agent loop. Reference types: [aurago/](./aurago/).
+
 ## WebSocket Endpoint
 
 - URL: `/api/agodesk/ws`
@@ -145,9 +147,19 @@ The client replies with `desktop.result` using the same `command_id`:
 
 | Operation | Approval required | Notes |
 |---|---|---|
-| `desktop_screenshot` | **Yes (local banner)** | Blocked until user approves |
+| `desktop_screenshot` | No | Monitor or window capture |
 | `desktop_permission_request` | No | Returns local permission status; shows approval banner |
-| `desktop_input` | **Yes (local banner)** | Blocked until user approves |
+| `desktop_input` | **Yes (local banner)** | Mouse, keyboard, scroll, drag, key combos via enigo |
+| `desktop_list_displays` | No | Requires `desktopControlEnabled` setting |
+| `desktop_list_windows` | No | Includes monitor assignment |
+| `desktop_active_window` | No | Focus window: title, process, bounds, `display_id` |
+| `desktop_host_info` | No | OS, hostname, monitors summary |
+| `desktop_ui_tree` | No | Accessibility tree for root or `window_id` |
+| `desktop_ui_action` | **Yes (local banner)** | Semantic click, set_value, focus on `element_id` |
+| `desktop_browser_connect` | No | Requires `browserControlEnabled` setting |
+| `desktop_browser_snapshot` | No | DOM/text snapshot via CDP |
+| `desktop_browser_action` | **Yes (local banner)** | Click/fill via CDP |
+| `desktop_browser_disconnect` | No | End browser session |
 | `desktop_stream_start` | — | **Not implemented** — client returns `DESKTOP_STREAM_UNSUPPORTED` |
 | `desktop_stream_stop` | — | **Not implemented** — client returns `DESKTOP_STREAM_UNSUPPORTED` |
 
@@ -167,10 +179,28 @@ In AuraGo production, the paired agodesk device must also be **approved** in the
 | `DESKTOP_STREAM_UNSUPPORTED` | Stream start/stop requested |
 | `DESKTOP_OPERATION_UNSUPPORTED` | Unknown operation |
 | `DESKTOP_COMMAND_INVALID` | Malformed `desktop.command` payload |
+| `DESKTOP_UI_UNAVAILABLE` | UI automation not available on this platform |
+| `DESKTOP_ELEMENT_NOT_FOUND` | `element_id` not found in UI tree |
+| `DESKTOP_ACCESSIBILITY_DENIED` | Accessibility permission denied |
+| `DESKTOP_BROWSER_UNAVAILABLE` | Browser CDP not available or not enabled |
 
 Payload fields accept snake_case and camelCase (`command_id` / `commandId`, `display_id` / `displayId`, …).
 
-Screenshots do not require user approval. Input injection requires explicit local approval via the remote-control banner.
+Screenshots and UI trees do not require user approval. Input injection, UI actions, and browser actions require explicit local approval via the remote-control banner.
+
+### Session capabilities (`session.start`)
+
+When desktop control is enabled, agodesk advertises:
+
+- `remote.desktop.capture`
+- `remote.desktop.permission_request`
+- `remote.desktop.input`
+- `remote.desktop.discovery` — list displays/windows, active window, host info
+- `remote.desktop.ui_automation` — UI tree and semantic actions
+
+When browser control is additionally enabled:
+
+- `remote.desktop.browser` — CDP connect, snapshot, action, disconnect
 
 Capture a specific monitor in multi-monitor setups with `display_id` from `list_displays()`:
 
@@ -241,10 +271,37 @@ Window captures set `"source": "window"` and include `window_id`.
 |---|---|
 | `mouse_move` | `{ "x": 100, "y": 200, "absolute": true }` |
 | `mouse_click` | `{ "x": 100, "y": 200, "button": "left", "action": "click" }` |
+| `mouse_scroll` | `{ "x": 100, "y": 200, "delta_x": 0, "delta_y": -120 }` |
+| `mouse_drag` | `{ "x": 100, "y": 200, "end_x": 300, "end_y": 400, "button": "left" }` |
+| `key_combo` | `{ "keys": ["ctrl", "c"] }` |
 | `key_down` / `key_up` | `{ "key": "enter" }` or `{ "code": 65 }` |
 | `text` | `{ "text": "Hello" }` |
 
 Input is blocked until the user approves remote control locally.
+
+### UI automation (`desktop_ui_tree` / `desktop_ui_action`)
+
+`desktop_ui_tree` returns a normalized accessibility tree:
+
+```json
+{
+  "window_id": "win-12345",
+  "root": {
+    "id": "elem-0",
+    "role": "Window",
+    "name": "VS Code",
+    "bounds": { "x": 0, "y": 0, "width": 1920, "height": 1080 },
+    "children": [],
+    "interactive": true
+  },
+  "truncated": false,
+  "element_count": 142
+}
+```
+
+`desktop_ui_action` params: `{ "element_id": "elem-42", "action": "click" | "set_value" | "focus", "value": "..." }`
+
+Recommended agent sequence: `desktop_active_window` → `desktop_ui_tree` → plan → `desktop_ui_action` or `desktop_input` → `desktop_screenshot` for verification.
 
 ## Planned Remote Operations
 
@@ -253,7 +310,7 @@ The RemoteHub command protocol also reserves stream operations for future client
 - `desktop_stream_start`
 - `desktop_stream_stop`
 
-agodesk v1 implements screenshot, permission, and input only.
+agodesk v1 implements screenshot, permission, input, discovery, UI automation, and optional browser CDP.
 
 ## Client Implementation Map
 
@@ -268,7 +325,8 @@ agodesk v1 implements screenshot, permission, and input only.
 | Pairing UI | `src/lib/components/PairingBanner.svelte` |
 | Remote-control banner | `src/lib/components/RemoteControlBanner.svelte` |
 | Desktop WS flow | `src/lib/services/desktop-flow.ts`, `src/lib/services/desktop.ts` |
-| Desktop native API | `src-tauri/src/desktop/` |
+| Desktop native API | `src-tauri/src/desktop/`, `src-tauri/src/computer_use/` |
+| Sidecar worker (optional) | `src-tauri/src/bin/agodesk_worker.rs` |
 | Mock backend | `scripts/mock-server.mjs` on `ws://localhost:8080/api/agodesk/ws` |
 
 ## Local Development

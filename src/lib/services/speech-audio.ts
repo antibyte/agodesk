@@ -82,8 +82,6 @@ export class SpeechAudioCapture {
     this.source = this.context.createMediaStreamSource(this.stream);
     this.analyser = this.context.createAnalyser();
     configureSpeechAnalyser(this.analyser);
-    this.source.connect(this.analyser);
-
     this.processor = this.context.createScriptProcessor(4096, 1, 1);
     this.silentGain = this.context.createGain();
     this.silentGain.gain.value = 0;
@@ -92,7 +90,8 @@ export class SpeechAudioCapture {
       void this.handleAudioProcess(event);
     };
 
-    this.source.connect(this.processor);
+    this.source.connect(this.analyser);
+    this.analyser.connect(this.processor);
     this.processor.connect(this.silentGain);
     this.silentGain.connect(this.context.destination);
   }

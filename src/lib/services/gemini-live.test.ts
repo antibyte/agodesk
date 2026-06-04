@@ -8,6 +8,7 @@ import {
   extractTranscriptFromMessage,
   InputTranscriptAccumulator,
   isSetupCompleteMessage,
+  mergeTranscriptChunks,
   normalizeGeminiLiveMessage,
   parseGeminiLiveMessage,
 } from "./gemini-live.ts";
@@ -113,6 +114,26 @@ describe("gemini-live parsing", () => {
     assert.equal(accumulator.push("Hallo"), "Hallo");
     assert.equal(accumulator.push("Hallo Welt"), "Hallo Welt");
     assert.equal(accumulator.finalize(), "Hallo Welt");
+  });
+
+  it("fuegt Leerzeichen bei inkrementellen Woertern ein", () => {
+    const accumulator = new InputTranscriptAccumulator();
+    assert.equal(accumulator.push("Erstelle"), "Erstelle");
+    assert.equal(accumulator.push("einen"), "Erstelle einen");
+    assert.equal(accumulator.push("Screenshot"), "Erstelle einen Screenshot");
+    assert.equal(accumulator.push("und"), "Erstelle einen Screenshot und");
+    assert.equal(accumulator.push(" werte ihn aus."), "Erstelle einen Screenshot und werte ihn aus.");
+    assert.equal(
+      accumulator.finalize(),
+      "Erstelle einen Screenshot und werte ihn aus.",
+    );
+  });
+
+  it("mergeTranscriptChunks erkennt Suffix-Prefix-Ueberlappung", () => {
+    assert.equal(
+      mergeTranscriptChunks("Erstelle einen", "einen Screenshot"),
+      "Erstelle einen Screenshot",
+    );
   });
 
   it("normalizes snake_case server messages", () => {

@@ -32,7 +32,7 @@
 
 <button
   type="button"
-  class="speech-toggle"
+  class="speech-toggle ui-btn ui-btn-icon"
   class:active={isActive}
   class:listening={status === "listening"}
   {disabled}
@@ -59,31 +59,15 @@
 
 <style>
   .speech-toggle {
-    display: grid;
-    place-items: center;
     width: 2.5rem;
     height: 2.5rem;
-    border: 1px solid var(--color-border);
     border-radius: var(--radius-full);
-    background: var(--color-surface);
-    color: var(--color-text);
-    cursor: pointer;
     flex-shrink: 0;
-    transition:
-      background var(--transition-fast),
-      border-color var(--transition-fast),
-      transform var(--transition-fast),
-      box-shadow var(--transition-fast);
-  }
-
-  .speech-toggle:hover:not(:disabled) {
-    border-color: var(--color-accent);
-    transform: scale(1.04);
   }
 
   .speech-toggle.active {
-    border-color: color-mix(in srgb, var(--color-danger) 60%, var(--color-border));
-    background: color-mix(in srgb, var(--color-danger) 12%, var(--color-surface));
+    border-color: color-mix(in srgb, var(--color-danger) 60%, var(--glass-border));
+    background: color-mix(in srgb, var(--color-danger) 12%, var(--glass-surface));
     color: var(--color-danger);
   }
 
@@ -92,14 +76,8 @@
     animation: pulse 1.6s ease-in-out infinite;
   }
 
-  .speech-toggle:active:not(:disabled) {
-    transform: scale(0.96);
-  }
-
   .speech-toggle:disabled {
     opacity: 0.35;
-    cursor: not-allowed;
-    transform: none;
     animation: none;
     box-shadow: none;
   }

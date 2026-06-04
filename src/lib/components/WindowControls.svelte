@@ -24,7 +24,7 @@
   <div class="window-controls">
     <button
       type="button"
-      class="win-btn"
+      class="win-btn ui-btn ui-btn-icon"
       aria-label={$i18n("windowControls.minimize.ariaLabel")}
       title={$i18n("windowControls.minimize.title")}
       onclick={() => void minimizeMainWindow()}
@@ -35,7 +35,7 @@
     </button>
     <button
       type="button"
-      class="win-btn win-btn-close"
+      class="win-btn win-btn-close ui-btn ui-btn-icon"
       aria-label={closeLabel}
       title={closeLabel}
       onclick={() => void closeMainWindow()}
@@ -58,23 +58,8 @@
   }
 
   .win-btn {
-    display: grid;
-    place-items: center;
     width: 2rem;
     height: 2rem;
-    border: none;
-    border-radius: var(--radius-md);
-    background: transparent;
-    color: var(--color-muted);
-    cursor: pointer;
-    transition:
-      background var(--transition-fast),
-      color var(--transition-fast);
-  }
-
-  .win-btn:hover {
-    background: var(--color-input-bg);
-    color: var(--color-text);
   }
 
   .win-btn-close:hover {

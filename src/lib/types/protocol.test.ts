@@ -11,6 +11,8 @@ import {
   normalizeDesktopCommandPayload,
   normalizePersonaAssetsPayload,
   normalizeSessionAcceptedPayload,
+  requiresLocalDesktopApproval,
+  requiresRemoteControlBanner,
   resolvePersonaAssetUrl,
 } from "./protocol.ts";
 
@@ -132,6 +134,15 @@ test("agodeskClientCapabilities respektiert Desktop-Einstellung", () => {
   assert.deepEqual(agodeskClientCapabilities(), [...AGODESK_CLIENT_CAPABILITIES]);
 });
 
+test("agodeskClientCapabilities advertised Browser nur bei browserControlEnabled", () => {
+  const withBrowser = agodeskClientCapabilities(true, DEFAULT_SETTINGS.fileAccess, true);
+  assert.ok(withBrowser.includes("remote.desktop.browser"));
+  const withoutBrowser = agodeskClientCapabilities(true, DEFAULT_SETTINGS.fileAccess, false);
+  assert.ok(!withoutBrowser.includes("remote.desktop.browser"));
+  assert.ok(withoutBrowser.includes("remote.desktop.discovery"));
+  assert.ok(withoutBrowser.includes("remote.desktop.ui_automation"));
+});
+
 test("agodeskClientCapabilities advertised Datei-Capabilities nur bei Freigabe", () => {
   const fileAccess = {
     enabled: true,
@@ -163,12 +174,32 @@ test("isFileOperation erkennt file_list/file_read/file_write", () => {
   assert.equal(isFileOperation("desktop_screenshot"), false);
 });
 
-test("DEFAULT_SETTINGS enthaelt uiSounds und locale", () => {
+test("requiresLocalDesktopApproval gilt fuer Input- und UI-/Browser-Aktionen", () => {
+  assert.equal(requiresLocalDesktopApproval("desktop_input"), true);
+  assert.equal(requiresLocalDesktopApproval("desktop_ui_action"), true);
+  assert.equal(requiresLocalDesktopApproval("desktop_browser_action"), true);
+  assert.equal(requiresLocalDesktopApproval("desktop_screenshot"), false);
+  assert.equal(requiresLocalDesktopApproval("desktop_ui_tree"), false);
+  assert.equal(requiresLocalDesktopApproval("desktop_permission_request"), false);
+});
+
+test("requiresRemoteControlBanner ohne Screenshot und UI-Tree", () => {
+  assert.equal(requiresRemoteControlBanner("desktop_screenshot"), false);
+  assert.equal(requiresRemoteControlBanner("desktop_ui_tree"), false);
+  assert.equal(requiresRemoteControlBanner("desktop_input"), true);
+  assert.equal(requiresRemoteControlBanner("desktop_ui_action"), true);
+  assert.equal(requiresRemoteControlBanner("desktop_browser_action"), true);
+  assert.equal(requiresRemoteControlBanner("desktop_permission_request"), true);
+});
+
+test("DEFAULT_SETTINGS enthaelt uiSounds, locale und browserControlEnabled", () => {
   assert.equal(DEFAULT_SETTINGS.locale, "system");
   assert.equal(DEFAULT_SETTINGS.uiSounds.enabled, true);
   assert.equal(DEFAULT_SETTINGS.uiSounds.theme, "soft");
   assert.equal(DEFAULT_SETTINGS.uiSounds.volume, 0.2);
   assert.equal(DEFAULT_SETTINGS.fileAccess.enabled, false);
+  assert.equal(DEFAULT_SETTINGS.browserControlEnabled, false);
+  assert.equal(DEFAULT_SETTINGS.desktopControlEnabled, true);
 });
 
 test("normalizePersonaAssetsPayload akzeptiert snake_case", () => {
@@ -200,6 +231,21 @@ test("resolvePersonaAssetUrl loest relative Pfade auf", () => {
       "wss://192.168.1.10:8443/api/agodesk/ws",
       "/static/persona.png",
     ),
-    "wss://192.168.1.10:8443/static/persona.png",
+    "https://192.168.1.10:8443/static/persona.png",
+  );
+  assert.equal(
+    resolvePersonaAssetUrl(
+      "ws://127.0.0.1:8080/api/agodesk/ws",
+      "/static/persona.png",
+    ),
+    "http://127.0.0.1:8080/static/persona.png",
+  );
+});
+
+test("resolvePersonaAssetUrl laesst data-URLs unveraendert", () => {
+  const dataUrl = "data:image/svg+xml;base64,PHN2Zy8+";
+  assert.equal(
+    resolvePersonaAssetUrl("ws://127.0.0.1:8080/api/agodesk/ws", dataUrl),
+    dataUrl,
   );
 });

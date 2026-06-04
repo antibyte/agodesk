@@ -57,6 +57,17 @@ export function buildAgentToolDeclarations(): Record<string, unknown>[] {
   ];
 }
 
+function resolvePersonaInstructionLead(fallback: string): string {
+  const cachedPersona = get(personaState);
+  if (cachedPersona.personaPrompt.trim()) {
+    return cachedPersona.personaPrompt.trim();
+  }
+  if (cachedPersona.persona.trim()) {
+    return `Du bist ${cachedPersona.persona.trim()}, der Sprach-Assistent in agodesk.`;
+  }
+  return fallback;
+}
+
 export function buildTranscriptionSystemInstruction(
   speech: SpeechSettings,
   usesAudioOutput = false,
@@ -65,7 +76,10 @@ export function buildTranscriptionSystemInstruction(
     speech.language.trim().length > 0 ? speech.language.trim() : "de-DE";
 
   if (usesAudioOutput && speech.voiceResponses) {
-    return `Du bist ein gesprochener Sprach-Assistent in ${languageHint}. Höre dem Nutzer zu und antworte natürlich, klar und auf Deutsch. Halte Antworten kurz.`;
+    const personaLead = resolvePersonaInstructionLead(
+      `Du bist ein gesprochener Sprach-Assistent in ${languageHint}.`,
+    );
+    return `${personaLead} Höre dem Nutzer zu und antworte natürlich, klar und auf Deutsch (${languageHint}). Halte Antworten kurz und im Stil der Persona.`;
   }
 
   if (usesAudioOutput) {
@@ -82,10 +96,9 @@ export function buildAgentSystemInstruction(
   const languageHint =
     speech.language.trim().length > 0 ? speech.language.trim() : "de-DE";
 
-  const cachedPersona = get(personaState);
-  const promptBody = cachedPersona.personaPrompt.trim()
-    ? cachedPersona.personaPrompt.trim()
-    : `Du bist der Sprach-Assistent von agodesk. Der Nutzer spricht über das Mikrofon.`;
+  const promptBody = resolvePersonaInstructionLead(
+    "Du bist der Sprach-Assistent von agodesk. Der Nutzer spricht über das Mikrofon.",
+  );
 
   return `${promptBody}
 

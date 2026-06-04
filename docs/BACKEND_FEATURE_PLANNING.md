@@ -102,29 +102,47 @@ Bei Pairing/Reconnect-Fehlern: `chat.error` mit Codes wie `SESSION_*`, `AUTH_FAI
 
 ---
 
-## 4. Desktop Control (neu — clientseitig bereit)
+## 4. Desktop Control & Computer-Use (clientseitig bereit)
 
-Der Client kann native Desktop-Operationen ausführen. **WebSocket-Anbindung ist vorbereitet** (`desktop.command` → native API → `desktop.result`), Backend muss Commands senden und Results auswerten.
+Der Client kann native Desktop-Operationen ausführen. **WebSocket-Anbindung ist implementiert** (`desktop.command` → native API → `desktop.result`). AuraGo muss Commands senden und Results auswerten.
 
-### 4.1 Capabilities
+**Vollständige AuraGo-Anleitung:** [AURAGO_COMPUTER_USE_AGENT.md](./AURAGO_COMPUTER_USE_AGENT.md)
 
-In `system.connected.payload.capabilities` erwartet der Client u. a.:
+### 4.1 Capabilities (aktuell)
+
+Der Client sendet in `session.start` **`client_capabilities`** (nicht mehr nur Legacy-Namen in `system.connected`):
 
 ```json
-["desktop_screenshot", "desktop_input", "streaming"]
+[
+  "remote.desktop.capture",
+  "remote.desktop.permission_request",
+  "remote.desktop.input",
+  "remote.desktop.discovery",
+  "remote.desktop.ui_automation",
+  "remote.desktop.browser",
+  "chat.full_response",
+  "persona.assets"
+]
 ```
 
-Backend sollte Capabilities senden, damit der Agent weiß, was der Client kann.
+AuraGo **muss** in `session.accepted` die Schnittmenge als **`advertised_capabilities`** zurückgeben (mind. `remote.desktop.capture` für UI-Registrierung).
 
-### 4.2 Operationen
+### 4.2 Operationen (v1 + Computer-Use)
 
-| Operation | Client native | Approval nötig? | `desktop.result` |
+| Operation | Client native | Approval nötig? | Capability |
 |---|---|---|---|
-| `desktop_screenshot` | Ja | Nein | Bild als Base64 |
-| `desktop_permission_request` | Ja | Nein | Permission-Status |
-| `desktop_input` | Ja | **Ja (lokal)** | Erfolg/Fehler |
-| `desktop_stream_start` | Nein (Stub) | Nein | Status only |
-| `desktop_stream_stop` | Nein (Stub) | Nein | Status only |
+| `desktop_screenshot` | Ja | Nein | `remote.desktop.capture` |
+| `desktop_permission_request` | Ja | Nein | `remote.desktop.permission_request` |
+| `desktop_input` | Ja | **Ja (lokal)** | `remote.desktop.input` |
+| `desktop_list_displays` | Ja | Nein | `remote.desktop.discovery` |
+| `desktop_list_windows` | Ja | Nein | `remote.desktop.discovery` |
+| `desktop_active_window` | Ja | Nein | `remote.desktop.discovery` |
+| `desktop_host_info` | Ja | Nein | `remote.desktop.discovery` |
+| `desktop_ui_tree` | Ja | Nein | `remote.desktop.ui_automation` |
+| `desktop_ui_action` | Ja | **Ja (lokal)** | `remote.desktop.ui_automation` |
+| `desktop_browser_*` | Ja (optional) | Action: Ja | `remote.desktop.browser` |
+| `desktop_stream_start` | Nein (Stub) | — | — |
+| `desktop_stream_stop` | Nein (Stub) | — | — |
 
 ### 4.3 `desktop.command` — Screenshot Monitor
 

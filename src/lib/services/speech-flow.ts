@@ -19,14 +19,10 @@ import {
 import { speechState } from "../stores/speech";
 import { getTranslateFn } from "../i18n/store";
 let liveSession: GeminiLiveSession | null = null;
-
 let audioCapture: SpeechAudioCapture | null = null;
-
-
+let activeConnectingSession: GeminiLiveSession | null = null;
 
 const MAX_PENDING_AUDIO_CHUNKS = 120;
-
-
 
 export interface SpeechSessionOptions {
 
@@ -40,15 +36,11 @@ export interface SpeechSessionOptions {
 
 }
 
-
-
 export function isSpeechSessionActive(): boolean {
 
-  return liveSession !== null;
+  return liveSession !== null || activeConnectingSession !== null;
 
 }
-
-
 
 export async function toggleSpeechSession(
 
@@ -58,15 +50,13 @@ export async function toggleSpeechSession(
 
 ): Promise<void> {
 
-  if (liveSession) {
+  if (liveSession || activeConnectingSession) {
 
     await stopSpeechSession();
 
     return;
 
   }
-
-
 
   if (!speech.enabled) {
 
@@ -76,8 +66,6 @@ export async function toggleSpeechSession(
 
   }
 
-
-
   if (!isMicrophoneSupported()) {
 
     speechState.setError(getTranslateFn()("speechFlow.error.noMicrophone"));
@@ -85,8 +73,6 @@ export async function toggleSpeechSession(
     return;
 
   }
-
-
 
   const apiKey = await loadGeminiApiKey();
 
@@ -98,15 +84,11 @@ export async function toggleSpeechSession(
 
   }
 
-
-
   speechState.setAgentMode(Boolean(speech.agentMode));
 
   speechState.setStatus("connecting");
 
   speechState.setPartialTranscript("");
-
-
 
   const agentContext =
 
@@ -115,8 +97,6 @@ export async function toggleSpeechSession(
       ? options.getAgentContext()
 
       : undefined;
-
-
 
   const session = new GeminiLiveSession(
 
@@ -196,13 +176,9 @@ export async function toggleSpeechSession(
 
   );
 
-
-
+  activeConnectingSession = session;
   const capture = new SpeechAudioCapture();
-
   const pendingChunks: string[] = [];
-
-
 
   try {
 
@@ -216,8 +192,6 @@ export async function toggleSpeechSession(
 
       }
 
-
-
       if (pendingChunks.length >= MAX_PENDING_AUDIO_CHUNKS) {
 
         pendingChunks.shift();
@@ -230,43 +204,47 @@ export async function toggleSpeechSession(
 
     audioCapture = capture;
 
-
-
     await session.connect(apiKey);
 
-    liveSession = session;
+    if (activeConnectingSession === session) {
 
+      liveSession = session;
 
+      activeConnectingSession = null;
 
-    for (const chunk of pendingChunks) {
+      for (const chunk of pendingChunks) {
 
-      session.sendAudio(chunk);
+        session.sendAudio(chunk);
+
+      }
+
+      pendingChunks.length = 0;
 
     }
 
-    pendingChunks.length = 0;
-
   } catch (error) {
 
-    capture.stop();
+    if (activeConnectingSession === session) {
 
-    audioCapture = null;
+      capture.stop();
 
-    session.disconnect();
+      audioCapture = null;
 
-    liveSession = null;
+      session.disconnect();
 
-    speechState.setError(
-      error instanceof Error
-        ? error.message
-        : getTranslateFn()("speechFlow.error.sessionStartFailed"),
-    );
+      activeConnectingSession = null;
+
+      speechState.setError(
+        error instanceof Error
+          ? error.message
+          : getTranslateFn()("speechFlow.error.sessionStartFailed"),
+      );
+
+    }
 
   }
 
 }
-
-
 
 export async function stopSpeechSession(): Promise<void> {
 
@@ -277,6 +255,10 @@ export async function stopSpeechSession(): Promise<void> {
   liveSession?.disconnect();
 
   liveSession = null;
+
+  activeConnectingSession?.disconnect();
+
+  activeConnectingSession = null;
 
   speechState.reset();
 

@@ -10,6 +10,7 @@ import {
   canExecuteDesktopCommands,
   isDesktopInputOperation,
   isFileOperation,
+  isDesktopBrowserOperation,
   normalizeDesktopCommandPayload,
   requiresLocalDesktopApproval,
   requiresRemoteControlBanner,
@@ -99,6 +100,20 @@ export async function handleIncomingDesktopCommand(
     return;
   }
 
+  if (
+    isDesktopBrowserOperation(command.operation) &&
+    !get(settings).browserControlEnabled
+  ) {
+    await rejectCommand(
+      context.wsSend,
+      command,
+      "DESKTOP_BROWSER_UNAVAILABLE",
+      "Browser-Automatisierung ist in den agodesk-Einstellungen deaktiviert.",
+      desktopContext,
+    );
+    return;
+  }
+
   handleDesktopCommand({
     ...message,
     payload: command,
@@ -113,15 +128,6 @@ export async function handleIncomingDesktopCommand(
       pendingInputCommands.push(command);
       return;
     }
-
-    await rejectCommand(
-      context.wsSend,
-      command,
-      "DESKTOP_SESSION_NOT_APPROVED",
-      "Bitte Remote Control im agodesk-Banner freigeben, dann erneut anfordern.",
-      desktopContext,
-    );
-    return;
   }
 
   await executeDesktopCommand(context.wsSend, command, { context: desktopContext });

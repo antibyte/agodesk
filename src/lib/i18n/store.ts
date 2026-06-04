@@ -12,7 +12,9 @@ import { translate, type TranslateParams } from "./translate";
 
 export const localeSetting = writable<UiLocaleSetting>("system");
 export const activeLocale = derived(localeSetting, ($setting) => resolveLocale($setting));
-export const messages = writable<Messages>({});
+export const messages = writable<Messages>(
+  loadMessages(resolveLocale("system")),
+);
 
 export const i18n = derived([activeLocale, messages], ([, msgs]) => {
   return (key: MessageKey, params?: TranslateParams): string =>

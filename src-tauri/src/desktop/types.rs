@@ -29,14 +29,18 @@ pub struct WindowInfo {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct CaptureScreenOptions {
+    #[serde(alias = "display_id")]
     pub display_id: Option<String>,
+    #[serde(alias = "window_id")]
     pub window_id: Option<String>,
     pub format: Option<String>,
     pub quality: Option<u8>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct CaptureResult {
     pub source: String,
     pub display_id: Option<String>,
@@ -54,6 +58,7 @@ pub struct ControlPermissionStatus {
     pub screen_capture: bool,
     pub input_injection: bool,
     pub approved_session: bool,
+    pub ui_automation: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

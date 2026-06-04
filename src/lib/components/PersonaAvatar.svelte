@@ -5,7 +5,7 @@
     imageUrl?: string;
     label?: string;
     size?: "sm" | "md" | "lg";
-    tone?: "assistant" | "system";
+    tone?: "assistant" | "system" | "user";
     loading?: boolean;
   }
 
@@ -37,8 +37,17 @@
 >
   {#if loading}
     <span class="skeleton-fill ui-skeleton"></span>
+  {:else if tone === "user"}
+    <svg class="user-icon" viewBox="0 0 24 24" aria-hidden="true">
+      <circle cx="12" cy="8" r="4" fill="currentColor" stroke="none" />
+      <path
+        d="M4 20c0-4 3.6-6 8-6s8 2 8 6"
+        fill="currentColor"
+        stroke="none"
+      />
+    </svg>
   {:else if showImage}
-    <img src={imageUrl} alt="" loading="lazy" onerror={() => (imageFailed = true)} />
+    <img src={imageUrl} alt="" loading="eager" decoding="async" onerror={() => (imageFailed = true)} />
   {:else}
     {displayLabel}
   {/if}
@@ -94,6 +103,21 @@
   .persona-avatar[data-tone="system"] {
     background: var(--color-warning-soft);
     color: var(--color-warning);
+  }
+
+  .persona-avatar[data-tone="user"] {
+    background: color-mix(in srgb, var(--color-accent) 14%, var(--glass-surface));
+    color: var(--color-accent);
+    border: 1px solid color-mix(in srgb, var(--color-accent) 22%, var(--glass-border));
+    box-shadow: var(--shadow-1);
+  }
+
+  .user-icon {
+    position: relative;
+    z-index: 1;
+    width: 58%;
+    height: 58%;
+    display: block;
   }
 
   .persona-avatar.loading {

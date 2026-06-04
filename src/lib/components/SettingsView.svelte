@@ -61,6 +61,7 @@
     | "uiSounds"
     | "minimizeToTray"
     | "desktopControlEnabled"
+    | "browserControlEnabled"
     | "fileAccess"
   >;
 
@@ -83,6 +84,7 @@
     uiSounds?: UiSoundSettings;
     minimizeToTray?: boolean;
     desktopControlEnabled?: boolean;
+    browserControlEnabled?: boolean;
     fileAccess?: FileAccessSettings;
     connectionStatus?: ConnectionStatus;
     sessionStatus?: SessionStatus;
@@ -106,6 +108,7 @@
     uiSounds = DEFAULT_UI_SOUND_SETTINGS,
     minimizeToTray = false,
     desktopControlEnabled = true,
+    browserControlEnabled = false,
     fileAccess = DEFAULT_FILE_ACCESS_SETTINGS,
     connectionStatus = "disconnected",
     sessionStatus = "idle",
@@ -137,6 +140,7 @@
   let draftLocale = $state<UiLocaleSetting>("system");
   let draftMinimizeToTray = $state(false);
   let draftDesktopControlEnabled = $state(true);
+  let draftBrowserControlEnabled = $state(false);
   let draftFileAccess = $state<FileAccessSettings>(cloneFileAccessSettings(DEFAULT_FILE_ACCESS_SETTINGS));
   let draftSpeech = $state<SpeechSettings>({ ...DEFAULT_SPEECH_SETTINGS });
   let draftUiSoundEnabled = $state(true);
@@ -209,6 +213,7 @@
       draftLocale = locale;
       draftMinimizeToTray = minimizeToTray;
       draftDesktopControlEnabled = desktopControlEnabled;
+      draftBrowserControlEnabled = browserControlEnabled;
       draftFileAccess = cloneFileAccessSettings(fileAccess);
       draftSpeech = { ...DEFAULT_SPEECH_SETTINGS, ...speech };
       draftUiSoundEnabled = uiSounds.enabled;
@@ -266,6 +271,7 @@
       },
       minimizeToTray: draftMinimizeToTray,
       desktopControlEnabled: draftDesktopControlEnabled,
+      browserControlEnabled: draftBrowserControlEnabled,
       fileAccess: cloneFileAccessSettings(draftFileAccess),
     };
   }
@@ -436,10 +442,11 @@
     >
       {$i18n("settings.back")}
     </button>
-    <div class="header-drag" data-tauri-drag-region aria-hidden="true"></div>
-    <div class="header-copy">
-      <h1>{$i18n("settings.title")}</h1>
-      <p>{$i18n("settings.subtitle")}</p>
+    <div class="header-body" data-tauri-drag-region>
+      <div class="header-copy">
+        <h1>{$i18n("settings.title")}</h1>
+        <p>{$i18n("settings.subtitle")}</p>
+      </div>
     </div>
     <div class="header-actions">
       {#if dirty}
@@ -478,7 +485,7 @@
       {#key activeSection}
         <div class="section-panel">
           {#if activeSection === "connection"}
-            <section class="card">
+            <section class="ui-card">
               <div class="card-header">
                 <h2>{$i18n("settings.connection.websocket.title")}</h2>
                 <p>{$i18n("settings.connection.websocket.description")}</p>
@@ -511,7 +518,7 @@
               </div>
             </section>
 
-            <section class="card">
+            <section class="ui-card">
               <div class="card-header">
                 <h2>{$i18n("settings.connection.status.title")}</h2>
               </div>
@@ -569,7 +576,7 @@
           {/if}
 
           {#if activeSection === "device"}
-            <section class="card">
+            <section class="ui-card">
               <div class="card-header">
                 <h2>{$i18n("settings.device.title")}</h2>
                 <p>{$i18n("settings.device.description")}</p>
@@ -628,7 +635,7 @@
           {/if}
 
           {#if activeSection === "appearance"}
-            <section class="card">
+            <section class="ui-card">
               <div class="card-header">
                 <h2>{$i18n("settings.appearance.title")}</h2>
                 <p>{$i18n("settings.appearance.description")}</p>
@@ -651,7 +658,7 @@
               </div>
             </section>
 
-            <section class="card">
+            <section class="ui-card">
               <div class="card-header">
                 <h2>{$i18n("settings.appearance.uiSounds.title")}</h2>
                 <p>{$i18n("settings.appearance.uiSounds.description")}</p>
@@ -709,7 +716,7 @@
               </label>
             </section>
 
-            <section class="card">
+            <section class="ui-card">
               <label class="field checkbox-field">
                 <input
                   type="checkbox"
@@ -723,7 +730,7 @@
           {/if}
 
           {#if activeSection === "language"}
-            <section class="card">
+            <section class="ui-card">
               <div class="card-header">
                 <h2>{$i18n("settings.language.title")}</h2>
                 <p>{$i18n("settings.language.description")}</p>
@@ -755,7 +762,7 @@
           {/if}
 
           {#if activeSection === "desktop"}
-            <section class="card">
+            <section class="ui-card">
               <div class="card-header">
                 <h2>{$i18n("settings.desktop.title")}</h2>
                 <p>{$i18n("settings.desktop.description")}</p>
@@ -771,6 +778,18 @@
               </label>
 
               <p class="help">{$i18n("settings.desktop.disabledHelp")}</p>
+
+              <label class="field checkbox-field">
+                <input
+                  type="checkbox"
+                  bind:checked={draftBrowserControlEnabled}
+                  onchange={markDirty}
+                  disabled={!draftDesktopControlEnabled}
+                />
+                <span>{$i18n("settings.desktop.browser.enable")}</span>
+              </label>
+
+              <p class="help">{$i18n("settings.desktop.browser.disabledHelp")}</p>
 
               <dl class="info-grid">
                 <div>
@@ -791,8 +810,20 @@
                   <dd>{$i18n("settings.desktop.screenshots.value")}</dd>
                 </div>
                 <div>
+                  <dt>{$i18n("settings.desktop.discovery.label")}</dt>
+                  <dd>{$i18n("settings.desktop.discovery.value")}</dd>
+                </div>
+                <div>
+                  <dt>{$i18n("settings.desktop.uiAutomation.label")}</dt>
+                  <dd>{$i18n("settings.desktop.uiAutomation.value")}</dd>
+                </div>
+                <div>
                   <dt>{$i18n("settings.desktop.input.label")}</dt>
                   <dd>{$i18n("settings.desktop.input.value")}</dd>
+                </div>
+                <div>
+                  <dt>{$i18n("settings.desktop.browser.label")}</dt>
+                  <dd>{$i18n("settings.desktop.browser.value")}</dd>
                 </div>
                 <div>
                   <dt>{$i18n("settings.desktop.remoteControl.label")}</dt>
@@ -815,7 +846,7 @@
           {/if}
 
           {#if activeSection === "files"}
-            <section class="card">
+            <section class="ui-card">
               <div class="card-header">
                 <h2>{$i18n("settings.fileAccess.title")}</h2>
                 <p>{$i18n("settings.fileAccess.description")}</p>
@@ -934,7 +965,7 @@
           {/if}
 
           {#if activeSection === "speech"}
-            <section class="card">
+            <section class="ui-card">
               <div class="card-header">
                 <h2>{$i18n("settings.speech.title")}</h2>
                 <p>{$i18n("settings.speech.description")}</p>
@@ -1031,7 +1062,7 @@
               </label>
             </section>
 
-            <section class="card">
+            <section class="ui-card">
               <div class="card-header">
                 <h2>{$i18n("settings.speech.apiKey.title")}</h2>
                 <p>
@@ -1115,7 +1146,7 @@
           {/if}
 
           {#if activeSection === "about"}
-            <section class="card">
+            <section class="ui-card">
               <div class="card-header">
                 <h2>{$i18n("settings.about.title")}</h2>
               </div>
@@ -1174,31 +1205,34 @@
     flex-direction: column;
     height: 100%;
     min-height: 0;
-    background: var(--color-bg);
+    background: transparent;
+    overflow: hidden;
+    border-radius: inherit;
   }
 
   .settings-header {
     display: flex;
     align-items: center;
-    gap: 1rem;
-    padding: 1rem 1.25rem;
-    border-bottom: 1px solid var(--color-border);
-    background: var(--color-surface);
-    box-shadow: var(--color-panel-shadow);
-    flex-wrap: wrap;
+    gap: var(--space-4);
+    padding: var(--space-4) var(--space-5);
+    border-bottom: 1px solid var(--glass-border);
+    background: var(--glass-surface);
+    backdrop-filter: blur(var(--blur));
+    -webkit-backdrop-filter: blur(var(--blur));
+    box-shadow: var(--shadow-1);
+    flex-wrap: nowrap;
   }
 
-  .header-drag {
+  .header-body {
     flex: 1;
-    min-width: 3rem;
-    min-height: 1.5rem;
-    -webkit-app-region: drag;
-    app-region: drag;
+    align-self: stretch;
+    min-width: 0;
+    display: flex;
+    align-items: center;
   }
 
   .header-copy {
-    flex: 1;
-    min-width: 12rem;
+    min-width: 0;
   }
 
   .header-copy h1 {
@@ -1217,6 +1251,7 @@
     align-items: center;
     gap: 0.75rem;
     flex-wrap: wrap;
+    flex-shrink: 0;
   }
 
   .dirty-badge {
@@ -1226,8 +1261,8 @@
   .settings-layout {
     display: grid;
     grid-template-columns: minmax(12rem, 16rem) minmax(0, 1fr);
-    gap: 1rem;
-    padding: 1rem;
+    gap: var(--space-4);
+    padding: var(--space-4);
     flex: 1;
     min-height: 0;
     overflow: hidden;
@@ -1236,8 +1271,16 @@
   .settings-nav {
     display: flex;
     flex-direction: column;
-    gap: 0.35rem;
+    gap: var(--space-1);
     overflow: auto;
+    padding: var(--space-2);
+    border-radius: var(--radius-xl);
+    border: 1px solid var(--glass-border);
+    background: var(--glass-surface-subtle, color-mix(in srgb, var(--glass-surface) 72%, transparent));
+    backdrop-filter: blur(var(--blur));
+    -webkit-backdrop-filter: blur(var(--blur));
+    align-self: start;
+    max-height: 100%;
   }
 
   .nav-item {
@@ -1245,11 +1288,15 @@
     gap: 0.15rem;
     text-align: left;
     border: 1px solid transparent;
-    border-radius: 0.75rem;
-    padding: 0.75rem 0.9rem;
+    border-radius: var(--radius-lg);
+    padding: var(--space-3) var(--space-4);
     background: transparent;
     color: inherit;
     cursor: pointer;
+    transition:
+      background var(--transition-fast),
+      border-color var(--transition-fast),
+      box-shadow var(--transition-fast);
   }
 
   .nav-item:hover {
@@ -1257,8 +1304,9 @@
   }
 
   .nav-item.active {
-    border-color: var(--color-accent);
+    border-color: color-mix(in srgb, var(--color-accent) 35%, var(--glass-border));
     background: color-mix(in srgb, var(--color-accent) 12%, transparent);
+    box-shadow: var(--accent-glow);
   }
 
   .nav-label {
@@ -1282,16 +1330,8 @@
 
   .section-panel {
     display: grid;
-    gap: 1rem;
+    gap: var(--space-4);
     align-content: start;
-  }
-
-  .card {
-    border: 1px solid var(--color-border);
-    border-radius: 1rem;
-    padding: 1rem 1.1rem;
-    background: var(--color-surface);
-    box-shadow: var(--color-panel-shadow);
   }
 
   .card-header h2 {
@@ -1342,11 +1382,24 @@
   input[type="password"],
   input[type="number"],
   select {
-    border: 1px solid var(--color-border);
-    border-radius: 0.65rem;
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-md);
     padding: 0.7rem 0.8rem;
     background: var(--color-input-bg);
     color: var(--color-text);
+    transition:
+      border-color var(--transition-fast),
+      box-shadow var(--transition-fast);
+  }
+
+  input[type="url"]:focus-visible,
+  input[type="text"]:focus-visible,
+  input[type="password"]:focus-visible,
+  input[type="number"]:focus-visible,
+  select:focus-visible {
+    outline: none;
+    border-color: color-mix(in srgb, var(--color-accent) 45%, var(--glass-border));
+    box-shadow: var(--accent-glow);
   }
 
   input[type="range"] {
@@ -1397,20 +1450,25 @@
     display: grid;
     gap: 0.25rem;
     text-align: left;
-    border: 1px solid var(--color-border);
-    border-radius: 0.75rem;
-    padding: 0.8rem;
-    background: var(--color-input-bg);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-lg);
+    padding: var(--space-3);
+    background: color-mix(in srgb, var(--glass-surface) 80%, transparent);
     cursor: pointer;
     color: inherit;
+    transition:
+      border-color var(--transition-fast),
+      box-shadow var(--transition-fast),
+      background var(--transition-fast);
   }
 
   .preset-card.selected,
   .theme-card.selected,
   .locale-card.selected,
   .sound-theme-card.selected {
-    border-color: var(--color-accent);
+    border-color: color-mix(in srgb, var(--color-accent) 45%, var(--glass-border));
     background: color-mix(in srgb, var(--color-accent) 10%, var(--color-input-bg));
+    box-shadow: var(--accent-glow);
   }
 
   .preset-card span:last-child,
@@ -1452,12 +1510,12 @@
   }
 
   .file-root-row {
-    border: 1px solid var(--color-border);
-    border-radius: 0.75rem;
-    padding: 0.75rem;
-    background: var(--color-input-bg);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-lg);
+    padding: var(--space-3);
+    background: color-mix(in srgb, var(--glass-surface) 80%, transparent);
     display: grid;
-    gap: 0.75rem;
+    gap: var(--space-3);
   }
 
   .file-root-fields {
@@ -1475,9 +1533,9 @@
   .path-display {
     display: block;
     padding: 0.55rem 0.65rem;
-    border-radius: 0.5rem;
-    background: var(--color-surface);
-    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    background: var(--glass-surface);
+    border: 1px solid var(--glass-border);
   }
 
   .info-grid {
@@ -1504,121 +1562,51 @@
     font-size: 0.9375rem;
   }
 
-  .ui-chip {
-    display: inline-flex;
-    align-items: center;
-    border-radius: 999px;
-    padding: 0.15rem 0.55rem;
-    font-size: 0.8125rem;
-    background: var(--color-input-bg);
-    border: 1px solid var(--color-border);
-  }
-
-  .ui-chip[data-tone="warning"] {
-    border-color: #eab308;
-    color: #a16207;
-  }
-
-  .ui-chip[data-tone="connected"],
-  .ui-chip[data-tone="accepted"],
-  .ui-chip[data-tone="loopback"] {
-    border-color: #22c55e;
-    color: #15803d;
-  }
-
-  .ui-chip[data-tone="connecting"],
-  .ui-chip[data-tone="pairing"],
-  .ui-chip[data-tone="awaiting_pairing"] {
-    border-color: #eab308;
-    color: #a16207;
-  }
-
-  .ui-chip[data-tone="error"],
-  .ui-chip[data-tone="disconnected"],
-  .ui-chip[data-tone="idle"] {
-    border-color: #ef4444;
-    color: #b91c1c;
+  .back-button {
+    flex-shrink: 0;
   }
 
   .action-row {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.5rem;
-    margin-top: 1rem;
+    gap: var(--space-2);
+    margin-top: var(--space-4);
   }
 
   .error-box {
-    margin: 1rem 0 0;
-    padding: 0.75rem 0.85rem;
-    border-radius: 0.65rem;
+    margin: var(--space-4) 0 0;
+    padding: var(--space-3);
+    border-radius: var(--radius-md);
     background: var(--color-system-bg);
     color: var(--color-system-text);
     font-size: 0.875rem;
   }
 
   .api-key-message {
-    margin: 0.75rem 0 0;
+    margin: var(--space-3) 0 0;
     font-size: 0.875rem;
   }
 
   .api-key-message.success {
-    color: #15803d;
+    color: var(--color-success, #15803d);
   }
 
   .api-key-message.error {
-    color: #b91c1c;
-  }
-
-  .back-button,
-  :global(.ui-btn) {
-    border-radius: 0.55rem;
-    padding: 0.55rem 0.9rem;
-    cursor: pointer;
-    font: inherit;
-  }
-
-  .back-button,
-  :global(.ui-btn-secondary) {
-    border: 1px solid var(--color-border);
-    background: transparent;
-    color: inherit;
-  }
-
-  :global(.ui-btn-primary) {
-    border: none;
-    background: var(--color-accent);
-    color: white;
-  }
-
-  :global(.ui-btn-primary:disabled),
-  .back-button:disabled {
-    opacity: 0.55;
-    cursor: not-allowed;
-  }
-
-  :global(.ui-btn-danger) {
-    border-color: #ef4444;
-    color: #ef4444;
-  }
-
-  :global(.ui-btn-link) {
-    border: none;
-    background: none;
-    padding: 0;
-    color: var(--color-accent);
-    text-decoration: underline;
-    cursor: pointer;
+    color: var(--color-danger);
   }
 
   .settings-footer {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 1rem;
-    padding: 0.85rem 1.25rem;
-    border-top: 1px solid var(--color-border);
-    background: var(--color-surface);
-    box-shadow: var(--color-panel-shadow);
+    gap: var(--space-4);
+    padding: var(--space-3) var(--space-5);
+    border-top: 1px solid var(--glass-border);
+    background: var(--glass-surface);
+    backdrop-filter: blur(var(--blur));
+    border-radius: 0 0 var(--radius-window) var(--radius-window);
+    -webkit-backdrop-filter: blur(var(--blur));
+    box-shadow: var(--shadow-1);
     flex-wrap: wrap;
   }
 
@@ -1656,10 +1644,6 @@
     }
 
     .nav-hint {
-      display: none;
-    }
-
-    .header-drag {
       display: none;
     }
   }

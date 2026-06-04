@@ -149,14 +149,22 @@
     certModalOpen = true;
   }
 
+  function maybeRequestPersonaAssets(): void {
+    const session = get(sessionState);
+    if (
+      !session.sessionId ||
+      (session.status !== "loopback" && session.status !== "accepted")
+    ) {
+      return;
+    }
+    void requestPersonaAssets(wsService, session.sessionId);
+  }
+
   async function handleIncomingMessage(message: WsMessage): Promise<void> {
     if (isSessionAccepted(message)) {
       pairingBusy = false;
       await handleSessionAccepted(message.payload, $settings.serverUrl);
-      const sessionId = get(sessionState).sessionId;
-      if (sessionId) {
-        void requestPersonaAssets(wsService, sessionId);
-      }
+      maybeRequestPersonaAssets();
       return;
     }
 
@@ -170,6 +178,7 @@
           message.payload,
           $settings.serverUrl,
         );
+        maybeRequestPersonaAssets();
       } finally {
         if ($sessionState.status === "awaiting_pairing") {
           pairingBusy = false;
@@ -217,9 +226,6 @@
     }
 
     if (isDesktopCommand(message)) {
-      if (!$settings.desktopControlEnabled) {
-        return;
-      }
       remoteOperation = String(
         (message.payload as { operation?: string })?.operation ?? "",
       );
@@ -567,6 +573,7 @@
       uiSounds={$settings.uiSounds}
       minimizeToTray={$settings.minimizeToTray}
       desktopControlEnabled={$settings.desktopControlEnabled}
+      browserControlEnabled={$settings.browserControlEnabled}
       fileAccess={$settings.fileAccess}
       connectionStatus={$connectionStatus}
       sessionStatus={$sessionState.status}
@@ -615,7 +622,7 @@
       />
 
       {#if $sessionState.status === "pairing"}
-        <section class="info-banner">
+        <section class="info-banner banner-glass" data-tone="info">
           {getTranslateFn()("chatView.pairing.authenticating")}
         </section>
       {/if}
@@ -665,6 +672,8 @@
     height: 100%;
     min-height: 0;
     position: relative;
+    overflow: hidden;
+    border-radius: inherit;
   }
 
   .chat-view {
@@ -682,10 +691,10 @@
   }
 
   .info-banner {
-    padding: 0.65rem 1.25rem;
-    border-bottom: 1px solid var(--color-border);
-    background: var(--color-input-bg);
-    color: var(--color-muted);
-    font-size: 0.875rem;
+    margin: 0;
+    border-radius: 0;
+    border-left: none;
+    border-right: none;
+    border-top: none;
   }
 </style>

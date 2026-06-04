@@ -1,6 +1,10 @@
 import { get } from "svelte/store";
 import { invoke } from "@tauri-apps/api/core";
 import type {
+  ActiveWindowInfo,
+  BrowserActionParams,
+  BrowserConnectParams,
+  BrowserSnapshotParams,
   CaptureScreenshotParams,
   CaptureScreenshotResult,
   ControlPermissionStatus,
@@ -13,6 +17,8 @@ import type {
   DisplayInfo,
   FileCommandParams,
   HostInfo,
+  UiActionParams,
+  UiTreeResult,
   WindowInfo,
   WsMessage,
 } from "../types/protocol";
@@ -26,14 +32,48 @@ import {
 import { fileAccessIsConfigured } from "./file-access";
 
 export type {
+  ActiveWindowInfo,
   CaptureScreenshotParams,
   CaptureScreenshotResult,
   ControlPermissionStatus,
   DesktopInputEvent,
   DisplayInfo,
   HostInfo,
+  UiTreeResult,
   WindowInfo,
 };
+
+export async function getActiveWindowInfo(): Promise<ActiveWindowInfo> {
+  return invoke<ActiveWindowInfo>("get_active_window");
+}
+
+export async function getUiTree(windowId?: string): Promise<UiTreeResult> {
+  return invoke<UiTreeResult>("get_ui_tree", {
+    windowId: windowId ?? null,
+  });
+}
+
+export async function runUiAction(params: UiActionParams): Promise<Record<string, unknown>> {
+  return invoke<Record<string, unknown>>("perform_ui_action", { params });
+}
+
+export async function browserConnect(params: BrowserConnectParams = {}): Promise<Record<string, unknown>> {
+  return invoke<Record<string, unknown>>("browser_connect", { params });
+}
+
+export async function browserSnapshot(
+  params: BrowserSnapshotParams = {},
+): Promise<Record<string, unknown>> {
+  return invoke<Record<string, unknown>>("browser_snapshot", { params });
+}
+
+export async function browserAction(params: BrowserActionParams): Promise<Record<string, unknown>> {
+  return invoke<Record<string, unknown>>("browser_action", { params });
+}
+
+export async function browserDisconnect(): Promise<void> {
+  await invoke("browser_disconnect");
+}
 
 export async function collectHostInfo(): Promise<HostInfo> {
   return invoke<HostInfo>("collect_host_info");
@@ -55,7 +95,14 @@ export async function listWindowsOnDisplay(displayId: string): Promise<WindowInf
 export async function captureScreen(
   options: CaptureScreenshotParams = {},
 ): Promise<CaptureScreenshotResult> {
-  return invoke<CaptureScreenshotResult>("capture_screen", { options });
+  return invoke<CaptureScreenshotResult>("capture_screen", {
+    options: {
+      displayId: options.display_id,
+      windowId: options.window_id,
+      format: options.format,
+      quality: options.quality,
+    },
+  });
 }
 
 export async function captureDisplay(
@@ -184,9 +231,67 @@ function desktopFailure(
   message: string,
 ): DesktopResultPayload {
   result.success = false;
+  result.status = "error";
   result.error_code = code;
   result.error = message;
+  result.data = null;
   return result;
+}
+
+export function normalizeCaptureResultForWire(
+  capture: CaptureScreenshotResult | Record<string, unknown>,
+): Record<string, unknown> {
+  const raw = capture as Record<string, unknown>;
+  const dataBase64 =
+    (typeof raw.data_base64 === "string" && raw.data_base64) ||
+    (typeof raw.dataBase64 === "string" && raw.dataBase64) ||
+    "";
+
+  return {
+    source: typeof raw.source === "string" ? raw.source : "display",
+    display_id:
+      typeof raw.display_id === "string"
+        ? raw.display_id
+        : typeof raw.displayId === "string"
+          ? raw.displayId
+          : null,
+    window_id:
+      typeof raw.window_id === "string"
+        ? raw.window_id
+        : typeof raw.windowId === "string"
+          ? raw.windowId
+          : null,
+    format: typeof raw.format === "string" ? raw.format : "jpeg",
+    width: typeof raw.width === "number" ? raw.width : 0,
+    height: typeof raw.height === "number" ? raw.height : 0,
+    scale_factor:
+      typeof raw.scale_factor === "number"
+        ? raw.scale_factor
+        : typeof raw.scaleFactor === "number"
+          ? raw.scaleFactor
+          : 1,
+    mime: typeof raw.mime === "string" ? raw.mime : "image/jpeg",
+    data_base64: dataBase64,
+  };
+}
+
+function finalizeDesktopResult(payload: DesktopResultPayload): DesktopResultPayload {
+  if (payload.success) {
+    return {
+      ...payload,
+      status: "ok",
+      error: null,
+      error_code: null,
+    };
+  }
+
+  return {
+    ...payload,
+    status: "error",
+    data: payload.data ?? null,
+    error: payload.error ?? "Desktop command failed.",
+    error_code: payload.error_code ?? "DESKTOP_OPERATION_UNSUPPORTED",
+  };
 }
 
 export async function executeDesktopCommand(
@@ -224,11 +329,11 @@ export async function executeDesktopCommand(
     switch (command.operation) {
       case "desktop_screenshot": {
         const status = await controlPermissionStatus();
-        if (!status.approved_session) {
+        if (!status.screen_capture) {
           desktopFailure(
             result,
-            "DESKTOP_SESSION_NOT_APPROVED",
-            "Bitte Remote Control im agodesk-Banner freigeben.",
+            "DESKTOP_OPERATION_UNSUPPORTED",
+            "Screenshot-Capture ist auf diesem System nicht verfügbar.",
           );
           break;
         }
@@ -238,8 +343,17 @@ export async function executeDesktopCommand(
           format: params.format ?? "jpeg",
           quality: params.quality ?? 75,
         });
+        const screenshotData = normalizeCaptureResultForWire(capture);
+        if (!screenshotData.data_base64) {
+          desktopFailure(
+            result,
+            "DESKTOP_OPERATION_UNSUPPORTED",
+            "Screenshot-Capture lieferte keine Bilddaten.",
+          );
+          break;
+        }
         result.success = true;
-        result.data = capture as unknown as Record<string, unknown>;
+        result.data = screenshotData;
         break;
       }
       case "desktop_permission_request": {
@@ -262,6 +376,110 @@ export async function executeDesktopCommand(
           kind: String(params.kind ?? "unknown"),
           payload: params,
         });
+        result.success = true;
+        break;
+      }
+      case "desktop_list_displays": {
+        const displays = await listDisplays();
+        result.success = true;
+        result.data = { displays: displays as unknown as Record<string, unknown>[] };
+        break;
+      }
+      case "desktop_list_windows": {
+        const windows = await listWindows();
+        result.success = true;
+        result.data = { windows: windows as unknown as Record<string, unknown>[] };
+        break;
+      }
+      case "desktop_active_window": {
+        const active = await getActiveWindowInfo();
+        result.success = true;
+        result.data = active as unknown as Record<string, unknown>;
+        break;
+      }
+      case "desktop_host_info": {
+        const host = await collectHostInfo();
+        result.success = true;
+        result.data = host as unknown as Record<string, unknown>;
+        break;
+      }
+      case "desktop_ui_tree": {
+        const status = await controlPermissionStatus();
+        if (status.ui_automation === false) {
+          desktopFailure(
+            result,
+            "DESKTOP_UI_UNAVAILABLE",
+            "UI-Automation ist auf diesem System nicht verfügbar.",
+          );
+          break;
+        }
+        const tree = await getUiTree(
+          typeof params.window_id === "string" ? params.window_id : undefined,
+        );
+        result.success = true;
+        result.data = tree as unknown as Record<string, unknown>;
+        break;
+      }
+      case "desktop_ui_action": {
+        const status = await controlPermissionStatus();
+        if (!status.approved_session || !status.input_injection) {
+          desktopFailure(
+            result,
+            "DESKTOP_INPUT_NOT_APPROVED",
+            "UI-Aktionen sind lokal noch nicht freigegeben.",
+          );
+          break;
+        }
+        const actionResult = await runUiAction({
+          action: String(params.action ?? "click"),
+          element_id: String(params.element_id ?? ""),
+          value: typeof params.value === "string" ? params.value : undefined,
+          window_id:
+            typeof params.window_id === "string" ? params.window_id : undefined,
+        });
+        result.success = true;
+        result.data = actionResult;
+        break;
+      }
+      case "desktop_browser_connect": {
+        const session = await browserConnect({
+          endpoint: typeof params.endpoint === "string" ? params.endpoint : undefined,
+        });
+        result.success = true;
+        result.data = session;
+        break;
+      }
+      case "desktop_browser_snapshot": {
+        const snapshot = await browserSnapshot({
+          selector: typeof params.selector === "string" ? params.selector : undefined,
+          include_html:
+            params.include_html === true || params.includeHtml === true,
+        });
+        result.success = true;
+        result.data = snapshot;
+        break;
+      }
+      case "desktop_browser_action": {
+        const status = await controlPermissionStatus();
+        if (!status.approved_session || !status.input_injection) {
+          desktopFailure(
+            result,
+            "DESKTOP_INPUT_NOT_APPROVED",
+            "Browser-Aktionen sind lokal noch nicht freigegeben.",
+          );
+          break;
+        }
+        const browserResult = await browserAction({
+          action: String(params.action ?? "click"),
+          selector: String(params.selector ?? ""),
+          value: typeof params.value === "string" ? params.value : undefined,
+        });
+        result.success = true;
+        result.data = browserResult;
+        break;
+      }
+      case "desktop_browser_disconnect": {
+        await browserDisconnect();
         result.success = true;
         break;
       }
@@ -342,11 +560,15 @@ export async function executeDesktopCommand(
         );
     }
   } catch (error) {
-    result.error =
+    const message =
       error instanceof Error ? error.message : "Desktop command failed.";
+    result.error = message;
+    if (!result.error_code) {
+      result.error_code = "DESKTOP_OPERATION_UNSUPPORTED";
+    }
   }
 
-  await sendDesktopResult(wsSend, result, context);
+  await sendDesktopResult(wsSend, finalizeDesktopResult(result), context);
 }
 
 function buildDesktopResultMessage(

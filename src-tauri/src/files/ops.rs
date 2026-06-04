@@ -122,14 +122,15 @@ pub fn file_read(
     }
 
     let bytes = fs::read(&resolved.absolute_path).map_err(|_| "FILE_ACCESS_DENIED".to_string())?;
-    let content = String::from_utf8(bytes.clone()).map_err(|_| "FILE_ACCESS_DENIED".to_string())?;
+    let size = bytes.len() as u64;
+    let content = String::from_utf8(bytes).map_err(|_| "FILE_ACCESS_DENIED".to_string())?;
 
     Ok(FileReadResult {
         root_id: resolved.root_id,
         path: resolved.relative_path,
         encoding: "utf-8".to_string(),
         content,
-        size: bytes.len() as u64,
+        size,
         truncated: false,
     })
 }

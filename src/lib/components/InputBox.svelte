@@ -23,6 +23,22 @@
     onSpeechToggle,
   }: Props = $props();
 
+  let textareaEl = $state<HTMLTextAreaElement>();
+
+  function resizeTextarea(): void {
+    if (!textareaEl) {
+      return;
+    }
+    textareaEl.style.height = "auto";
+    const maxHeight = 160;
+    textareaEl.style.height = `${Math.min(textareaEl.scrollHeight, maxHeight)}px`;
+  }
+
+  $effect(() => {
+    void draft;
+    resizeTextarea();
+  });
+
   function submit(): void {
     const trimmed = draft.trim();
     if (!trimmed || disabled) {
@@ -30,6 +46,7 @@
     }
     onSubmit?.(trimmed);
     draft = "";
+    resizeTextarea();
   }
 
   function handleKeydown(event: KeyboardEvent): void {
@@ -40,38 +57,46 @@
   }
 </script>
 
-<form class="input-box" onsubmit={(event) => { event.preventDefault(); submit(); }}>
+<form class="input-box glass-panel" onsubmit={(event) => { event.preventDefault(); submit(); }}>
   {#if hint}
     <p class="hint">{hint}</p>
   {/if}
-  <div class="row">
-    {#if speechEnabled}
-      <SpeechControl
-        status={speechStatus}
-        disabled={disabled}
-        onToggle={() => onSpeechToggle?.()}
-      />
-    {/if}
-    <textarea
-      bind:value={draft}
-      placeholder={disabled
-        ? $i18n("inputBox.placeholder.disabled")
-        : $i18n("inputBox.placeholder.default")}
-      rows="3"
-      {disabled}
-      aria-label={$i18n("inputBox.message.ariaLabel")}
-      onkeydown={handleKeydown}
-    ></textarea>
-    <button
-      type="submit"
-      disabled={disabled || !draft.trim()}
-      aria-label={disabled
-        ? $i18n("inputBox.send.disabled.ariaLabel")
-        : $i18n("inputBox.send.ariaLabel")}
-      title={$i18n("inputBox.send.title")}
-    >
-      ↑
-    </button>
+  <div class="composer glass-panel-subtle">
+    <div class="row">
+      {#if speechEnabled}
+        <SpeechControl
+          status={speechStatus}
+          disabled={disabled}
+          onToggle={() => onSpeechToggle?.()}
+        />
+      {/if}
+      <textarea
+        bind:this={textareaEl}
+        bind:value={draft}
+        placeholder={disabled
+          ? $i18n("inputBox.placeholder.disabled")
+          : $i18n("inputBox.placeholder.default")}
+        rows="1"
+        {disabled}
+        aria-label={$i18n("inputBox.message.ariaLabel")}
+        onkeydown={handleKeydown}
+        oninput={resizeTextarea}
+      ></textarea>
+      <button
+        type="submit"
+        class="ui-btn ui-btn-primary send-btn"
+        disabled={disabled || !draft.trim()}
+        aria-label={disabled
+          ? $i18n("inputBox.send.disabled.ariaLabel")
+          : $i18n("inputBox.send.ariaLabel")}
+        title={$i18n("inputBox.send.title")}
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <line x1="12" y1="19" x2="12" y2="5"></line>
+          <polyline points="5 12 12 5 19 12"></polyline>
+        </svg>
+      </button>
+    </div>
   </div>
   <p class="footnote">{$i18n("inputBox.footnote")}</p>
 </form>
@@ -80,40 +105,52 @@
   .input-box {
     display: flex;
     flex-direction: column;
-    gap: 0.5rem;
-    padding: 1rem 1.25rem;
-    border-top: 1px solid var(--color-border);
-    background: var(--color-surface);
-    box-shadow: var(--color-panel-shadow);
+    gap: var(--space-2);
+    padding: var(--space-4) var(--space-5);
+    border-top: 1px solid var(--color-border-subtle);
+    border-radius: 0 0 var(--radius-window) var(--radius-window);
+    flex-shrink: 0;
+    z-index: 2;
+    overflow: hidden;
   }
 
   .hint {
     margin: 0;
     font-size: 0.8125rem;
     color: var(--color-muted);
+    padding-left: var(--space-1);
+  }
+
+  .composer {
+    border-radius: var(--radius-xl);
+    padding: 0.35rem;
+    border: 1px solid var(--color-border);
+    transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
   }
 
   .row {
     display: flex;
-    gap: 0.75rem;
+    gap: var(--space-2);
     align-items: flex-end;
   }
 
   textarea {
     flex: 1;
     resize: none;
-    border: 1px solid var(--color-border);
-    border-radius: 0.75rem;
-    padding: 0.75rem 1rem;
+    border: none;
+    border-radius: var(--radius-lg);
+    padding: var(--space-3) var(--space-4);
     font: inherit;
-    background: var(--color-input-bg);
+    line-height: 1.5;
+    background: transparent;
     color: var(--color-text);
-    min-height: 4.5rem;
+    min-height: 2.75rem;
+    max-height: 10rem;
+    overflow-y: auto;
   }
 
   textarea:focus {
-    outline: 2px solid var(--color-accent);
-    outline-offset: 1px;
+    outline: none;
   }
 
   textarea:disabled {
@@ -121,27 +158,40 @@
     cursor: not-allowed;
   }
 
-  button[type="submit"] {
-    align-self: flex-end;
-    width: 2.5rem;
-    height: 2.5rem;
-    border: none;
-    border-radius: var(--radius-full);
-    font: inherit;
-    font-weight: 700;
-    background: var(--color-accent);
-    color: white;
-    cursor: pointer;
+  .composer:focus-within {
+    border-color: color-mix(in srgb, var(--color-accent) 45%, var(--color-border));
+    box-shadow: var(--accent-glow);
   }
 
-  button:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
+  .send-btn {
+    align-self: flex-end;
+    width: 2.625rem;
+    height: 2.625rem;
+    min-width: 2.625rem;
+    padding: 0;
+    border-radius: var(--radius-full);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition:
+      transform var(--transition-fast),
+      background var(--transition-fast),
+      box-shadow var(--transition-fast);
+  }
+
+  .send-btn:not(:disabled):hover {
+    transform: scale(1.06) translateY(-1px);
+  }
+
+  .send-btn:not(:disabled):active {
+    transform: scale(0.96) translateY(0);
   }
 
   .footnote {
     margin: 0;
-    font-size: 0.75rem;
+    font-size: 0.6875rem;
     color: var(--color-muted);
+    padding-left: var(--space-1);
+    opacity: 0.75;
   }
 </style>

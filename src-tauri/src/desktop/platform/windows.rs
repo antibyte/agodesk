@@ -21,18 +21,9 @@ use windows::Win32::Graphics::Gdi::{
 };
 use windows::Win32::Graphics::Dwm::{DwmGetWindowAttribute, DWMWA_EXTENDED_FRAME_BOUNDS};
 use windows::Win32::UI::HiDpi::{GetDpiForMonitor, MDT_EFFECTIVE_DPI};
-use windows::Win32::UI::Input::KeyboardAndMouse::{
-    SendInput, INPUT, INPUT_0, INPUT_KEYBOARD, INPUT_MOUSE, KEYBDINPUT, KEYEVENTF_KEYUP,
-    KEYEVENTF_UNICODE, MOUSEEVENTF_ABSOLUTE, MOUSEEVENTF_LEFTDOWN, MOUSEEVENTF_LEFTUP,
-    MOUSEEVENTF_MIDDLEDOWN, MOUSEEVENTF_MIDDLEUP, MOUSEEVENTF_MOVE, MOUSEEVENTF_RIGHTDOWN,
-    MOUSEEVENTF_RIGHTUP, MOUSEINPUT, MOUSE_EVENT_FLAGS, VIRTUAL_KEY, VK_BACK, VK_DOWN, VK_END,
-    VK_ESCAPE, VK_HOME, VK_LEFT, VK_NEXT, VK_PRIOR, VK_RETURN, VK_RIGHT, VK_SPACE, VK_TAB, VK_UP,
-    VK_SHIFT, VK_CONTROL, VK_MENU, VK_LWIN,
-};
 use windows::Win32::UI::WindowsAndMessaging::{
-    EnumWindows, GetClassNameW, GetSystemMetrics, GetWindowRect, GetWindowTextLengthW,
-    GetWindowTextW, IsWindowVisible, SM_CXVIRTUALSCREEN, SM_CYVIRTUALSCREEN, SM_XVIRTUALSCREEN,
-    SM_YVIRTUALSCREEN,
+    EnumWindows, GetClassNameW, GetWindowRect, GetWindowTextLengthW,
+    GetWindowTextW, IsWindowVisible,
 };
 
 struct RawMonitor {
@@ -49,6 +40,10 @@ struct WindowEnumState<'a> {
 
 pub fn screen_capture_available() -> bool {
     true
+}
+
+pub fn ui_automation_available() -> bool {
+    crate::computer_use::platform::ui_automation_available()
 }
 
 pub fn list_displays() -> Result<Vec<DisplayInfo>, String> {
@@ -119,18 +114,7 @@ pub fn capture_screen(options: CaptureScreenOptions) -> Result<CaptureResult, St
 }
 
 pub fn inject_input(event: InputEvent) -> Result<(), String> {
-    if event.kind.is_empty() {
-        return Err("Missing input event kind.".to_string());
-    }
-
-    match event.kind.as_str() {
-        "mouse_move" => inject_mouse_move(&event),
-        "mouse_click" => inject_mouse_click(&event),
-        "key_down" => inject_key(&event, false),
-        "key_up" => inject_key(&event, true),
-        "text" => inject_text(&event),
-        other => Err(format!("Unsupported input kind: {other}")),
-    }
+    crate::computer_use::input::inject_input_enigo(&event)
 }
 
 unsafe extern "system" fn collect_monitor_proc(
@@ -640,224 +624,6 @@ fn encode_pixels(
         "png" => encode_png_rgb(rgb, width, height),
         other => Err(format!("Unsupported capture format: {other}")),
     }
-}
-
-fn inject_mouse_move(event: &InputEvent) -> Result<(), String> {
-    let payload = event.payload.as_ref().ok_or_else(|| "mouse_move requires payload.".to_string())?;
-    let x = json_i32(payload, "x")?;
-    let y = json_i32(payload, "y")?;
-    let absolute = payload
-        .get("absolute")
-        .and_then(|value| value.as_bool())
-        .unwrap_or(true);
-
-    let input = INPUT {
-        r#type: INPUT_MOUSE,
-        Anonymous: INPUT_0 {
-            mi: MOUSEINPUT {
-                dx: if absolute { absolute_x(x)? } else { x },
-                dy: if absolute { absolute_y(y)? } else { y },
-                dwFlags: if absolute {
-                    MOUSEEVENTF_MOVE | MOUSEEVENTF_ABSOLUTE
-                } else {
-                    MOUSEEVENTF_MOVE
-                },
-                ..Default::default()
-            },
-        },
-    };
-    send_inputs(&[input])
-}
-
-fn inject_mouse_click(event: &InputEvent) -> Result<(), String> {
-    let payload = event
-        .payload
-        .as_ref()
-        .ok_or_else(|| "mouse_click requires payload.".to_string())?;
-    let x = json_i32(payload, "x")?;
-    let y = json_i32(payload, "y")?;
-    let button = payload
-        .get("button")
-        .and_then(|value| value.as_str())
-        .unwrap_or("left");
-    let action = payload
-        .get("action")
-        .and_then(|value| value.as_str())
-        .unwrap_or("click");
-
-    let mut sequence = Vec::new();
-    sequence.push(build_mouse_move(x, y)?);
-
-    let (down_flag, up_flag) = mouse_button_flags(button)?;
-    match action {
-        "down" => sequence.push(build_mouse_button(down_flag)),
-        "up" => sequence.push(build_mouse_button(up_flag)),
-        "click" => {
-            sequence.push(build_mouse_button(down_flag));
-            sequence.push(build_mouse_button(up_flag));
-        }
-        other => return Err(format!("Unsupported mouse action: {other}")),
-    }
-
-    send_inputs(&sequence)
-}
-
-fn inject_key(event: &InputEvent, key_up: bool) -> Result<(), String> {
-    let payload = event
-        .payload
-        .as_ref()
-        .ok_or_else(|| "key event requires payload.".to_string())?;
-    let vk = resolve_virtual_key(payload)?;
-    let input = INPUT {
-        r#type: INPUT_KEYBOARD,
-        Anonymous: INPUT_0 {
-            ki: KEYBDINPUT {
-                wVk: vk,
-                dwFlags: if key_up { KEYEVENTF_KEYUP } else { Default::default() },
-                ..Default::default()
-            },
-        },
-    };
-    send_inputs(&[input])
-}
-
-fn inject_text(event: &InputEvent) -> Result<(), String> {
-    let payload = event
-        .payload
-        .as_ref()
-        .ok_or_else(|| "text event requires payload.".to_string())?;
-    let text = payload
-        .get("text")
-        .and_then(|value| value.as_str())
-        .ok_or_else(|| "text payload requires text.".to_string())?;
-
-    let mut inputs = Vec::new();
-    for unit in text.encode_utf16() {
-        inputs.push(INPUT {
-            r#type: INPUT_KEYBOARD,
-            Anonymous: INPUT_0 {
-                ki: KEYBDINPUT {
-                    wScan: unit,
-                    dwFlags: KEYEVENTF_UNICODE,
-                    ..Default::default()
-                },
-            },
-        });
-    }
-    send_inputs(&inputs)
-}
-
-fn build_mouse_move(x: i32, y: i32) -> Result<INPUT, String> {
-    Ok(INPUT {
-        r#type: INPUT_MOUSE,
-        Anonymous: INPUT_0 {
-            mi: MOUSEINPUT {
-                dx: absolute_x(x)?,
-                dy: absolute_y(y)?,
-                dwFlags: MOUSEEVENTF_MOVE | MOUSEEVENTF_ABSOLUTE,
-                ..Default::default()
-            },
-        },
-    })
-}
-
-fn build_mouse_button(flag: MOUSE_EVENT_FLAGS) -> INPUT {
-    INPUT {
-        r#type: INPUT_MOUSE,
-        Anonymous: INPUT_0 {
-            mi: MOUSEINPUT {
-                dwFlags: flag,
-                ..Default::default()
-            },
-        },
-    }
-}
-
-fn mouse_button_flags(button: &str) -> Result<(MOUSE_EVENT_FLAGS, MOUSE_EVENT_FLAGS), String> {
-    match button {
-        "left" => Ok((MOUSEEVENTF_LEFTDOWN, MOUSEEVENTF_LEFTUP)),
-        "right" => Ok((MOUSEEVENTF_RIGHTDOWN, MOUSEEVENTF_RIGHTUP)),
-        "middle" => Ok((MOUSEEVENTF_MIDDLEDOWN, MOUSEEVENTF_MIDDLEUP)),
-        other => Err(format!("Unsupported mouse button: {other}")),
-    }
-}
-
-fn send_inputs(inputs: &[INPUT]) -> Result<(), String> {
-    if inputs.is_empty() {
-        return Ok(());
-    }
-    unsafe {
-        let sent = SendInput(inputs, size_of::<INPUT>() as i32);
-        if sent == 0 {
-            return Err("SendInput failed.".to_string());
-        }
-    }
-    Ok(())
-}
-
-fn absolute_x(x: i32) -> Result<i32, String> {
-    let left = unsafe { GetSystemMetrics(SM_XVIRTUALSCREEN) };
-    let width = unsafe { GetSystemMetrics(SM_CXVIRTUALSCREEN) }.max(1);
-    Ok((((x - left) as i64 * 65_535) / width as i64) as i32)
-}
-
-fn absolute_y(y: i32) -> Result<i32, String> {
-    let top = unsafe { GetSystemMetrics(SM_YVIRTUALSCREEN) };
-    let height = unsafe { GetSystemMetrics(SM_CYVIRTUALSCREEN) }.max(1);
-    Ok((((y - top) as i64 * 65_535) / height as i64) as i32)
-}
-
-fn resolve_virtual_key(payload: &serde_json::Value) -> Result<VIRTUAL_KEY, String> {
-    if let Some(code) = payload.get("code").and_then(|value| value.as_u64()) {
-        return Ok(VIRTUAL_KEY(code as u16));
-    }
-
-    let key = payload
-        .get("key")
-        .and_then(|value| value.as_str())
-        .ok_or_else(|| "key event requires key or code.".to_string())?;
-
-    map_key_name(key).ok_or_else(|| format!("Unsupported key: {key}"))
-}
-
-fn map_key_name(key: &str) -> Option<VIRTUAL_KEY> {
-    let normalized = key.trim().to_ascii_lowercase();
-    match normalized.as_str() {
-        "enter" | "return" => Some(VK_RETURN),
-        "escape" | "esc" => Some(VK_ESCAPE),
-        "tab" => Some(VK_TAB),
-        "space" | " " => Some(VK_SPACE),
-        "backspace" => Some(VK_BACK),
-        "arrowup" | "up" => Some(VK_UP),
-        "arrowdown" | "down" => Some(VK_DOWN),
-        "arrowleft" | "left" => Some(VK_LEFT),
-        "arrowright" | "right" => Some(VK_RIGHT),
-        "home" => Some(VK_HOME),
-        "end" => Some(VK_END),
-        "pageup" => Some(VK_PRIOR),
-        "pagedown" => Some(VK_NEXT),
-        "shift" => Some(VK_SHIFT),
-        "control" | "ctrl" => Some(VK_CONTROL),
-        "alt" => Some(VK_MENU),
-        "meta" | "win" | "os" => Some(VK_LWIN),
-        single if single.len() == 1 => {
-            let ch = single.chars().next()?;
-            if ch.is_ascii_alphanumeric() {
-                Some(VIRTUAL_KEY(ch.to_ascii_uppercase() as u16))
-            } else {
-                None
-            }
-        }
-        _ => None,
-    }
-}
-
-fn json_i32(payload: &serde_json::Value, field: &str) -> Result<i32, String> {
-    payload
-        .get(field)
-        .and_then(|value| value.as_i64())
-        .ok_or_else(|| format!("Missing or invalid `{field}`."))
-        .map(|value| value as i32)
 }
 
 fn wide_to_string(buffer: &[u16]) -> String {

@@ -22,25 +22,44 @@
 </script>
 
 {#if errorMessage}
-  <section class="speech-banner error" role="alert" in:fly={bannerTransition} out:fly={{ ...bannerTransition, y: -4 }}>
+  <section
+    class="speech-banner banner-glass"
+    data-tone="danger"
+    role="alert"
+    in:fly={bannerTransition}
+    out:fly={{ ...bannerTransition, y: -4 }}
+  >
     <span class="icon" aria-hidden="true">!</span>
     <span>{errorMessage}</span>
   </section>
 {:else if partialTranscript}
-  <section class="speech-banner listening" role="status" aria-live="polite" in:fly={bannerTransition} out:fly={{ ...bannerTransition, y: -4 }}>
+  <section
+    class="speech-banner banner-glass listening"
+    data-tone="accent"
+    role="status"
+    aria-live="polite"
+    in:fly={bannerTransition}
+    out:fly={{ ...bannerTransition, y: -4 }}
+  >
     <div class="content">
       <span class="pulse-dot" aria-hidden="true"></span>
       <span class="label">{$i18n("speechBanner.recognizing.label")}</span>
       <span class="transcript">{partialTranscript}</span>
       {#if agentMode}
-        <span class="mode-chip">{$i18n("speechBanner.mode.agent")}</span>
+        <span class="mode-chip ui-chip" data-tone="connected">{$i18n("speechBanner.mode.agent")}</span>
       {:else if autoSendToAuraGo}
-        <span class="mode-chip">{$i18n("speechBanner.mode.autoSend")}</span>
+        <span class="mode-chip ui-chip" data-tone="connected">{$i18n("speechBanner.mode.autoSend")}</span>
       {/if}
     </div>
   </section>
 {:else if speechActive}
-  <section class="speech-banner mode" role="status" in:fly={bannerTransition} out:fly={{ ...bannerTransition, y: -4 }}>
+  <section
+    class="speech-banner banner-glass mode"
+    data-tone="accent"
+    role="status"
+    in:fly={bannerTransition}
+    out:fly={{ ...bannerTransition, y: -4 }}
+  >
     <div class="content">
       <span class="pulse-dot" aria-hidden="true"></span>
       {#if agentMode}
@@ -59,11 +78,6 @@
     display: flex;
     align-items: center;
     gap: var(--space-2);
-    margin: 0 var(--space-5) var(--space-2);
-    padding: var(--space-2) var(--space-3);
-    border-radius: var(--radius-md);
-    font-size: 0.8125rem;
-    line-height: 1.45;
   }
 
   .content {
@@ -74,34 +88,13 @@
     min-width: 0;
   }
 
-  .speech-banner.listening {
-    background: color-mix(in srgb, var(--color-danger) 10%, var(--color-surface));
-    border: 1px solid color-mix(in srgb, var(--color-danger) 25%, var(--color-border));
-    color: var(--color-text);
-  }
-
   .speech-banner.mode {
-    background: color-mix(in srgb, var(--color-accent) 8%, var(--color-surface));
-    border: 1px solid color-mix(in srgb, var(--color-accent) 25%, var(--color-border));
-    color: var(--color-text);
     font-size: 0.75rem;
   }
 
   .mode-chip {
     margin-left: auto;
-    padding: 0.1rem 0.45rem;
-    border-radius: var(--radius-full);
-    background: color-mix(in srgb, var(--color-accent) 14%, transparent);
-    color: var(--color-accent);
-    font-size: 0.6875rem;
-    font-weight: 600;
     flex-shrink: 0;
-  }
-
-  .speech-banner.error {
-    background: var(--color-danger-soft);
-    border: 1px solid color-mix(in srgb, var(--color-danger) 35%, transparent);
-    color: var(--color-danger);
   }
 
   .pulse-dot {

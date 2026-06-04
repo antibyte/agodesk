@@ -1,7 +1,9 @@
 mod commands;
+pub mod computer_use;
 mod desktop;
 mod files;
 mod tray;
+mod window_effects;
 mod ws;
 
 use tauri::Manager;
@@ -15,6 +17,9 @@ pub fn run() {
         .manage(WsTransportState::default())
         .manage(TrayState::default())
         .setup(|app| {
+            if let Some(window) = app.get_webview_window("main") {
+                window_effects::apply_main_window_effects(&window);
+            }
             let state = app.state::<TrayState>();
             tray::setup_tray(app.handle(), state.inner())?;
             Ok(())
@@ -27,6 +32,10 @@ pub fn run() {
             commands::store_shared_key,
             commands::get_shared_key,
             commands::delete_shared_key,
+            commands::store_gemini_api_key,
+            commands::get_gemini_api_key,
+            commands::delete_gemini_api_key,
+            commands::has_gemini_api_key,
             commands::collect_host_info,
             commands::list_displays,
             commands::list_windows,
@@ -35,6 +44,13 @@ pub fn run() {
             commands::inject_input,
             commands::set_input_approval,
             commands::reset_desktop_session,
+            commands::get_active_window,
+            commands::get_ui_tree,
+            commands::perform_ui_action,
+            commands::browser_connect,
+            commands::browser_snapshot,
+            commands::browser_action,
+            commands::browser_disconnect,
             commands::open_external_url,
             files::ops::file_list,
             files::ops::file_read,

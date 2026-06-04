@@ -34,6 +34,7 @@ export async function buildSessionStartCommon(): Promise<SessionStartCommon> {
     client_capabilities: agodeskClientCapabilities(
       get(settings).desktopControlEnabled,
       get(settings).fileAccess,
+      get(settings).browserControlEnabled,
     ),
     host,
     ...(fileAccessPayload ? { file_access: fileAccessPayload } : {}),

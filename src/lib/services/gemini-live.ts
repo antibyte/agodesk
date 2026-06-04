@@ -445,18 +445,7 @@ export class InputTranscriptAccumulator {
       return this.buffer;
     }
 
-    if (!this.buffer) {
-      this.buffer = trimmed;
-    } else if (trimmed.startsWith(this.buffer)) {
-      this.buffer = trimmed;
-    } else if (this.buffer.endsWith(trimmed)) {
-      // bereits enthalten
-    } else if (this.buffer.startsWith(trimmed)) {
-      // kürzerer Zwischenstand ignorieren
-    } else {
-      this.buffer += trimmed;
-    }
-
+    this.buffer = mergeTranscriptChunks(this.buffer, trimmed);
     return this.buffer;
   }
 
@@ -473,6 +462,66 @@ export class InputTranscriptAccumulator {
   get current(): string {
     return this.buffer;
   }
+}
+
+/** @internal Exported for unit tests. */
+export function mergeTranscriptChunks(existing: string, incoming: string): string {
+  const trimmed = incoming.trim();
+  if (!trimmed) {
+    return existing;
+  }
+  if (!existing) {
+    return trimmed;
+  }
+  if (trimmed.startsWith(existing)) {
+    return trimmed;
+  }
+  if (existing.startsWith(trimmed) || existing.endsWith(trimmed)) {
+    return existing;
+  }
+
+  const overlap = longestSuffixPrefixOverlap(existing, trimmed);
+  if (overlap >= 2) {
+    return existing + trimmed.slice(overlap);
+  }
+
+  // Kurze Fragmente (<3 Zeichen) oft Silben/Fortsetzung desselben Worts (z. B. "Hal"+"lo").
+  if (trimmed.length < 3) {
+    return existing + trimmed;
+  }
+
+  return existing + (shouldInsertSpaceBetween(existing, trimmed) ? " " : "") + trimmed;
+}
+
+function shouldInsertSpaceBetween(left: string, right: string): boolean {
+  if (!left || !right) {
+    return false;
+  }
+  if (/\s$/.test(left) || /^\s/.test(right)) {
+    return false;
+  }
+  const leftLast = left[left.length - 1] ?? "";
+  const rightFirst = right[0] ?? "";
+  if (/^[,.!?;:)\]}]/.test(right)) {
+    return false;
+  }
+  if (/[(\[{]$/.test(left)) {
+    return false;
+  }
+  if (leftLast === "-" || rightFirst === "-") {
+    return false;
+  }
+  return true;
+}
+
+function longestSuffixPrefixOverlap(left: string, right: string): number {
+  const max = Math.min(left.length, right.length);
+  for (let len = max; len > 0; len -= 1) {
+    if (left.endsWith(right.slice(0, len))) {
+      return len;
+    }
+  }
+  return 0;
 }
 
 export function buildGeminiToolResponseMessage(

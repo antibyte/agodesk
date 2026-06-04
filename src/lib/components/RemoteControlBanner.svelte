@@ -27,6 +27,18 @@
         return $i18n("remoteControl.operation.screenshot");
       case "desktop_input":
         return $i18n("remoteControl.operation.input");
+      case "desktop_ui_tree":
+        return $i18n("remoteControl.operation.uiTree");
+      case "desktop_ui_action":
+        return $i18n("remoteControl.operation.uiAction");
+      case "desktop_browser_connect":
+        return $i18n("remoteControl.operation.browserConnect");
+      case "desktop_browser_snapshot":
+        return $i18n("remoteControl.operation.browserSnapshot");
+      case "desktop_browser_action":
+        return $i18n("remoteControl.operation.browserAction");
+      case "desktop_browser_disconnect":
+        return $i18n("remoteControl.operation.browserDisconnect");
       case "desktop_permission_request":
         return $i18n("remoteControl.operation.permissionRequest");
       default:
@@ -39,8 +51,9 @@
 
 {#if visible}
   <div
-    class="remote-banner"
-    class:active
+    class="remote-banner banner-glass"
+    data-tone={active ? "success" : "warning"}
+    class:is-active={active}
     aria-live="assertive"
     role="dialog"
     aria-labelledby="remote-title"
@@ -62,14 +75,14 @@
     </div>
     <div class="actions">
       {#if active}
-        <button type="button" class="danger" onclick={() => onStop?.()}>
+        <button type="button" class="ui-btn ui-btn-danger" onclick={() => onStop?.()}>
           {$i18n("remoteControl.stop")}
         </button>
       {:else if pending}
-        <button type="button" onclick={() => onApprove?.()}>
+        <button type="button" class="ui-btn ui-btn-primary" onclick={() => onApprove?.()}>
           {$i18n("remoteControl.approve")}
         </button>
-        <button type="button" class="secondary" onclick={() => onDeny?.()}>
+        <button type="button" class="ui-btn ui-btn-secondary" onclick={() => onDeny?.()}>
           {$i18n("remoteControl.deny")}
         </button>
       {/if}
@@ -81,17 +94,13 @@
   .remote-banner {
     display: flex;
     justify-content: space-between;
-    gap: 1rem;
-    padding: 0.85rem 1.25rem;
-    border-bottom: 2px solid #f59e0b;
-    background: color-mix(in srgb, #f59e0b 22%, var(--color-surface));
-    box-shadow: 0 2px 8px color-mix(in srgb, #f59e0b 25%, transparent);
+    gap: var(--space-4);
+    margin: 0;
+    border-radius: 0;
+    border-left: none;
+    border-right: none;
+    border-top: none;
     z-index: 20;
-  }
-
-  .remote-banner.active {
-    border-bottom-color: #22c55e;
-    background: color-mix(in srgb, #22c55e 14%, var(--color-surface));
   }
 
   .op {
@@ -100,7 +109,7 @@
   }
 
   p {
-    margin: 0.35rem 0 0;
+    margin: var(--space-2) 0 0;
     font-size: 0.875rem;
     line-height: 1.5;
   }
@@ -108,28 +117,8 @@
   .actions {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: var(--space-2);
     flex-wrap: wrap;
-  }
-
-  button {
-    border: none;
-    border-radius: 0.5rem;
-    padding: 0.55rem 0.9rem;
-    background: var(--color-accent);
-    color: white;
-    cursor: pointer;
-  }
-
-  .secondary,
-  .danger {
-    background: transparent;
-    border: 1px solid var(--color-border);
-    color: var(--color-text);
-  }
-
-  .danger {
-    border-color: #ef4444;
-    color: #ef4444;
+    flex-shrink: 0;
   }
 </style>

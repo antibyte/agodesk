@@ -95,7 +95,7 @@
     offset: number,
   ): void {
     const { waveform, energy, speaking } = metrics;
-    const amplitude = height * amplitudeScale * (speaking ? 0.38 + energy * 0.72 : 0.035 + energy * 0.1);
+    const amplitude = height * amplitudeScale * (speaking ? 0.5 + energy * 1.0 : 0.03 + energy * 0.08);
 
     ctx.beginPath();
     ctx.lineWidth = lineWidth;
@@ -149,8 +149,22 @@
 
     resizeCanvas();
 
-    const analyser = getSpeechAudioAnalyser();
-    const sampleSpeech = analyser ? createSpeechAudioSampler(analyser) : null;
+    let sampleSpeech: (() => SpeechAudioMetrics) | null = null;
+    let boundAnalyser: AnalyserNode | null = null;
+
+    function resolveMetrics(): SpeechAudioMetrics {
+      const analyser = getSpeechAudioAnalyser();
+      if (!analyser) {
+        sampleSpeech = null;
+        boundAnalyser = null;
+        return createIdleSpeechMetrics();
+      }
+      if (analyser !== boundAnalyser) {
+        boundAnalyser = analyser;
+        sampleSpeech = createSpeechAudioSampler(analyser);
+      }
+      return sampleSpeech?.() ?? createIdleSpeechMetrics();
+    }
 
     let fade = 0;
     let pulseRing = 0;
@@ -189,7 +203,7 @@
         return;
       }
 
-      const metrics = sampleSpeech ? sampleSpeech() : createIdleSpeechMetrics();
+      const metrics = resolveMetrics();
       updateSpeechCssVars(metrics);
 
       const { energy, speaking, bass, mid, treble, spectrum } = metrics;
@@ -213,60 +227,18 @@
       const voiceDrive = speaking ? energy : energy * 0.25;
       const globalAlpha = fade * (0.35 + voiceDrive * 0.55);
 
-      // Localized glowing orbs (more performant + beautiful than full-screen washes)
-      const orbs = [
-        { x: 0.22, y: 0.28, color: accent, band: bass, size: 0.32 },
-        { x: 0.78, y: 0.34, color: secondary, band: mid, size: 0.29 },
-        { x: 0.5, y: 0.72, color: danger, band: mid * 0.65 + bass * 0.35, size: 0.35 },
-        { x: 0.32, y: 0.52, color: accent, band: treble, size: 0.26 },
-      ];
-
-      for (const orb of orbs) {
-        const bandPush = speaking ? orb.band * 0.11 : orb.band * 0.025;
-        const ox = orb.x * width + (metrics.waveform[6] ?? 0) * width * 0.03;
-        const oy = orb.y * height + (metrics.waveform[22] ?? 0) * height * 0.035;
-        const radius = Math.min(width, height) * (orb.size + bandPush + voiceDrive * 0.11);
-
-        const grad = ctx.createRadialGradient(ox, oy, radius * 0.1, ox, oy, radius);
-        grad.addColorStop(0, rgba(orb.color, (0.22 + orb.band * 0.25) * globalAlpha));
-        grad.addColorStop(0.55, rgba(orb.color, (0.07 + orb.band * 0.12) * globalAlpha));
-        grad.addColorStop(1, rgba(orb.color, 0));
-
-        ctx.fillStyle = grad;
-        ctx.beginPath();
-        ctx.arc(ox, oy, radius, 0, Math.PI * 2);
-        ctx.fill();
-      }
-
-      // Central voice core / orb - reacts strongly to energy + bass
-      const coreX = centerX + (metrics.waveform[12] ?? 0) * 18;
-      const coreY = centerY + (metrics.waveform[28] ?? 0) * 12;
-      const coreR = Math.min(width, height) * (0.065 + bass * 0.07 + voiceDrive * 0.09);
-      const coreGrad = ctx.createRadialGradient(coreX, coreY, coreR * 0.2, coreX, coreY, coreR * 1.6);
-      coreGrad.addColorStop(0, rgba(accent, (0.35 + energy * 0.3) * globalAlpha));
-      coreGrad.addColorStop(0.5, rgba(secondary, (0.12 + mid * 0.2) * globalAlpha));
-      coreGrad.addColorStop(1, rgba(danger, 0));
-      ctx.fillStyle = coreGrad;
-      ctx.beginPath();
-      ctx.arc(coreX, coreY, coreR * 1.6, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Inner bright core
-      const innerGrad = ctx.createRadialGradient(coreX, coreY, 0, coreX, coreY, coreR * 0.7);
-      innerGrad.addColorStop(0, rgba("#fff", 0.18 * globalAlpha));
-      innerGrad.addColorStop(1, rgba(accent, 0.06 * globalAlpha));
-      ctx.fillStyle = innerGrad;
-      ctx.beginPath();
-      ctx.arc(coreX, coreY, coreR * 0.7, 0, Math.PI * 2);
-      ctx.fill();
+      // No large colored radial orbs / central core anymore.
+      // These were creating the strong "farbverlauf" over the whole surface.
+      // The animation now relies on waveforms, bars, particles and subtle vignette for a cleaner look.
+      // (Radial effects are now only inside the chat bubbles via MessageBubble styles.)
 
       // Beautiful reactive spectrum bars (bottom + subtle top mirror)
       const barCount = Math.min(spectrum.length, 48); // slightly fewer for perf + elegance
       const barWidth = width / barCount;
       for (let index = 0; index < barCount; index += 1) {
         const raw = spectrum[index] ?? 0;
-        const barEnergy = raw * (speaking ? 0.58 + energy * 0.82 : 0.07 + energy * 0.18);
-        const barHeight = barEnergy * height * 0.29;
+        const barEnergy = raw * (speaking ? 0.7 + energy * 1.0 : 0.08 + energy * 0.15);
+        const barHeight = barEnergy * height * 0.38;
         const x = index * barWidth + barWidth * 0.18;
         const bw = barWidth * 0.64;
 
@@ -295,7 +267,7 @@
         ctx.fillRect(x, 0, bw, topH);
       }
 
-      drawVoiceWaveform(ctx, metrics, width, height, centerY, danger, 0.42 * globalAlpha, 0.22, 3.2, 0);
+      drawVoiceWaveform(ctx, metrics, width, height, centerY, danger, 0.55 * globalAlpha, 0.28, 4, 0);
       drawVoiceWaveform(
         ctx,
         metrics,
@@ -303,9 +275,9 @@
         height,
         centerY * 0.72,
         accent,
-        0.24 * globalAlpha,
-        0.12,
-        2,
+        0.35 * globalAlpha,
+        0.16,
+        2.5,
         (metrics.waveform[40] ?? 0) * height * 0.01,
       );
       drawVoiceWaveform(
@@ -315,38 +287,40 @@
         height,
         centerY * 1.22,
         secondary,
-        0.2 * globalAlpha,
-        0.1,
-        1.6,
+        0.28 * globalAlpha,
+        0.13,
+        2,
         (metrics.waveform[64] ?? 0) * height * 0.012,
       );
 
       // Particles + constellation connections for premium audio-reactive look
       const particlePositions: Array<{ x: number; y: number; size: number }> = [];
       for (const particle of particles) {
-        const motion = speaking ? 0.0038 + mid * 0.016 + treble * 0.011 : 0.0007;
+        const motion = speaking ? 0.005 + mid * 0.025 + treble * 0.015 : 0.0008;
         particle.angle +=
           motion *
           (1 +
-            (metrics.waveform[Math.floor(particle.wobble) % metrics.waveform.length] ?? 0) * 0.6);
+            (metrics.waveform[Math.floor(particle.wobble) % metrics.waveform.length] ?? 0) * 0.8);
         const orbitRadius =
           Math.min(width, height) *
-          (particle.radius + bass * (speaking ? 0.09 : 0.012) + energy * (speaking ? 0.055 : 0.012));
+          (particle.radius + bass * (speaking ? 0.12 : 0.015) + energy * (speaking ? 0.07 : 0.015));
         const px = centerX + Math.cos(particle.angle) * orbitRadius;
         const py =
           centerY +
           Math.sin(particle.angle * 1.15 + particle.wobble * 0.7) * orbitRadius * 0.65;
-        const size = particle.size + voiceDrive * (speaking ? 4.5 : 1.1);
+        const size = particle.size + voiceDrive * (speaking ? 6 : 1.3);
 
         particlePositions.push({ x: px, y: py, size });
 
-        const glow = ctx.createRadialGradient(px, py, 0, px, py, size * 3.2);
-        glow.addColorStop(0, rgba(danger, (0.24 + mid * 0.42) * globalAlpha));
-        glow.addColorStop(0.45, rgba(accent, (0.09 + treble * 0.16) * globalAlpha));
-        glow.addColorStop(1, rgba(accent, 0));
-        ctx.fillStyle = glow;
+        // Simple solid glow without radial gradient
+        ctx.fillStyle = rgba(danger, (0.08 + mid * 0.15) * globalAlpha);
         ctx.beginPath();
-        ctx.arc(px, py, size * 3.2, 0, Math.PI * 2);
+        ctx.arc(px, py, size * 2.5, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = rgba(accent, (0.03 + treble * 0.06) * globalAlpha);
+        ctx.beginPath();
+        ctx.arc(px, py, size * 1.5, 0, Math.PI * 2);
         ctx.fill();
       }
 
@@ -386,19 +360,8 @@
         }
       }
 
-      const vignette = ctx.createRadialGradient(
-        centerX,
-        centerY,
-        Math.min(width, height) * 0.14,
-        centerX,
-        centerY,
-        Math.max(width, height) * 0.76,
-      );
-      vignette.addColorStop(0, rgba(colors.bg, 0));
-      vignette.addColorStop(0.55, rgba(colors.bg, 0.06 * fade));
-      vignette.addColorStop(1, rgba(colors.bg, 0.4 * fade));
-      ctx.fillStyle = vignette;
-      ctx.fillRect(0, 0, width, height);
+      // No vignette for cleaner look without radial
+      // if needed, can add a simple full fade later
     }
 
     renderFrame();
@@ -488,18 +451,18 @@
     background: conic-gradient(
       from 12deg at 50% 48%,
       transparent 0deg,
-      color-mix(in srgb, var(--color-accent) 22%, transparent) 62deg,
+      color-mix(in srgb, var(--color-accent) 8%, transparent) 62deg,
       transparent 125deg,
-      color-mix(in srgb, var(--color-danger) 18%, transparent) 195deg,
+      color-mix(in srgb, var(--color-danger) 6%, transparent) 195deg,
       transparent 260deg,
-      color-mix(in srgb, var(--color-accent) 14%, transparent) 310deg,
+      color-mix(in srgb, var(--color-accent) 5%, transparent) 310deg,
       transparent 360deg
     );
-    opacity: calc(0.07 + var(--speech-energy) * 0.38);
+    opacity: calc(0.04 + var(--speech-energy) * 0.22);
     mix-blend-mode: screen;
     animation: aurora-spin calc(26s - var(--speech-energy) * 15s) linear infinite;
     transform: scale(calc(1 + var(--speech-mid) * 0.07));
-    mask-image: radial-gradient(circle at 50% 46%, black 8%, transparent 68%);
+    /* no radial mask to avoid any radial gradient */
     transition:
       opacity 0.1s linear,
       transform 0.1s linear;
@@ -508,7 +471,7 @@
 
   .speech-bg.speaking .speech-bg-shimmer {
     animation-duration: calc(19s - var(--speech-energy) * 11s);
-    opacity: calc(0.11 + var(--speech-energy) * 0.46);
+    opacity: calc(0.06 + var(--speech-energy) * 0.28);
   }
 
   @keyframes aurora-spin {

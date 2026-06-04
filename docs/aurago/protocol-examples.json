@@ -1,0 +1,254 @@
+{
+  "protocol_version": "agodesk.v1",
+  "endpoint": "wss://<host>:<port>/api/agodesk/ws",
+  "session_start": {
+    "client_to_server": {
+      "id": "msg-session-start-1",
+      "type": "session.start",
+      "timestamp": "2026-06-04T12:00:00.000Z",
+      "payload": {
+        "client_version": "0.1.0",
+        "client_capabilities": [
+          "chat.full_response",
+          "remote.desktop.capture",
+          "remote.desktop.permission_request",
+          "remote.desktop.input",
+          "remote.desktop.discovery",
+          "remote.desktop.ui_automation",
+          "persona.assets"
+        ],
+        "host": {
+          "hostname": "DESKTOP-ABC",
+          "os": "windows",
+          "arch": "x86_64"
+        },
+        "device_id": "dev-abc123",
+        "shared_key_proof": {
+          "nonce": "550e8400-e29b-41d4-a716-446655440000",
+          "timestamp": "2026-06-04T12:00:00.000Z",
+          "hmac": "<hex-hmac>"
+        }
+      }
+    },
+    "server_to_client": {
+      "id": "msg-session-accepted-1",
+      "type": "session.accepted",
+      "timestamp": "2026-06-04T12:00:01.000Z",
+      "payload": {
+        "session_id": "sess-acc-xyz",
+        "device_id": "dev-abc123",
+        "advertised_capabilities": [
+          "chat.full_response",
+          "remote.desktop.capture",
+          "remote.desktop.permission_request",
+          "remote.desktop.input",
+          "remote.desktop.discovery",
+          "remote.desktop.ui_automation",
+          "persona.assets"
+        ]
+      }
+    }
+  },
+  "desktop_commands": {
+    "desktop_list_displays": {
+      "command": {
+        "id": "env-1",
+        "type": "desktop.command",
+        "timestamp": "2026-06-04T12:01:00.000Z",
+        "payload": {
+          "command_id": "cmd-displays-1",
+          "operation": "desktop_list_displays",
+          "params": {}
+        }
+      },
+      "result": {
+        "id": "env-2",
+        "type": "desktop.result",
+        "timestamp": "2026-06-04T12:01:00.100Z",
+        "payload": {
+          "command_id": "cmd-displays-1",
+          "success": true,
+          "status": "ok",
+          "session_id": "sess-acc-xyz",
+          "device_id": "dev-abc123",
+          "data": {
+            "displays": [
+              {
+                "id": "display-0",
+                "index": 0,
+                "name": "\\\\.\\DISPLAY1",
+                "width": 1920,
+                "height": 1080,
+                "x": 0,
+                "y": 0,
+                "primary": true,
+                "scale_factor": 1.25
+              }
+            ]
+          },
+          "error": null,
+          "error_code": null
+        }
+      }
+    },
+    "desktop_active_window": {
+      "command": {
+        "payload": {
+          "command_id": "cmd-active-1",
+          "operation": "desktop_active_window",
+          "params": {}
+        }
+      },
+      "result": {
+        "payload": {
+          "command_id": "cmd-active-1",
+          "success": true,
+          "status": "ok",
+          "data": {
+            "id": "win-12345678",
+            "title": "Notepad",
+            "process_name": "Notepad.exe",
+            "process_path": "C:\\Windows\\System32\\notepad.exe",
+            "x": 100,
+            "y": 100,
+            "width": 800,
+            "height": 600,
+            "display_id": "display-0"
+          }
+        }
+      }
+    },
+    "desktop_ui_tree": {
+      "command": {
+        "payload": {
+          "command_id": "cmd-tree-1",
+          "operation": "desktop_ui_tree",
+          "params": {
+            "window_id": "win-12345678"
+          }
+        }
+      },
+      "result": {
+        "payload": {
+          "command_id": "cmd-tree-1",
+          "success": true,
+          "status": "ok",
+          "data": {
+            "window_id": "win-12345678",
+            "truncated": false,
+            "element_count": 42,
+            "root": {
+              "id": "elem-0",
+              "role": "Window",
+              "name": "Notepad",
+              "bounds": { "x": 100, "y": 100, "width": 800, "height": 600 },
+              "interactive": true,
+              "enabled": true,
+              "visible": true,
+              "children": [
+                {
+                  "id": "elem-1",
+                  "role": "Edit",
+                  "name": "Text Editor",
+                  "automation_id": "15",
+                  "bounds": { "x": 0, "y": 0, "width": 784, "height": 562 },
+                  "interactive": true,
+                  "enabled": true,
+                  "visible": true,
+                  "children": []
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+    "desktop_ui_action": {
+      "command": {
+        "payload": {
+          "command_id": "cmd-ui-action-1",
+          "operation": "desktop_ui_action",
+          "params": {
+            "element_id": "elem-1",
+            "action": "set_value",
+            "value": "Hello from AuraGo"
+          }
+        }
+      },
+      "result_pending_approval": {
+        "payload": {
+          "command_id": "cmd-ui-action-1",
+          "success": false,
+          "status": "error",
+          "error_code": "DESKTOP_INPUT_NOT_APPROVED",
+          "error": "UI-Aktionen sind lokal noch nicht freigegeben."
+        }
+      },
+      "result_after_approval": {
+        "payload": {
+          "command_id": "cmd-ui-action-1",
+          "success": true,
+          "status": "ok",
+          "data": { "element_id": "elem-1", "action": "set_value", "success": true }
+        }
+      }
+    },
+    "desktop_input_scroll": {
+      "command": {
+        "payload": {
+          "command_id": "cmd-input-1",
+          "operation": "desktop_input",
+          "params": {
+            "kind": "mouse_scroll",
+            "x": 400,
+            "y": 300,
+            "delta": -120,
+            "direction": "down"
+          }
+        }
+      }
+    },
+    "desktop_screenshot": {
+      "command": {
+        "payload": {
+          "command_id": "cmd-shot-1",
+          "operation": "desktop_screenshot",
+          "params": {
+            "display_id": "display-0",
+            "format": "jpeg",
+            "quality": 75
+          }
+        }
+      },
+      "result": {
+        "payload": {
+          "command_id": "cmd-shot-1",
+          "success": true,
+          "status": "ok",
+          "data": {
+            "source": "display",
+            "display_id": "display-0",
+            "format": "jpeg",
+            "width": 1280,
+            "height": 720,
+            "scale_factor": 1.25,
+            "mime": "image/jpeg",
+            "data_base64": "<base64-jpeg>"
+          }
+        }
+      }
+    },
+    "desktop_browser_connect": {
+      "command": {
+        "payload": {
+          "command_id": "cmd-browser-1",
+          "operation": "desktop_browser_connect",
+          "params": {
+            "endpoint": "http://127.0.0.1:9222"
+          }
+        }
+      },
+      "note": "Requires client setting browserControlEnabled and capability remote.desktop.browser"
+    }
+  }
+}

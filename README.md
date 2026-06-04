@@ -30,7 +30,8 @@ Der Mock-Backend lauscht auf `ws://localhost:8080/api/agodesk/ws`.
 - Loopback-Dev (Default): `ws://localhost:8080/api/agodesk/ws?insecure_loopback=1`
 - Pairing-Test: Query-Parameter entfernen und Token im Pairing-Banner eingeben
 
-Protokoll-Details: [docs/BACKEND_PROTOCOL.md](docs/BACKEND_PROTOCOL.md)
+Protokoll-Details: [docs/BACKEND_PROTOCOL.md](docs/BACKEND_PROTOCOL.md)  
+AuraGo Computer-Use Integration: [docs/AURAGO_COMPUTER_USE_AGENT.md](docs/AURAGO_COMPUTER_USE_AGENT.md)
 
 ## Build
 

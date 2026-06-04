@@ -27,5 +27,6 @@ pub fn permission_status() -> Result<super::types::ControlPermissionStatus, Stri
         screen_capture: super::platform::screen_capture_available(),
         input_injection: approved,
         approved_session: approved,
+        ui_automation: super::platform::ui_automation_available(),
     })
 }
