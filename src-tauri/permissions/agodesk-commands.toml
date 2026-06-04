@@ -1,4 +1,4 @@
-﻿[[permission]]
+[[permission]]
 identifier = "agodesk-commands"
 description = "Allows agodesk credential, desktop, file, tray, and websocket commands."
 commands.allow = [

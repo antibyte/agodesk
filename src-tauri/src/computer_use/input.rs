@@ -56,25 +56,48 @@ pub fn inject_input_enigo(event: &InputEvent) -> Result<(), String> {
                     .move_mouse(x, y, Coordinate::Abs)
                     .map_err(|error| error.to_string())?;
             }
-            let delta = payload
-                .get("delta")
+            // Support documented delta_x/delta_y (and camelCase fallbacks) from remote,
+            // as well as legacy single "delta" + "direction".
+            // Pass signed value directly to enigo.scroll (positive/negative controls direction per axis).
+            let delta_x = payload
+                .get("delta_x")
                 .and_then(|value| value.as_i64())
-                .unwrap_or(120) as i32;
-            let direction = payload
-                .get("direction")
-                .and_then(|value| value.as_str())
-                .unwrap_or(if delta >= 0 { "up" } else { "down" });
-            let axis = match direction {
-                "left" | "right" => Axis::Horizontal,
-                _ => Axis::Vertical,
-            };
-            let amount = if direction == "down" || direction == "left" {
-                delta.unsigned_abs() as u32
+                .or_else(|| payload.get("deltaX").and_then(|value| value.as_i64()))
+                .map(|v| v as i32);
+            let delta_y = payload
+                .get("delta_y")
+                .and_then(|value| value.as_i64())
+                .or_else(|| payload.get("deltaY").and_then(|value| value.as_i64()))
+                .map(|v| v as i32);
+            let (scroll_amount, axis) = if let Some(dx) = delta_x {
+                if dx != 0 {
+                    (dx, Axis::Horizontal)
+                } else if let Some(dy) = delta_y {
+                    (dy, Axis::Vertical)
+                } else {
+                    (dx, Axis::Horizontal)
+                }
+            } else if let Some(dy) = delta_y {
+                (dy, Axis::Vertical)
             } else {
-                delta.unsigned_abs() as u32
+                // legacy fallback
+                let d = payload
+                    .get("delta")
+                    .and_then(|value| value.as_i64())
+                    .unwrap_or(120) as i32;
+                let dir = payload
+                    .get("direction")
+                    .and_then(|value| value.as_str())
+                    .unwrap_or(if d >= 0 { "up" } else { "down" });
+                let ax = if dir == "left" || dir == "right" {
+                    Axis::Horizontal
+                } else {
+                    Axis::Vertical
+                };
+                (d, ax)
             };
             enigo
-                .scroll(amount as i32, axis)
+                .scroll(scroll_amount, axis)
                 .map_err(|error| error.to_string())?;
         }
         "mouse_drag" => {

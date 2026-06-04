@@ -10,7 +10,7 @@
     "check": "svelte-check --tsconfig ./tsconfig.json",
     "tauri": "tauri",
     "mock-server": "node scripts/mock-server.mjs",
-    "build:sidecar": "cd src-tauri && cargo build --release --bin agodesk-worker && cd .. && node scripts/copy-sidecar.mjs",
+    "build:sidecar": "cd src-tauri && cargo build --release --bin agodesk-worker --features computer-use-sidecar && cd .. && node scripts/copy-sidecar.mjs",
     "test": "node --import tsx --test src/lib/**/*.test.ts"
   },
   "dependencies": {

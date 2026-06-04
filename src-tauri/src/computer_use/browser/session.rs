@@ -60,26 +60,9 @@ fn current_endpoint() -> Result<String, String> {
         .ok_or_else(|| "Browser is not connected.".to_string())
 }
 
-#[cfg(feature = "browser-automation")]
-pub mod cdp_impl {
-    use super::*;
-    use crate::computer_use::types::BrowserConnectParams;
+// Future work (when browser-automation feature + chromiumoxide is wired up):
+// A real async CDP implementation lived here (cdp_impl with Browser::launch).
+// It was never called from the sync browser_* fns and used a Linux-only hardcoded path.
+// For now the module above provides only stubs (currently not even invoked from browser/mod.rs).
 
-    pub async fn connect_async(params: BrowserConnectParams) -> Result<BrowserSessionInfo, String> {
-        use chromiumoxide::browser::{Browser, BrowserConfig};
-
-        let endpoint = params
-            .endpoint
-            .unwrap_or_else(|| "http://127.0.0.1:9222".to_string());
-        let config = BrowserConfig::builder()
-            .chrome_executable("/usr/bin/chromium")
-            .build()
-            .map_err(|error| error.to_string())?;
-        let (_browser, _handler) = Browser::launch(config)
-            .await
-            .map_err(|error| format!("Failed to launch browser: {error}"))?;
-        connect(BrowserConnectParams {
-            endpoint: Some(endpoint.clone()),
-        })
-    }
-}
+// The cdp.rs re-export and mod declaration were also unused scaffolding.

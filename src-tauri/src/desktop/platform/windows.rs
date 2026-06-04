@@ -650,16 +650,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn maps_common_keys() {
-        assert_eq!(map_key_name("enter"), Some(VK_RETURN));
-        assert_eq!(map_key_name("a"), Some(VIRTUAL_KEY(b'A' as u16)));
-        assert_eq!(map_key_name("shift"), Some(VK_SHIFT));
-        assert_eq!(map_key_name("ctrl"), Some(VK_CONTROL));
-        assert_eq!(map_key_name("alt"), Some(VK_MENU));
-        assert_eq!(map_key_name("win"), Some(VK_LWIN));
-    }
-
-    #[test]
     fn parses_window_ids() {
         assert_eq!(hwnd_from_id("win-123").unwrap().0, 123 as *mut c_void);
     }

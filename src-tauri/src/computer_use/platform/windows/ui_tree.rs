@@ -127,7 +127,7 @@ fn build_node(
     let automation_id = element.get_automation_id().ok().filter(|value| !value.is_empty());
     let role = element
         .get_control_type()
-        .map(|control| format_control_type(control))
+        .map(format_control_type)
         .unwrap_or_else(|_| "Unknown".to_string());
     let bounds = element
         .get_bounding_rectangle()
