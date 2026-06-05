@@ -12,12 +12,13 @@ const MOCK_PERSONA_AVATAR_URL = `data:image/svg+xml;base64,${Buffer.from(MOCK_PE
 /** @type {Map<string, string>} */
 const deviceKeys = new Map();
 
-/** @type {WeakMap<import('ws').WebSocket, { connectionSessionId: string; sessionId: string; deviceId: string | null; chatAccepted: boolean; clientCapabilities: string[] }>} */
+/** @type {WeakMap<import('ws').WebSocket, { connectionSessionId: string; sessionId: string; deviceId: string | null; chatAccepted: boolean; clientCapabilities: string[]; activeStreamId: string | null; streamFramesSeen: number }>} */
 const socketSessions = new WeakMap();
 
 const DEFAULT_ADVERTISED_CAPABILITIES = [
   "chat.full_response",
   "remote.desktop.capture",
+  "remote.desktop.stream",
   "remote.desktop.permission_request",
   "remote.desktop.input",
   "remote.desktop.discovery",
@@ -44,6 +45,8 @@ wss.on("connection", (socket, request) => {
     deviceId: null,
     chatAccepted: insecureLoopback,
     clientCapabilities: [...DEFAULT_ADVERTISED_CAPABILITIES],
+    activeStreamId: null,
+    streamFramesSeen: 0,
   });
 
   /** @param {WsMessage} message */
@@ -101,6 +104,10 @@ wss.on("connection", (socket, request) => {
         handleSessionStart(message, session, send);
         break;
 
+      case "session.clear":
+        handleSessionClear(message, session, send);
+        break;
+
       case "chat.message":
         if (!session.chatAccepted) {
           send({
@@ -131,8 +138,56 @@ wss.on("connection", (socket, request) => {
             error: message.payload?.error,
             error_code: message.payload?.error_code,
             has_data: Boolean(message.payload?.data),
+            operation_data: message.payload?.data?.stream_id
+              ? {
+                  stream_id: message.payload.data.stream_id,
+                  active: message.payload.data.active,
+                  frames_sent: message.payload.data.frames_sent,
+                }
+              : undefined,
           }),
         );
+        if (
+          message.payload?.success &&
+          message.payload?.data?.stream_id &&
+          message.payload?.data?.active === true
+        ) {
+          session.activeStreamId = message.payload.data.stream_id;
+          session.streamFramesSeen = 0;
+        }
+        if (
+          message.payload?.success &&
+          message.payload?.data?.active === false
+        ) {
+          session.activeStreamId = null;
+        }
+        break;
+
+      case "desktop.stream.frame":
+        session.streamFramesSeen += 1;
+        console.log(
+          "[desktop.stream.frame]",
+          JSON.stringify({
+            stream_id: message.payload?.stream_id,
+            sequence: message.payload?.sequence,
+            mime: message.payload?.frame?.mime,
+            width: message.payload?.frame?.width,
+            height: message.payload?.frame?.height,
+            bytes: message.payload?.frame?.data_base64?.length ?? 0,
+          }),
+        );
+        if (session.activeStreamId && session.streamFramesSeen >= 5) {
+          send({
+            id: randomUUID(),
+            type: "desktop.command",
+            timestamp: new Date().toISOString(),
+            payload: {
+              command_id: randomUUID(),
+              operation: "desktop_stream_stop",
+              params: { stream_id: session.activeStreamId },
+            },
+          });
+        }
         break;
 
       default:
@@ -182,9 +237,37 @@ function sendPersonaAssets(session, send) {
   });
 }
 
+function sendSessionClear(session, send, reason) {
+  const newSessionId = `sess-acc-${randomUUID().slice(0, 8)}`;
+  session.sessionId = newSessionId;
+  send({
+    id: randomUUID(),
+    type: "session.clear",
+    timestamp: new Date().toISOString(),
+    payload: {
+      session_id: newSessionId,
+      ...(reason ? { reason } : {}),
+    },
+  });
+}
+
 /**
  * @param {WsMessage} message
- * @param {{ sessionId: string; deviceId: string | null; chatAccepted: boolean }} session
+ * @param {{ sessionId: string }} session
+ * @param {(message: WsMessage) => void} send
+ */
+function handleSessionClear(message, session, send) {
+  const reason = String(message.payload?.reason ?? "").trim();
+  sendSessionClear(
+    session,
+    send,
+    reason || "Mock: Session durch Client session.clear zurückgesetzt.",
+  );
+}
+
+/**
+ * @param {WsMessage} message
+ * @param {{ sessionId: string; deviceId: string | null; chatAccepted: boolean; clientCapabilities: string[] }} session
  * @param {(message: WsMessage) => void} send
  */
 function handleSessionStart(message, session, send) {
@@ -319,6 +402,15 @@ function handleChatMessage(message, session, send) {
     return;
   }
 
+  if (text.trim().toLowerCase() === "/newsession") {
+    sendSessionClear(
+      session,
+      send,
+      "Mock: neue Session gestartet (Chat-Verlauf gelöscht).",
+    );
+    return;
+  }
+
   if (text.trim().toLowerCase() === "/desktop") {
     send({
       id: randomUUID(),
@@ -450,18 +542,54 @@ function handleChatMessage(message, session, send) {
   }
 
   if (text.trim().toLowerCase() === "/browser") {
-    send({
-      id: randomUUID(),
-      type: "desktop.command",
-      timestamp: new Date().toISOString(),
-      payload: {
-        command_id: randomUUID(),
-        operation: "desktop_browser_connect",
-        params: {
-          port: 9222,
-        },
-      },
+    sendDesktopCommand(send, "desktop_browser_connect", {
+      port: 9222,
+      auto_launch: true,
     });
+    setTimeout(() => {
+      sendDesktopCommand(send, "desktop_browser_list_tabs", {});
+    }, 900);
+    setTimeout(() => {
+      sendDesktopCommand(send, "desktop_browser_snapshot", {
+        include_html: false,
+        include_screenshot: true,
+        screenshot_format: "jpeg",
+        quality: 75,
+      });
+    }, 1800);
+    setTimeout(() => {
+      send({
+        id: randomUUID(),
+        type: "desktop.command",
+        timestamp: new Date().toISOString(),
+        payload: {
+          command_id: randomUUID(),
+          operation: "desktop_browser_action",
+          params: {
+            action: "select_tab",
+            tab_id: "mock-tab-1",
+          },
+        },
+      });
+    }, 2700);
+    setTimeout(() => {
+      send({
+        id: randomUUID(),
+        type: "desktop.command",
+        timestamp: new Date().toISOString(),
+        payload: {
+          command_id: randomUUID(),
+          operation: "desktop_browser_action",
+          params: {
+            action: "click",
+            selector: "body",
+          },
+        },
+      });
+    }, 3600);
+    setTimeout(() => {
+      sendDesktopCommand(send, "desktop_browser_disconnect", {});
+    }, 4500);
     return;
   }
 
@@ -517,9 +645,14 @@ function handleChatMessage(message, session, send) {
       payload: {
         command_id: randomUUID(),
         operation: "desktop_stream_start",
-        params: {},
+        params: { format: "jpeg", quality: 60, fps: 2 },
       },
     });
+    return;
+  }
+
+  if (text.trim().toLowerCase() === "/stream") {
+    sendStreamingReply(send, session, requestId, mockReply(text));
     return;
   }
 
@@ -548,6 +681,40 @@ function mockReply(text) {
     return "pong";
   }
   return `Echo vom Mock-Agent: „${trimmed}“`;
+}
+
+function sendStreamingReply(send, session, requestId, fullText) {
+  const words = fullText.split(/(\s+)/).filter((part) => part.length > 0);
+  if (words.length === 0) {
+    send({
+      id: randomUUID(),
+      type: "chat.response.chunk",
+      timestamp: new Date().toISOString(),
+      payload: {
+        session_id: session.sessionId,
+        request_id: requestId,
+        delta: "",
+        done: true,
+      },
+    });
+    return;
+  }
+
+  words.forEach((word, index) => {
+    setTimeout(() => {
+      send({
+        id: randomUUID(),
+        type: "chat.response.chunk",
+        timestamp: new Date().toISOString(),
+        payload: {
+          session_id: session.sessionId,
+          request_id: requestId,
+          delta: word,
+          done: index === words.length - 1,
+        },
+      });
+    }, 120 * (index + 1));
+  });
 }
 
 function sharedKeyBytes(sharedKey) {

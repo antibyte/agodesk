@@ -48,7 +48,7 @@ Dieses Dokument beschreibt Architektur, Komponenten, Tools und das WebSocket-Pro
 | **scripts/mock-server.mjs** | Referenz-Backend (Node.js + `ws`) |
 | **npm run mock-server** | Startet Mock auf Port `8765` |
 | **npm run tauri dev** | Desktop-App im Dev-Modus |
-| **npm run tauri build** | Release-Build + Installer |
+| **npm run build:win** (or `npm run tauri build`) | Full Windows release + classic NSIS setup.exe (with optional post-install launch) + sidecar |
 
 ### 2.4 Explizit NICHT verwendet
 
@@ -154,9 +154,10 @@ Dieses Dokument beschreibt Architektur, Komponenten, Tools und das WebSocket-Pro
 | `chat.error` | Server → Client | **Empfohlen** | Fehler bei Verarbeitung |
 | `system.ping` | Client → Server | **Aktiv** | Keepalive (alle 30s) |
 | `system.pong` | Server → Client | **Empfohlen** | Keepalive-Antwort |
-| `chat.response.chunk` | Server → Client | *Geplant v1.1* | Streaming-Chunk |
-| `session.start` | Client → Server | *Definiert, ungenutzt* | Explizite Session |
-| `session.clear` | Client → Server | *Definiert, ungenutzt* | Session zurücksetzen |
+| `chat.response.chunk` | Server → Client | **Aktiv** | Streaming-Chunk |
+| `session.start` | Client → Server | **Aktiv** | Pairing oder Reconnect |
+| `session.accepted` | Server → Client | **Aktiv** | Auth OK, finale Session-ID |
+| `session.clear` | Server → Client | **Aktiv** | Session-Reset: Chat leeren, neue `session_id` |
 
 ### 5.3 Envelope-Schema
 
@@ -303,7 +304,7 @@ Server antwortet:
 
 ---
 
-#### Geplant (v1.1): `chat.response.chunk` — Streaming
+#### `chat.response.chunk` — Streaming
 
 ```json
 {
@@ -319,9 +320,40 @@ Server antwortet:
 }
 ```
 
-Letzter Chunk: `"done": true`, `"delta": ""` oder letztes Textstück.
+Letzter Chunk: `"done": true`. Der Client hängt alle `delta`-Teile an dieselbe Assistant-Nachricht (`request_id`-Korrelation) und blendet die Tipp-Indikator-Animation aus, sobald der erste Chunk sichtbar ist.
 
-**Status:** Typ definiert in `protocol.ts`, Client verarbeitet noch **nicht**.
+Optional kann der Server stattdessen (oder zusätzlich nach Abschluss) ein vollständiges `chat.response` senden — der Client dedupliziert per `request_id`.
+
+**Status:** Implementiert in agodesk (`chat-inbound.ts`, Mock: Chat-Befehl `/stream`).
+
+---
+
+#### `session.clear` — Session zurücksetzen (Server → Client)
+
+```json
+{
+  "id": "...",
+  "type": "session.clear",
+  "timestamp": "...",
+  "payload": {
+    "session_id": "sess-new-abc",
+    "reason": "Neuer Agent-Kontext",
+    "clear_chat": true
+  }
+}
+```
+
+| Feld | Typ | Beschreibung |
+|---|---|---|
+| `session_id` | string? | Neue Session-ID für folgende `chat.message` |
+| `reason` | string? | Optionaler Hinweis in der Chat-UI |
+| `clear_chat` | boolean? | Default `true`: Chat-Verlauf leeren |
+
+**Client-Verhalten:** Leert Chat (optional), stoppt Desktop-Stream/Browser-Session, deaktiviert Remote-Control-Banner, setzt `session_id` wenn mitgeliefert.
+
+**Mock:** Chat-Befehl `/newsession` oder Client → Server `session.clear` (Mock antwortet mit neuer Session).
+
+**Status:** Implementiert in agodesk (`session-clear.ts`).
 
 ---
 
@@ -407,7 +439,7 @@ Backend kann lokal oder remote sein (`wss://` für Produktion empfohlen).
 |---|---|---|
 | Streaming | `chat.response.chunk` | v1.1 |
 | Auth | API-Key im Handshake oder Header | v1.2 |
-| Multi-Session | `session.start`, `session.clear` | v1.2 |
+| Multi-Session | `session.start`, `session.clear` | v1.2 (session.clear in Client) |
 | Tool-Call-Visualisierung | `metadata.tool_calls[]` in `chat.response` | v2.0 |
 | Markdown/Code-Rendering | Kein Protokoll-Change, nur UI | v1.1 |
 | Dateianhänge | Neuer Message-Typ nötig | v2.0 |

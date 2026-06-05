@@ -1,9 +1,10 @@
 use crate::computer_use::types::{
     ActiveWindowInfo, BrowserActionParams, BrowserConnectParams, BrowserSessionInfo,
-    BrowserSnapshotParams, BrowserSnapshotResult, UiActionParams, UiActionResult, UiTreeResult,
+    BrowserSnapshotParams, BrowserSnapshotResult, BrowserTabListResult, UiActionParams,
+    UiActionResult, UiTreeResult,
 };
 use crate::computer_use::{
-    browser, get_active_window as computer_use_active_window,
+    browser::{self, BrowserState}, get_active_window as computer_use_active_window,
     perform_ui_action as computer_use_ui_action, ui_tree_for_window as computer_use_ui_tree,
 };
 use crate::desktop::{
@@ -16,7 +17,7 @@ use keyring::Entry;
 use serde::Serialize;
 use std::fs;
 use std::path::PathBuf;
-use tauri::{AppHandle, Manager};
+use tauri::{AppHandle, Manager, State};
 
 #[derive(Serialize)]
 pub struct HostInfo {
@@ -236,22 +237,38 @@ pub fn perform_ui_action(params: UiActionParams) -> Result<UiActionResult, Strin
 }
 
 #[tauri::command]
-pub fn browser_connect(params: BrowserConnectParams) -> Result<BrowserSessionInfo, String> {
-    browser::browser_connect(params)
+pub async fn browser_list_tabs(
+    state: State<'_, BrowserState>,
+) -> Result<BrowserTabListResult, String> {
+    browser::list_tabs(&state).await
 }
 
 #[tauri::command]
-pub fn browser_snapshot(params: BrowserSnapshotParams) -> Result<BrowserSnapshotResult, String> {
-    browser::browser_snapshot(params)
+pub async fn browser_connect(
+    state: State<'_, BrowserState>,
+    params: BrowserConnectParams,
+) -> Result<BrowserSessionInfo, String> {
+    browser::connect(&state, params).await
 }
 
 #[tauri::command]
-pub fn browser_action(params: BrowserActionParams) -> Result<serde_json::Value, String> {
-    browser::browser_action(params)
+pub async fn browser_snapshot(
+    state: State<'_, BrowserState>,
+    params: BrowserSnapshotParams,
+) -> Result<BrowserSnapshotResult, String> {
+    browser::snapshot(&state, params).await
 }
 
 #[tauri::command]
-pub fn browser_disconnect() -> Result<(), String> {
-    browser::browser_disconnect()
+pub async fn browser_action(
+    state: State<'_, BrowserState>,
+    params: BrowserActionParams,
+) -> Result<serde_json::Value, String> {
+    browser::action(&state, params).await
+}
+
+#[tauri::command]
+pub async fn browser_disconnect(state: State<'_, BrowserState>) -> Result<(), String> {
+    browser::disconnect(&state).await
 }
 

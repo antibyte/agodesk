@@ -118,6 +118,76 @@
         }
       }
     },
+    "desktop_stream_start": {
+      "command": {
+        "payload": {
+          "command_id": "cmd-stream-start-1",
+          "operation": "desktop_stream_start",
+          "params": {
+            "display_id": "display-0",
+            "format": "jpeg",
+            "quality": 60,
+            "fps": 2
+          }
+        }
+      },
+      "result": {
+        "payload": {
+          "command_id": "cmd-stream-start-1",
+          "success": true,
+          "status": "ok",
+          "data": {
+            "stream_id": "stream-uuid",
+            "active": true,
+            "fps": 2,
+            "format": "jpeg",
+            "display_id": "display-0"
+          }
+        }
+      },
+      "frame": {
+        "type": "desktop.stream.frame",
+        "payload": {
+          "stream_id": "stream-uuid",
+          "sequence": 1,
+          "timestamp": "2026-06-04T12:00:00.000Z",
+          "frame": {
+            "source": "display",
+            "display_id": "display-0",
+            "window_id": null,
+            "format": "jpeg",
+            "width": 1280,
+            "height": 720,
+            "scale_factor": 1,
+            "mime": "image/jpeg",
+            "data_base64": "<base64-jpeg>"
+          }
+        }
+      }
+    },
+    "desktop_stream_stop": {
+      "command": {
+        "payload": {
+          "command_id": "cmd-stream-stop-1",
+          "operation": "desktop_stream_stop",
+          "params": {
+            "stream_id": "stream-uuid"
+          }
+        }
+      },
+      "result": {
+        "payload": {
+          "command_id": "cmd-stream-stop-1",
+          "success": true,
+          "status": "ok",
+          "data": {
+            "stream_id": "stream-uuid",
+            "active": false,
+            "frames_sent": 12
+          }
+        }
+      }
+    },
     "desktop_ui_tree": {
       "command": {
         "payload": {
@@ -244,11 +314,108 @@
           "command_id": "cmd-browser-1",
           "operation": "desktop_browser_connect",
           "params": {
-            "endpoint": "http://127.0.0.1:9222"
+            "port": 9222,
+            "auto_launch": true,
+            "url": "https://example.com"
           }
         }
       },
+      "result": {
+        "success": true,
+        "data": {
+          "connected": true,
+          "endpoint": "http://127.0.0.1:9222",
+          "launched": true,
+          "auto_launch": true,
+          "active_tab_id": "target-abc123"
+        }
+      },
       "note": "Requires client setting browserControlEnabled and capability remote.desktop.browser"
+    },
+    "desktop_browser_list_tabs": {
+      "command": {
+        "payload": {
+          "command_id": "cmd-browser-1b",
+          "operation": "desktop_browser_list_tabs",
+          "params": {}
+        }
+      },
+      "result": {
+        "success": true,
+        "data": {
+          "tabs": [
+            {
+              "id": "target-abc123",
+              "url": "https://example.com/",
+              "title": "Example Domain",
+              "active": true
+            }
+          ],
+          "active_tab_id": "target-abc123"
+        }
+      }
+    },
+    "desktop_browser_snapshot": {
+      "command": {
+        "payload": {
+          "command_id": "cmd-browser-2",
+          "operation": "desktop_browser_snapshot",
+          "params": {
+            "include_html": false,
+            "include_screenshot": true,
+            "screenshot_format": "jpeg",
+            "quality": 75,
+            "full_page": false
+          }
+        }
+      },
+      "result": {
+        "success": true,
+        "data": {
+          "url": "https://example.com/",
+          "title": "Example Domain",
+          "text": "Example Domain\nThis domain is for use in documentation examples…",
+          "truncated": false,
+          "screenshot_base64": "<base64-jpeg>",
+          "screenshot_mime": "image/jpeg",
+          "screenshot_width": 1280,
+          "screenshot_height": 720,
+          "tab_id": "target-abc123"
+        }
+      }
+    },
+    "desktop_browser_action": {
+      "command": {
+        "payload": {
+          "command_id": "cmd-browser-3",
+          "operation": "desktop_browser_action",
+          "params": {
+            "action": "click",
+            "selector": "a"
+          }
+        }
+      },
+      "result": {
+        "success": true,
+        "data": {
+          "action": "click",
+          "selector": "a",
+          "success": true
+        }
+      },
+      "note": "Requires local approval banner (same as desktop_input)"
+    },
+    "desktop_browser_disconnect": {
+      "command": {
+        "payload": {
+          "command_id": "cmd-browser-4",
+          "operation": "desktop_browser_disconnect",
+          "params": {}
+        }
+      },
+      "result": {
+        "success": true
+      }
     }
   }
 }

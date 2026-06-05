@@ -28,5 +28,6 @@ pub fn permission_status() -> Result<super::types::ControlPermissionStatus, Stri
         input_injection: approved,
         approved_session: approved,
         ui_automation: super::platform::ui_automation_available(),
+        browser_automation: crate::computer_use::browser::browser_automation_available(),
     })
 }

@@ -16,6 +16,7 @@ pub fn run() {
         .plugin(tauri_plugin_store::Builder::default().build())
         .manage(WsTransportState::default())
         .manage(TrayState::default())
+        .manage(computer_use::browser::BrowserState::default())
         .setup(|app| {
             if let Some(window) = app.get_webview_window("main") {
                 window_effects::apply_main_window_effects(&window);
@@ -48,6 +49,7 @@ pub fn run() {
             commands::get_ui_tree,
             commands::perform_ui_action,
             commands::browser_connect,
+            commands::browser_list_tabs,
             commands::browser_snapshot,
             commands::browser_action,
             commands::browser_disconnect,

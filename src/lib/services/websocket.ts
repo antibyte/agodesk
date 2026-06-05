@@ -177,6 +177,12 @@ export function isSessionAccepted(
   return message.type === "session.accepted";
 }
 
+export function isSessionClear(
+  message: WsMessage,
+): message is WsMessage<import("../types/protocol").SessionClearPayload> {
+  return message.type === "session.clear";
+}
+
 export function isChatResponse(
   message: WsMessage,
 ): message is WsMessage<import("../types/protocol").ChatResponsePayload> {

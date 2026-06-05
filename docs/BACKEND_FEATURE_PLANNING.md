@@ -331,16 +331,19 @@ Native API vorhanden (`collect_host_info`), **kein** `desktop.command`-Mapping y
 
 ---
 
-## 7. Noch nicht implementiert (Client)
+## 7. Client-Implementierungsstand (Aktualisiert)
 
-| Feature | Status | Protokoll-Impact |
+| Feature | Status | Hinweis |
 |---|---|---|
-| `desktop_stream_start/stop` | Stub | Backend-Spec für Stream-Frames offen |
-| `list_displays` / `list_windows` über WS | Nur native API | Neue `desktop.command`-Ops empfohlen |
-| `chat.response.chunk` | Typ only | Streaming-Antworten |
-| `session.clear` | Typ only | Session-Reset serverseitig |
-| `collect_host_info` über WS | Native only | Optional neue Operation |
-| Input-Queue nach Banner-Approve | Blockierte Commands verworfen | Backend soll `desktop_input` ggf. wiederholen |
+| `desktop_stream_start/stop` | ✅ Implementiert | Frames als `desktop.stream.frame` |
+| `desktop_list_displays` / `desktop_list_windows` / `desktop_host_info` | ✅ Über WS | Discovery-Ops in `desktop.command` |
+| `chat.response.chunk` | ✅ Implementiert | Streaming in Chat-UI |
+| `session.clear` | ✅ Implementiert | Server → Client Session-Reset |
+| Browser Connect-Test (Settings) | ✅ Implementiert | CDP-Probe mit Auto-Launch |
+| Input-Queue nach Banner-Approve | ✅ Implementiert | `flushPendingInputCommands()` |
+| `collect_host_info` über WS | ✅ Als `desktop_host_info` | — |
+
+**Optional / Backend-seitig offen:** Rate Limits, Multi-Client pro `device_id`, Chunking großer Screenshots.
 
 ---
 
@@ -352,8 +355,8 @@ Native API vorhanden (`collect_host_info`), **kein** `desktop.command`-Mapping y
 4. **`desktop.command` → `desktop.result`** für `desktop_screenshot` (Monitor + Fenster)
 5. **`desktop_permission_request`** vor Input-Sequenzen
 6. **`desktop_input`** mit Retry nach User-Freigabe
-7. **Optional:** `desktop_list_displays`, `desktop_list_windows` (Discovery)
-8. **Optional:** Streaming-Spec (`desktop_stream_*`, `chat.response.chunk`)
+7. **Optional:** `desktop_list_displays`, `desktop_list_windows` (Discovery) — **erledigt in agodesk**
+8. **Optional:** Streaming-Spec (`desktop_stream_*`, `chat.response.chunk`) — **erledigt in agodesk**
 
 ---
 
@@ -382,7 +385,7 @@ Native API vorhanden (`collect_host_info`), **kein** `desktop.command`-Mapping y
 | `chat.error` | S → C | Fehler |
 | `desktop.command` | S → C | Screenshot, Input, Permission |
 | `desktop.result` | C → S | Ergebnis nativer Operation |
-| `session.clear` | S → C | *Geplant* |
+| `session.clear` | S → C | Session zurücksetzen (Chat leeren, neue session_id) |
 | `chat.response.chunk` | S → C | *Geplant* |
 
 **Legende:** S = Server (AuraGo), C = Client (agodesk)

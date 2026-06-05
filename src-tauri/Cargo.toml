@@ -15,7 +15,7 @@ name = "agodesk-worker"
 path = "src/bin/agodesk_worker.rs"
 
 [features]
-default = []
+default = ["browser-automation"]
 browser-automation = ["dep:chromiumoxide"]
 computer-use-sidecar = []
 
@@ -64,11 +64,14 @@ uiautomation = { version = "0.22", default-features = false, features = ["input"
 
 [target.'cfg(target_os = "linux")'.dependencies]
 xcap = "0.0.14"
+atspi = { version = "0.29", default-features = true, features = ["tokio"] }
+zbus = { version = "5", default-features = false, features = ["tokio"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 xcap = "0.0.14"
 objc2 = "0.5"
 objc2-foundation = "0.2"
+axuielement = "0.9"
 
 [profile.release]
 codegen-units = 1

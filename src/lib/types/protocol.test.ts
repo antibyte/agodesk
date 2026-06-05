@@ -11,6 +11,7 @@ import {
   normalizeDesktopCommandPayload,
   normalizePersonaAssetsPayload,
   normalizeSessionAcceptedPayload,
+  normalizeSessionClearPayload,
   requiresLocalDesktopApproval,
   requiresRemoteControlBanner,
   resolvePersonaAssetUrl,
@@ -179,8 +180,40 @@ test("requiresLocalDesktopApproval gilt fuer Input- und UI-/Browser-Aktionen", (
   assert.equal(requiresLocalDesktopApproval("desktop_ui_action"), true);
   assert.equal(requiresLocalDesktopApproval("desktop_browser_action"), true);
   assert.equal(requiresLocalDesktopApproval("desktop_screenshot"), false);
+  assert.equal(requiresLocalDesktopApproval("desktop_stream_start"), false);
+  assert.equal(requiresLocalDesktopApproval("desktop_stream_stop"), false);
   assert.equal(requiresLocalDesktopApproval("desktop_ui_tree"), false);
   assert.equal(requiresLocalDesktopApproval("desktop_permission_request"), false);
+});
+
+test("normalizeDesktopCommandPayload normalisiert desktop_stream_start", () => {
+  assert.deepEqual(
+    normalizeDesktopCommandPayload({
+      command_id: "cmd-stream-1",
+      operation: "desktop_stream_start",
+      params: {
+        displayId: "display-0",
+        format: "jpeg",
+        quality: 55,
+        fps: 3,
+      },
+    }),
+    {
+      command_id: "cmd-stream-1",
+      operation: "desktop_stream_start",
+      params: {
+        display_id: "display-0",
+        window_id: undefined,
+        format: "jpeg",
+        quality: 55,
+        fps: 3,
+      },
+    },
+  );
+});
+
+test("agodeskClientCapabilities enthaelt remote.desktop.stream", () => {
+  assert.ok(agodeskClientCapabilities(true).includes("remote.desktop.stream"));
 });
 
 test("requiresRemoteControlBanner ohne Screenshot und UI-Tree", () => {
@@ -223,6 +256,113 @@ test("normalizePersonaAssetsPayload akzeptiert snake_case", () => {
       persona_prompt: "Du bist hilfsbereit.",
     },
   );
+});
+
+test("normalizeDesktopCommandPayload mappt browser connect port und auto_launch", () => {
+  assert.deepEqual(
+    normalizeDesktopCommandPayload({
+      command_id: "cmd-1",
+      operation: "desktop_browser_connect",
+      params: {
+        port: 9333,
+        auto_launch: false,
+        url: "https://example.com",
+      },
+    }),
+    {
+      command_id: "cmd-1",
+      operation: "desktop_browser_connect",
+      params: {
+        endpoint: undefined,
+        port: 9333,
+        auto_launch: false,
+        url: "https://example.com",
+      },
+    },
+  );
+});
+
+test("normalizeDesktopCommandPayload mappt browser snapshot v2 und list_tabs", () => {
+  assert.deepEqual(
+    normalizeDesktopCommandPayload({
+      command_id: "cmd-2",
+      operation: "desktop_browser_snapshot",
+      params: {
+        include_screenshot: true,
+        screenshot_format: "png",
+        quality: 80,
+        full_page: true,
+        tab_id: "target-1",
+      },
+    }),
+    {
+      command_id: "cmd-2",
+      operation: "desktop_browser_snapshot",
+      params: {
+        selector: undefined,
+        include_html: false,
+        include_screenshot: true,
+        screenshot_format: "png",
+        quality: 80,
+        full_page: true,
+        tab_id: "target-1",
+      },
+    },
+  );
+  assert.deepEqual(
+    normalizeDesktopCommandPayload({
+      command_id: "cmd-3",
+      operation: "desktop_browser_list_tabs",
+      params: {},
+    }),
+    {
+      command_id: "cmd-3",
+      operation: "desktop_browser_list_tabs",
+      params: {},
+    },
+  );
+});
+
+test("browser tab actions brauchen keine lokale Freigabe", () => {
+  assert.equal(
+    requiresLocalDesktopApproval("desktop_browser_action", { action: "select_tab" }),
+    false,
+  );
+  assert.equal(
+    requiresRemoteControlBanner("desktop_browser_action", { action: "new_tab" }),
+    false,
+  );
+  assert.equal(
+    requiresLocalDesktopApproval("desktop_browser_action", { action: "click" }),
+    true,
+  );
+});
+
+test("normalizeSessionClearPayload akzeptiert snake_case und camelCase", () => {
+  assert.deepEqual(
+    normalizeSessionClearPayload({
+      session_id: "sess-new",
+      reason: "Neuer Agent-Kontext",
+      clear_chat: true,
+    }),
+    {
+      session_id: "sess-new",
+      reason: "Neuer Agent-Kontext",
+      clear_chat: true,
+    },
+  );
+  assert.deepEqual(
+    normalizeSessionClearPayload({
+      sessionId: "sess-2",
+      clearChat: false,
+    }),
+    {
+      session_id: "sess-2",
+      clear_chat: false,
+    },
+  );
+  assert.deepEqual(normalizeSessionClearPayload({}), {});
+  assert.equal(normalizeSessionClearPayload(null), null);
 });
 
 test("resolvePersonaAssetUrl loest relative Pfade auf", () => {

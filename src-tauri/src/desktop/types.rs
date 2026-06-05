@@ -59,6 +59,7 @@ pub struct ControlPermissionStatus {
     pub input_injection: bool,
     pub approved_session: bool,
     pub ui_automation: bool,
+    pub browser_automation: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

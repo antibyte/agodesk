@@ -123,3 +123,33 @@ export async function computerUseLoop(ctx: ComputerUseContext) {
   const screenshot = await verifyWithScreenshot(ctx);
   return { phase: "verify", observation, screenshot };
 }
+
+/** Attach to Chrome/Edge via CDP; retries after permission probe if needed. */
+export async function connectBrowser(
+  ctx: ComputerUseContext,
+  options: {
+    port?: number;
+    auto_launch?: boolean;
+    url?: string;
+  } = {},
+): Promise<DesktopResultPayload> {
+  const params: Record<string, unknown> = {
+    port: options.port ?? 9222,
+    auto_launch: options.auto_launch ?? true,
+  };
+  if (options.url) {
+    params.url = options.url;
+  }
+
+  let result = await runCommand(ctx, "desktop_browser_connect", params);
+  if (
+    !result.success &&
+    result.error_code === "DESKTOP_BROWSER_UNAVAILABLE" &&
+    typeof result.error === "string" &&
+    result.error.toLowerCase().includes("not connected")
+  ) {
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    result = await runCommand(ctx, "desktop_browser_connect", params);
+  }
+  return result;
+}

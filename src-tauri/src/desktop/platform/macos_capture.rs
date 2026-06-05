@@ -15,7 +15,7 @@ pub fn screen_capture_available() -> bool {
 }
 
 pub fn ui_automation_available() -> bool {
-    false
+    crate::computer_use::platform::ui_automation_available()
 }
 
 pub fn list_displays() -> Result<Vec<DisplayInfo>, String> {

@@ -69,6 +69,7 @@ export type DesktopOperation =
   | "desktop_ui_tree"
   | "desktop_ui_action"
   | "desktop_browser_connect"
+  | "desktop_browser_list_tabs"
   | "desktop_browser_snapshot"
   | "desktop_browser_action"
   | "desktop_browser_disconnect";
@@ -110,6 +111,7 @@ export const CAPABILITY_OPERATIONS: Record<string, DesktopOperation[]> = {
   "remote.desktop.ui_automation": ["desktop_ui_tree", "desktop_ui_action"],
   "remote.desktop.browser": [
     "desktop_browser_connect",
+    "desktop_browser_list_tabs",
     "desktop_browser_snapshot",
     "desktop_browser_action",
     "desktop_browser_disconnect",

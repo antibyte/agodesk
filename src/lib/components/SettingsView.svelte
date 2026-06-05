@@ -33,7 +33,7 @@
     saveGeminiApiKey,
   } from "../services/gemini-credentials";
   import { testGeminiConnection } from "../services/speech-flow";
-  import { collectHostInfo, type HostInfo } from "../services/desktop";
+  import { collectHostInfo, probeBrowserConnection, type HostInfo } from "../services/desktop";
   import {
     buildPathDisplay,
     cloneFileAccessSettings,
@@ -51,6 +51,7 @@
   import { normalizeServerUrl } from "../services/server-url";
   import { previewUiSoundTheme } from "../services/ui-sounds";
   import WindowControls from "./WindowControls.svelte";
+  import { isDesktopShell } from "../services/window-controls";
 
   export type SettingsSavePayload = Pick<
     AppSettings,
@@ -156,6 +157,10 @@
   let apiKeyBusy = $state(false);
   let apiKeyMessage = $state("");
   let apiKeyMessageTone = $state<"success" | "error" | "">("");
+
+  let browserTestBusy = $state(false);
+  let browserTestMessage = $state("");
+  let browserTestTone = $state<"success" | "error" | "">("");
 
   const sections = $derived(
     (
@@ -425,6 +430,43 @@
       setApiKeyFeedback("settings.speech.apiKey.error.testFailed", "error");
     } finally {
       apiKeyBusy = false;
+    }
+  }
+
+  async function handleTestBrowserConnection(): Promise<void> {
+    if (!isDesktopShell()) {
+      browserTestTone = "error";
+      browserTestMessage = $i18n("settings.desktop.browser.testUnavailable");
+      return;
+    }
+
+    browserTestBusy = true;
+    browserTestTone = "success";
+    browserTestMessage = $i18n("settings.desktop.browser.testing");
+    try {
+      const result = await probeBrowserConnection({ port: 9222, auto_launch: true });
+      if (!result.success) {
+        browserTestTone = "error";
+        browserTestMessage = $i18n("settings.desktop.browser.testFailed", {
+          message: result.message,
+        });
+        return;
+      }
+
+      browserTestTone = "success";
+      browserTestMessage = $i18n("settings.desktop.browser.testSuccess", {
+        endpoint: result.endpoint ?? $i18n("common.emDash"),
+        launched: result.launched
+          ? $i18n("settings.desktop.browser.testLaunchedSuffix")
+          : "",
+      });
+    } catch {
+      browserTestTone = "error";
+      browserTestMessage = $i18n("settings.desktop.browser.testFailed", {
+        message: $i18n("settings.desktop.browser.testUnknownError"),
+      });
+    } finally {
+      browserTestBusy = false;
     }
   }
 
@@ -790,6 +832,29 @@
               </label>
 
               <p class="help">{$i18n("settings.desktop.browser.disabledHelp")}</p>
+              <p class="help">{$i18n("settings.desktop.browser.setupHelp")}</p>
+
+              {#if draftBrowserControlEnabled && draftDesktopControlEnabled}
+                {#if browserTestMessage}
+                  <p
+                    class="api-key-message"
+                    class:success={browserTestTone === "success"}
+                    class:error={browserTestTone === "error"}
+                  >
+                    {browserTestMessage}
+                  </p>
+                {/if}
+                <div class="action-row">
+                  <button
+                    type="button"
+                    class="ui-btn ui-btn-secondary"
+                    onclick={() => void handleTestBrowserConnection()}
+                    disabled={browserTestBusy}
+                  >
+                    {$i18n("settings.desktop.browser.test")}
+                  </button>
+                </div>
+              {/if}
 
               <dl class="info-grid">
                 <div>

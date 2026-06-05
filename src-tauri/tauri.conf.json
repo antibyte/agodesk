@@ -37,6 +37,35 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "externalBin": [
+      "bin/agodesk-worker"
+    ],
+    "windows": {
+      "nsis": {
+        "installMode": "both",
+        "languages": [
+          "English",
+          "German",
+          "French",
+          "Spanish",
+          "SimpChinese",
+          "Japanese",
+          "Dutch",
+          "Portuguese",
+          "Italian",
+          "Swedish"
+        ],
+        "displayLanguageSelector": false,
+        "compression": "lzma",
+        "installerIcon": "icons/icon.ico",
+        "uninstallerIcon": "icons/icon.ico",
+        "installerHooks": "installer.nsh"
+      },
+      "webviewInstallMode": {
+        "type": "downloadBootstrapper",
+        "silent": true
+      }
+    }
   }
 }

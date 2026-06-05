@@ -39,7 +39,8 @@ Every frame uses this envelope:
 - `chat.message`: user prompt.
 - `chat.response`: full assistant response with `request_id`.
 - `chat.error`: machine-readable error.
-- `chat.response.chunk`: reserved for streaming support.
+- `chat.response.chunk`: streaming assistant tokens (`delta`, `done` per chunk).
+- `session.clear`: server-initiated session reset; optional new `session_id`, clears chat by default.
 - `desktop.command`: server-initiated desktop operation (screenshot, permission check, input).
 - `desktop.result`: client response to a `desktop.command` correlated by `command_id`.
 
@@ -157,11 +158,12 @@ The client replies with `desktop.result` using the same `command_id`:
 | `desktop_ui_tree` | No | Accessibility tree for root or `window_id` |
 | `desktop_ui_action` | **Yes (local banner)** | Semantic click, set_value, focus on `element_id` |
 | `desktop_browser_connect` | No | Requires `browserControlEnabled` setting |
-| `desktop_browser_snapshot` | No | DOM/text snapshot via CDP |
-| `desktop_browser_action` | **Yes (local banner)** | Click/fill via CDP |
-| `desktop_browser_disconnect` | No | End browser session |
-| `desktop_stream_start` | — | **Not implemented** — client returns `DESKTOP_STREAM_UNSUPPORTED` |
-| `desktop_stream_stop` | — | **Not implemented** — client returns `DESKTOP_STREAM_UNSUPPORTED` |
+| `desktop_browser_list_tabs` | No | List CDP targets/tabs |
+| `desktop_browser_snapshot` | No | DOM/text snapshot; optional CDP screenshot |
+| `desktop_browser_action` | **Yes (local banner)** | Click/fill/tab actions via CDP |
+| `desktop_browser_disconnect` | No | End browser session; kills auto-launched process |
+| `desktop_stream_start` | No | Starts periodic JPEG/PNG capture; frames as `desktop.stream.frame` |
+| `desktop_stream_stop` | No | Stops active stream |
 
 Desktop commands require an accepted session (`session.accepted` or loopback dev mode). Otherwise the client returns `SESSION_NOT_ACCEPTED`.
 

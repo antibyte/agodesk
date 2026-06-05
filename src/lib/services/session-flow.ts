@@ -192,7 +192,7 @@ export async function unpairDevice(serverUrl: string): Promise<void> {
 }
 
 export function handleDesktopCommand(message: WsMessage<DesktopCommandPayload>): void {
-  if (requiresRemoteControlBanner(message.payload.operation)) {
+  if (requiresRemoteControlBanner(message.payload.operation, message.payload.params)) {
     sessionState.setRemoteControlPending(true);
   }
 }

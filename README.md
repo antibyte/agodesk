@@ -36,10 +36,36 @@ AuraGo Computer-Use Integration: [docs/AURAGO_COMPUTER_USE_AGENT.md](docs/AURAGO
 ## Build
 
 ```powershell
+# Standard (produces nsis + msi on Windows)
 npm run tauri build
+
+# Recommended for the classic Windows "setup.exe" installer (NSIS):
+npm run build:win
+# or the helper:
+# .\scripts\build-windows-installer.ps1
 ```
 
-Der Windows-Installer liegt unter `src-tauri/target/release/bundle/msi/`.
+Der klassische Windows-Installer (NSIS-Setup.exe mit Wizard, Shortcuts, Deinstallations-Eintrag) liegt unter:
+
+`src-tauri/target/release/bundle/nsis/agodesk_<version>_x64-setup.exe`
+
+Auf der Finish-Seite des Installers gibt es eine Checkbox **"Run agodesk"** (optionaler Start nach der Installation) sowie eine Option für einen Desktop-Shortcut.
+
+Zusätzlich:
+- Der Installer erstellt **immer ein Desktop-Icon** (CreateShortcut im Post-Install-Hook).
+- Während der Installation wird per **MessageBox** angeboten, ob agodesk **automatisch beim Systemstart** (Windows Run-Registry) gestartet werden soll. In Silent/ Passive-Modus wird Auto-Start standardmäßig aktiviert.
+
+Die Deinstallation entfernt den Auto-Start-Eintrag (bereits im Template unterstützt) und optional App-Daten.
+
+**Optional Branding für Installer (NSIS):**  
+Für Header (150x57) / Sidebar (164x314) Bitmaps kannst du Assets unter `src-tauri/icons/` ablegen und in `tauri.conf.json` unter `bundle.windows.nsis.headerImage` / `sidebarImage` referenzieren. Aktuell werden Defaults + `icon.ico` genutzt. (Siehe Tauri NsisConfig in der CLI schema.)
+
+### Mit Sidecar (computer-use)
+Der `build:win*` Befehl aktiviert automatisch das Feature und bundled den `agodesk-worker` (wird neben der Haupt-EXE installiert, für `sidecar_enabled()`).
+
+MSI (für Enterprise) wird bei `targets: "all"` ebenfalls erzeugt, liegt unter `bundle/msi/`.
+
+Voraussetzungen siehe oben (inkl. MS C++ Build Tools auf Windows).
 
 ## Konfiguration
 

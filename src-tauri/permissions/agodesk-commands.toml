@@ -21,6 +21,7 @@ commands.allow = [
   "get_ui_tree",
   "perform_ui_action",
   "browser_connect",
+  "browser_list_tabs",
   "browser_snapshot",
   "browser_action",
   "browser_disconnect",

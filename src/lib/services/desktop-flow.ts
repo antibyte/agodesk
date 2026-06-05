@@ -18,12 +18,14 @@ import {
 import { settings } from "../stores/settings";
 import { sessionState } from "../stores/session";
 import { executeDesktopCommand, type DesktopResultSender } from "./desktop";
+import { resetDesktopStreamState } from "./desktop-stream";
 import { handleDesktopCommand } from "./session-flow";
 
 const pendingInputCommands: DesktopCommandPayload[] = [];
 
 export function resetDesktopCommandState(): void {
   pendingInputCommands.length = 0;
+  resetDesktopStreamState();
 }
 
 export function getPendingInputCommandCount(): number {
@@ -119,11 +121,17 @@ export async function handleIncomingDesktopCommand(
     payload: command,
   } as WsMessage<DesktopCommandPayload>);
 
-  if (!context.remoteControlActive && requiresRemoteControlBanner(command.operation)) {
+  if (
+    !context.remoteControlActive &&
+    requiresRemoteControlBanner(command.operation, command.params)
+  ) {
     context.onRemoteControlPrompt?.(command.operation);
   }
 
-  if (!context.remoteControlActive && requiresLocalDesktopApproval(command.operation)) {
+  if (
+    !context.remoteControlActive &&
+    requiresLocalDesktopApproval(command.operation, command.params)
+  ) {
     if (isDesktopInputOperation(command.operation)) {
       pendingInputCommands.push(command);
       return;

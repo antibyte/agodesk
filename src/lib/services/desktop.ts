@@ -22,8 +22,13 @@ import type {
   WindowInfo,
   WsMessage,
 } from "../types/protocol";
-import { DESKTOP_STREAM_OPERATIONS } from "../types/protocol";
+import type { DesktopStreamStartParams, DesktopStreamStopParams } from "../types/protocol";
 import { settings } from "../stores/settings";
+import {
+  resetDesktopStreamState,
+  startDesktopStream,
+  stopDesktopStream,
+} from "./desktop-stream";
 import {
   listRemoteFiles,
   readRemoteFile,
@@ -57,6 +62,10 @@ export async function runUiAction(params: UiActionParams): Promise<Record<string
   return invoke<Record<string, unknown>>("perform_ui_action", { params });
 }
 
+export async function browserListTabs(): Promise<Record<string, unknown>> {
+  return invoke<Record<string, unknown>>("browser_list_tabs");
+}
+
 export async function browserConnect(params: BrowserConnectParams = {}): Promise<Record<string, unknown>> {
   return invoke<Record<string, unknown>>("browser_connect", { params });
 }
@@ -73,6 +82,42 @@ export async function browserAction(params: BrowserActionParams): Promise<Record
 
 export async function browserDisconnect(): Promise<void> {
   await invoke("browser_disconnect");
+}
+
+export interface BrowserProbeResult {
+  success: boolean;
+  message: string;
+  endpoint?: string;
+  launched?: boolean;
+}
+
+export async function probeBrowserConnection(
+  params: BrowserConnectParams = {},
+): Promise<BrowserProbeResult> {
+  try {
+    const session = await browserConnect({
+      port: params.port ?? 9222,
+      auto_launch: params.auto_launch ?? true,
+      endpoint: params.endpoint,
+      url: params.url ?? "about:blank",
+    });
+    await browserDisconnect();
+    const endpoint =
+      typeof session.endpoint === "string" ? session.endpoint : undefined;
+    return {
+      success: true,
+      message: endpoint ?? "",
+      endpoint,
+      launched: session.launched === true,
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    const mapped = mapBrowserInvokeError(message);
+    return {
+      success: false,
+      message: mapped.message,
+    };
+  }
 }
 
 export async function collectHostInfo(): Promise<HostInfo> {
@@ -138,6 +183,7 @@ export async function setInputApproval(approved: boolean): Promise<void> {
 }
 
 export async function resetDesktopSession(): Promise<void> {
+  resetDesktopStreamState();
   await invoke("reset_desktop_session");
 }
 
@@ -197,9 +243,7 @@ export interface ExecuteDesktopCommandOptions {
   };
 }
 
-export type DesktopResultSender = (
-  message: WsMessage<DesktopResultPayload>,
-) => void | Promise<void>;
+export type DesktopResultSender = (message: WsMessage) => void | Promise<void>;
 
 function enrichDesktopResult(
   payload: DesktopResultPayload,
@@ -236,6 +280,25 @@ function desktopFailure(
   result.error = message;
   result.data = null;
   return result;
+}
+
+const BROWSER_ERROR_CODES: DesktopErrorCode[] = [
+  "DESKTOP_BROWSER_UNAVAILABLE",
+  "DESKTOP_ELEMENT_NOT_FOUND",
+  "DESKTOP_INPUT_NOT_APPROVED",
+];
+
+function mapBrowserInvokeError(message: string): {
+  code: DesktopErrorCode;
+  message: string;
+} {
+  for (const code of BROWSER_ERROR_CODES) {
+    if (message.startsWith(code)) {
+      const detail = message.slice(code.length).replace(/^:\s*/, "");
+      return { code, message: detail || message };
+    }
+  }
+  return { code: "DESKTOP_BROWSER_UNAVAILABLE", message };
 }
 
 export function normalizeCaptureResultForWire(
@@ -312,18 +375,10 @@ export async function executeDesktopCommand(
   }
 
   try {
-    if (DESKTOP_STREAM_OPERATIONS.includes(command.operation)) {
-      desktopFailure(
-        result,
-        "DESKTOP_STREAM_UNSUPPORTED",
-        "Desktop-Streaming ist in agodesk v1 nicht implementiert.",
-      );
-      await sendDesktopResult(wsSend, result, context);
-      return;
-    }
-
     const params = (command.params ?? {}) as DesktopInputParams &
       CaptureScreenshotParams &
+      DesktopStreamStartParams &
+      DesktopStreamStopParams &
       Record<string, unknown>;
 
     switch (command.operation) {
@@ -354,6 +409,50 @@ export async function executeDesktopCommand(
         }
         result.success = true;
         result.data = screenshotData;
+        break;
+      }
+      case "desktop_stream_start": {
+        const status = await controlPermissionStatus();
+        if (!status.screen_capture) {
+          desktopFailure(
+            result,
+            "DESKTOP_OPERATION_UNSUPPORTED",
+            "Screen-Capture ist auf diesem System nicht verfügbar.",
+          );
+          break;
+        }
+        const stream = await startDesktopStream(
+          wsSend,
+          {
+            display_id: params.display_id,
+            window_id: params.window_id,
+            format: params.format === "png" ? "png" : "jpeg",
+            quality: params.quality,
+            fps: params.fps,
+          },
+          context,
+        );
+        result.success = true;
+        result.data = stream as unknown as Record<string, unknown>;
+        break;
+      }
+      case "desktop_stream_stop": {
+        const stopped = stopDesktopStream({
+          stream_id:
+            typeof params.stream_id === "string" ? params.stream_id : undefined,
+        });
+        if (!stopped) {
+          desktopFailure(
+            result,
+            "DESKTOP_STREAM_NOT_ACTIVE",
+            params.stream_id
+              ? "Kein aktiver Desktop-Stream mit dieser stream_id."
+              : "Kein aktiver Desktop-Stream.",
+          );
+          break;
+        }
+        result.success = true;
+        result.data = stopped as unknown as Record<string, unknown>;
         break;
       }
       case "desktop_permission_request": {
@@ -441,22 +540,76 @@ export async function executeDesktopCommand(
         result.data = actionResult;
         break;
       }
+      case "desktop_browser_list_tabs": {
+        try {
+          const tabs = await browserListTabs();
+          result.success = true;
+          result.data = tabs;
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          const mapped = mapBrowserInvokeError(message);
+          desktopFailure(result, mapped.code, mapped.message);
+        }
+        break;
+      }
       case "desktop_browser_connect": {
-        const session = await browserConnect({
-          endpoint: typeof params.endpoint === "string" ? params.endpoint : undefined,
-        });
-        result.success = true;
-        result.data = session;
+        try {
+          const session = await browserConnect({
+            endpoint:
+              typeof params.endpoint === "string" ? params.endpoint : undefined,
+            port: typeof params.port === "number" ? params.port : undefined,
+            auto_launch:
+              typeof params.auto_launch === "boolean"
+                ? params.auto_launch
+                : typeof params.autoLaunch === "boolean"
+                  ? params.autoLaunch
+                  : undefined,
+            url: typeof params.url === "string" ? params.url : undefined,
+          });
+          result.success = true;
+          result.data = session;
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          const mapped = mapBrowserInvokeError(message);
+          desktopFailure(result, mapped.code, mapped.message);
+        }
         break;
       }
       case "desktop_browser_snapshot": {
-        const snapshot = await browserSnapshot({
-          selector: typeof params.selector === "string" ? params.selector : undefined,
-          include_html:
-            params.include_html === true || params.includeHtml === true,
-        });
-        result.success = true;
-        result.data = snapshot;
+        try {
+          const snapshot = await browserSnapshot({
+            selector: typeof params.selector === "string" ? params.selector : undefined,
+            include_html:
+              params.include_html === true || params.includeHtml === true,
+            include_screenshot:
+              params.include_screenshot === true ||
+              params.includeScreenshot === true,
+            screenshot_format:
+              params.screenshot_format === "png" ||
+              params.screenshot_format === "webp" ||
+              params.screenshot_format === "jpeg"
+                ? params.screenshot_format
+                : params.screenshotFormat === "png" ||
+                    params.screenshotFormat === "webp" ||
+                    params.screenshotFormat === "jpeg"
+                  ? params.screenshotFormat
+                  : undefined,
+            quality: typeof params.quality === "number" ? params.quality : undefined,
+            full_page: params.full_page === true || params.fullPage === true,
+            tab_id:
+              typeof params.tab_id === "string"
+                ? params.tab_id
+                : typeof params.tabId === "string"
+                  ? params.tabId
+                  : undefined,
+          });
+          result.success = true;
+          result.data = snapshot;
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          const mapped = mapBrowserInvokeError(message);
+          desktopFailure(result, mapped.code, mapped.message);
+        }
         break;
       }
       case "desktop_browser_action": {
@@ -469,18 +622,37 @@ export async function executeDesktopCommand(
           );
           break;
         }
-        const browserResult = await browserAction({
-          action: String(params.action ?? "click"),
-          selector: String(params.selector ?? ""),
-          value: typeof params.value === "string" ? params.value : undefined,
-        });
-        result.success = true;
-        result.data = browserResult;
+        try {
+          const browserResult = await browserAction({
+            action: String(params.action ?? "click"),
+            selector:
+              typeof params.selector === "string" ? params.selector : undefined,
+            tab_id:
+              typeof params.tab_id === "string"
+                ? params.tab_id
+                : typeof params.tabId === "string"
+                  ? params.tabId
+                  : undefined,
+            value: typeof params.value === "string" ? params.value : undefined,
+          });
+          result.success = true;
+          result.data = browserResult;
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          const mapped = mapBrowserInvokeError(message);
+          desktopFailure(result, mapped.code, mapped.message);
+        }
         break;
       }
       case "desktop_browser_disconnect": {
-        await browserDisconnect();
-        result.success = true;
+        try {
+          await browserDisconnect();
+          result.success = true;
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          const mapped = mapBrowserInvokeError(message);
+          desktopFailure(result, mapped.code, mapped.message);
+        }
         break;
       }
       case "file_list":

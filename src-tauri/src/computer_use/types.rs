@@ -68,18 +68,37 @@ pub struct UiActionResult {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BrowserConnectParams {
     pub endpoint: Option<String>,
+    #[serde(default)]
+    pub port: Option<u16>,
+    #[serde(default)]
+    pub auto_launch: Option<bool>,
+    #[serde(default)]
+    pub url: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BrowserSnapshotParams {
     pub selector: Option<String>,
     pub include_html: Option<bool>,
+    #[serde(default)]
+    pub include_screenshot: Option<bool>,
+    #[serde(default)]
+    pub screenshot_format: Option<String>,
+    #[serde(default)]
+    pub quality: Option<u8>,
+    #[serde(default)]
+    pub full_page: Option<bool>,
+    #[serde(default)]
+    pub tab_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BrowserActionParams {
     pub action: String,
-    pub selector: String,
+    #[serde(default)]
+    pub selector: Option<String>,
+    #[serde(default)]
+    pub tab_id: Option<String>,
     #[serde(default)]
     pub value: Option<String>,
 }
@@ -88,6 +107,12 @@ pub struct BrowserActionParams {
 pub struct BrowserSessionInfo {
     pub connected: bool,
     pub endpoint: String,
+    #[serde(default)]
+    pub launched: bool,
+    #[serde(default)]
+    pub auto_launch: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub active_tab_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -97,6 +122,32 @@ pub struct BrowserSnapshotResult {
     pub text: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub html: Option<String>,
+    #[serde(default)]
+    pub truncated: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub screenshot_base64: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub screenshot_mime: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub screenshot_width: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub screenshot_height: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tab_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BrowserTabInfo {
+    pub id: String,
+    pub url: String,
+    pub title: String,
+    pub active: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BrowserTabListResult {
+    pub tabs: Vec<BrowserTabInfo>,
+    pub active_tab_id: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -49,15 +49,19 @@
   import { resetDesktopSession, setInputApproval } from "../services/desktop";
   import { playUiSound } from "../services/ui-sounds";
   import { notifyIncomingMessageIfHidden } from "../services/message-notifications";
-  import {
-    WebSocketService,
-    isChatError,
-    isChatResponse,
-    isDesktopCommand,
-    isPersonaAssets,
-    isSessionAccepted,
-    isSystemConnected,
-  } from "../services/websocket";
+import { handleChatResponseChunk } from "../services/chat-inbound";
+import { applySessionClear } from "../services/session-clear";
+import {
+  WebSocketService,
+  isChatError,
+  isChatResponse,
+  isChatResponseChunk,
+  isDesktopCommand,
+  isPersonaAssets,
+  isSessionAccepted,
+  isSessionClear,
+  isSystemConnected,
+} from "../services/websocket";
   import type {
     AppSettings,
     CertificateProbeResult,
@@ -86,6 +90,10 @@
       $connectionStatus,
       $sessionState.sessionId,
     ) && !pending,
+  );
+
+  const streamingActive = $derived(
+    $chatMessages.some((message) => message.streaming === true),
   );
 
   const speechAllowed = $derived($settings.speech.enabled);
@@ -168,6 +176,23 @@
       return;
     }
 
+    if (isSessionClear(message)) {
+      pending = false;
+      pairingBusy = false;
+      composerDraft = "";
+      const cleared = await applySessionClear(message.payload);
+      if (cleared) {
+        addSystemMessage(
+          cleared.reason
+            ? "chatView.sessionClear.withReason"
+            : "chatView.sessionClear.notice",
+          cleared.reason ? { reason: cleared.reason } : undefined,
+          "info",
+        );
+      }
+      return;
+    }
+
     if (isSystemConnected(message)) {
       pairingBusy = true;
       sessionState.reset();
@@ -192,15 +217,41 @@
       return;
     }
 
+    if (isChatResponseChunk(message)) {
+      const result = handleChatResponseChunk(
+        message.payload,
+        message.timestamp,
+      );
+      if (!result) {
+        return;
+      }
+      if (result.completed) {
+        pending = false;
+        playUiSound("receive");
+        void notifyIncomingMessageIfHidden(result.text);
+      } else {
+        pending = true;
+      }
+      return;
+    }
+
     if (isChatResponse(message)) {
       pending = false;
-      chatMessages.addMessage({
-        id: message.id,
-        role: "assistant",
-        text: message.payload.text,
-        timestamp: message.timestamp,
-        requestId: message.payload.request_id,
-      });
+      const finalized = chatMessages.finalizeStreamingResponse(
+        message.payload.request_id,
+        message.payload.text,
+        message.timestamp,
+        message.id,
+      );
+      if (!finalized) {
+        chatMessages.addMessage({
+          id: message.id,
+          role: "assistant",
+          text: message.payload.text,
+          timestamp: message.timestamp,
+          requestId: message.payload.request_id,
+        });
+      }
       playUiSound("receive");
       void notifyIncomingMessageIfHidden(message.payload.text);
       return;
@@ -636,7 +687,7 @@
       />
 
       <MessageList
-        awaitingResponse={pending}
+        awaitingResponse={pending && !streamingActive}
         sessionStatus={$sessionState.status}
         connectionStatus={$connectionStatus}
         speechActive={$speechState.isActive}

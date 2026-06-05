@@ -65,13 +65,14 @@
       class="bubble"
       class:tail-assistant={message.role === "assistant" && !group.groupWithNext}
       class:grouped={group.groupWithPrevious}
+      class:streaming={message.streaming === true}
     >
       {#if message.role === "system"}
         <p>{message.text}</p>
       {:else}
         <ChatMessageBody text={message.text} tone={message.role} />
       {/if}
-      {#if showTime}
+      {#if showTime && !message.streaming}
         <time datetime={message.timestamp}>{formatMessageTime(message.timestamp)}</time>
       {/if}
     </article>
@@ -163,6 +164,12 @@
 
   .assistant .bubble.grouped {
     border-top-left-radius: var(--radius-sm);
+  }
+
+  .assistant .bubble.streaming {
+    box-shadow:
+      var(--color-bubble-shadow),
+      0 0 0 1px color-mix(in srgb, var(--color-accent) 18%, transparent);
   }
 
   .system .bubble {

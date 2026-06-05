@@ -279,8 +279,8 @@ Actions: `click`, `invoke`, `focus`, `set_value`
 | OS | UI-Tree | Hinweis |
 |----|---------|---------|
 | Windows | uiautomation | Vollständig |
-| Linux | AT-SPI Stub | Erweiterung nötig; Wayland/X11-Einschränkungen |
-| macOS | Stub | Capture via xcap, UI später |
+| Linux | AT-SPI (echter Accessibility-Baum) | Wayland/X11-Einschränkungen je Desktop; AT-SPI muss aktiv sein |
+| macOS | AXUIElement (Accessibility API) | Berechtigung unter Systemeinstellungen → Datenschutz → Bedienungshilfen erforderlich |
 
 ### 6.5 Browser CDP (`remote.desktop.browser`)
 
@@ -288,14 +288,73 @@ Erfordert Client-Setting **`browserControlEnabled`** und Capability `remote.desk
 
 | Operation | params | Banner |
 |-----------|--------|--------|
-| `desktop_browser_connect` | `{ endpoint?: "http://127.0.0.1:9222" }` | Nein |
-| `desktop_browser_snapshot` | `{ selector?, include_html? }` | Nein |
-| `desktop_browser_action` | `{ action, selector, value? }` | **Ja** |
+| `desktop_browser_connect` | `{ endpoint?, port?, auto_launch?, url? }` | Nein |
+| `desktop_browser_list_tabs` | `{}` | Nein |
+| `desktop_browser_snapshot` | `{ selector?, include_html?, include_screenshot?, screenshot_format?, quality?, full_page?, tab_id? }` | Nein |
+| `desktop_browser_action` | `{ action, selector?, tab_id?, value? }` | **Ja** (Tab-Actions `select_tab`/`new_tab`/`close_tab` ohne Banner) |
 | `desktop_browser_disconnect` | `{}` | Nein |
 
-CDP: Cargo-Feature `browser-automation` (chromiumoxide). Chrome/Edge mit `--remote-debugging-port=9222`.
+**Connect-Parameter:**
 
-### 6.6 Permission-Probe
+- `endpoint` — z. B. `http://127.0.0.1:9222` (nur Loopback: `127.0.0.1`, `localhost`, `::1`)
+- `port` — Alternative zu `endpoint` (Default `9222` → `http://127.0.0.1:{port}`)
+- `auto_launch` — Default `true`: bei fehlgeschlagem Attach startet agodesk Chrome/Edge mit `--remote-debugging-port`
+- `url` — Start-URL beim Auto-Launch
+
+**Actions (v2):** `click`, `focus`, `fill` / `set_value`, `type`, `press` (value = Taste, Default `Enter`); Tab-Steuerung: `select_tab` (`tab_id`), `new_tab` (`value` = URL, optional), `close_tab` (`tab_id`)
+
+**Snapshot:** `text`, optional `html` (max. ~512 KiB, dann `truncated: true`); optional CDP-Screenshot via `include_screenshot: true` mit `screenshot_format` (`jpeg`\|`png`\|`webp`), `quality` (40–90), `full_page`, `tab_id`
+
+**Tabs:** `desktop_browser_list_tabs` → `{ tabs: [{ id, url, title, active }], active_tab_id }`. Connect-Response enthält `active_tab_id`.
+
+**Disconnect:** Beendet bei Auto-Launch den gestarteten Browser-Prozess.
+
+CDP: Cargo-Feature `browser-automation` (chromiumoxide, standardmäßig aktiv). Manuell: `chrome.exe --remote-debugging-port=9222`
+
+**Settings:** Unter Desktop → „Browser-Verbindung testen“ (CDP-Attach/Auto-Launch auf Port 9222, danach Disconnect).
+
+**macOS Auto-Launch:** Chrome/Edge/Chromium/Brave unter `/Applications` und `~/Applications`; Debug-Port bindet an `127.0.0.1`.
+
+### 6.6 Desktop-Stream (periodische Screenshots)
+
+Erfordert Capability **`remote.desktop.stream`** in `session.start` (agodesk advertised automatisch bei aktivierter Desktop-Steuerung).
+
+| Operation | params | Antwort |
+|-----------|--------|---------|
+| `desktop_stream_start` | `display_id?`, `window_id?`, `format?` (`jpeg`\|`png`), `quality?` (40–90), `fps?` (1–10, Default 2) | `desktop.result` mit `{ stream_id, active: true, fps, format, display_id?, window_id? }` |
+| `desktop_stream_stop` | `stream_id?` (optional; ohne ID stoppt den aktiven Stream) | `desktop.result` mit `{ stream_id, active: false, frames_sent }` |
+
+Während ein Stream aktiv ist, sendet agodesk **unsolicited** WebSocket-Nachrichten:
+
+```json
+{
+  "type": "desktop.stream.frame",
+  "payload": {
+    "stream_id": "uuid",
+    "sequence": 1,
+    "timestamp": "2026-06-04T12:00:00.000Z",
+    "session_id": "sess-acc-…",
+    "device_id": "dev-…",
+    "frame": {
+      "source": "display",
+      "display_id": "display-0",
+      "window_id": null,
+      "format": "jpeg",
+      "width": 1920,
+      "height": 1080,
+      "scale_factor": 1,
+      "mime": "image/jpeg",
+      "data_base64": "…"
+    }
+  }
+}
+```
+
+- Kein Remote-Control-Banner nötig (wie `desktop_screenshot`)
+- Ein neuer `desktop_stream_start` ersetzt einen laufenden Stream
+- Stream endet bei Disconnect, Session-Reset oder `desktop_stream_stop`
+
+### 6.7 Permission-Probe
 
 **`desktop_permission_request`** → `data`:
 
@@ -304,7 +363,8 @@ CDP: Cargo-Feature `browser-automation` (chromiumoxide). Chrome/Edge mit `--remo
   "screen_capture": true,
   "input_injection": true,
   "approved_session": false,
-  "ui_automation": true
+  "ui_automation": true,
+  "browser_automation": true
 }
 ```
 
@@ -323,7 +383,7 @@ CDP: Cargo-Feature `browser-automation` (chromiumoxide). Chrome/Edge mit `--remo
 | `DESKTOP_ELEMENT_NOT_FOUND` | `element_id` ungültig | UI-Tree neu laden |
 | `DESKTOP_ACCESSIBILITY_DENIED` | OS-Berechtigung fehlt | User informieren |
 | `DESKTOP_OPERATION_UNSUPPORTED` | Op/Plattform | Anderen Pfad wählen |
-| `DESKTOP_STREAM_UNSUPPORTED` | Stream nicht implementiert | Nicht verwenden |
+| `DESKTOP_STREAM_NOT_ACTIVE` | `desktop_stream_stop` ohne laufenden Stream | Erst `desktop_stream_start` |
 
 ---
 
@@ -405,4 +465,4 @@ AuraGo kommuniziert **nur** über WebSocket — nicht direkt mit Rust.
 
 ---
 
-*Stand: agodesk 0.1.0 — Computer-Use Phasen 1–6 (Windows voll, Linux/macOS teilweise)*
+*Stand: agodesk 0.1.0 — Computer-Use (Windows voll, Linux AT-SPI, macOS AX)*

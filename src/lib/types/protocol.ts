@@ -39,7 +39,8 @@ export type MessageType =
   | "persona.assets.request"
   | "persona.assets"
   | "desktop.command"
-  | "desktop.result";
+  | "desktop.result"
+  | "desktop.stream.frame";
 
 export interface WsMessage<T = unknown> {
   id: string;
@@ -97,6 +98,38 @@ export interface SessionAcceptedPayload {
   shared_key?: string;
   advertised_capabilities?: string[];
   capabilities?: string[];
+}
+
+export interface SessionClearPayload {
+  session_id?: string;
+  reason?: string;
+  clear_chat?: boolean;
+}
+
+export function normalizeSessionClearPayload(
+  payload: unknown,
+): SessionClearPayload | null {
+  if (!payload || typeof payload !== "object") {
+    return null;
+  }
+
+  const record = payload as Record<string, unknown>;
+  const result: SessionClearPayload = {};
+  const sessionId = readString(record, "session_id", "sessionId");
+  const reason = readString(record, "reason");
+  const clearChatRaw = record.clear_chat ?? record.clearChat;
+
+  if (sessionId) {
+    result.session_id = sessionId;
+  }
+  if (reason) {
+    result.reason = reason;
+  }
+  if (typeof clearChatRaw === "boolean") {
+    result.clear_chat = clearChatRaw;
+  }
+
+  return result;
 }
 
 export function normalizeSessionAcceptedPayload(
@@ -162,6 +195,37 @@ export interface ChatErrorPayload {
   message: string;
 }
 
+export function normalizeChatResponseChunkPayload(
+  payload: unknown,
+): ChatResponseChunkPayload | null {
+  if (!payload || typeof payload !== "object") {
+    return null;
+  }
+
+  const record = payload as Record<string, unknown>;
+  const sessionId = record.session_id ?? record.sessionId;
+  const requestId = record.request_id ?? record.requestId;
+  const delta = record.delta;
+  const done = record.done;
+
+  if (typeof sessionId !== "string" || typeof requestId !== "string") {
+    return null;
+  }
+  if (typeof delta !== "string") {
+    return null;
+  }
+  if (typeof done !== "boolean") {
+    return null;
+  }
+
+  return {
+    session_id: sessionId,
+    request_id: requestId,
+    delta,
+    done,
+  };
+}
+
 export interface DisplayInfo {
   id: string;
   index: number;
@@ -212,6 +276,7 @@ export interface ControlPermissionStatus {
   input_injection: boolean;
   approved_session: boolean;
   ui_automation?: boolean;
+  browser_automation?: boolean;
 }
 
 export interface HostInfo {
@@ -267,16 +332,50 @@ export interface UiActionParams {
 
 export interface BrowserConnectParams {
   endpoint?: string;
+  port?: number;
+  auto_launch?: boolean;
+  url?: string;
+}
+
+export interface BrowserSnapshotResult {
+  url: string;
+  title: string;
+  text: string;
+  html?: string;
+  truncated?: boolean;
+  screenshot_base64?: string;
+  screenshot_mime?: string;
+  screenshot_width?: number;
+  screenshot_height?: number;
+  tab_id?: string;
 }
 
 export interface BrowserSnapshotParams {
   selector?: string;
   include_html?: boolean;
+  include_screenshot?: boolean;
+  screenshot_format?: "jpeg" | "png" | "webp";
+  quality?: number;
+  full_page?: boolean;
+  tab_id?: string;
+}
+
+export interface BrowserTabInfo {
+  id: string;
+  url: string;
+  title: string;
+  active: boolean;
+}
+
+export interface BrowserTabListResult {
+  tabs: BrowserTabInfo[];
+  active_tab_id: string;
 }
 
 export interface BrowserActionParams {
   action: string;
-  selector: string;
+  selector?: string;
+  tab_id?: string;
   value?: string;
 }
 
@@ -300,6 +399,48 @@ export interface DesktopScreenshotParams {
   window_id?: string;
   format?: "png" | "jpeg";
   quality?: number;
+}
+
+export interface DesktopStreamStartParams extends DesktopScreenshotParams {
+  fps?: number;
+}
+
+export interface DesktopStreamStopParams {
+  stream_id?: string;
+}
+
+export interface DesktopStreamStartResult {
+  stream_id: string;
+  active: true;
+  fps: number;
+  format: "jpeg" | "png";
+  display_id?: string;
+  window_id?: string;
+}
+
+export interface DesktopStreamStopResult {
+  stream_id: string;
+  active: false;
+  frames_sent: number;
+}
+
+export interface DesktopStreamFramePayload {
+  stream_id: string;
+  sequence: number;
+  timestamp: string;
+  session_id?: string;
+  device_id?: string;
+  frame: {
+    source: string;
+    display_id: string | null;
+    window_id: string | null;
+    format: string;
+    width: number;
+    height: number;
+    scale_factor: number;
+    mime: string;
+    data_base64: string;
+  };
 }
 
 export interface DesktopInputParams {
@@ -334,6 +475,7 @@ export type DesktopOperation =
   | "desktop_ui_tree"
   | "desktop_ui_action"
   | "desktop_browser_connect"
+  | "desktop_browser_list_tabs"
   | "desktop_browser_snapshot"
   | "desktop_browser_action"
   | "desktop_browser_disconnect"
@@ -347,6 +489,8 @@ export type FileOperation = (typeof FILE_OPERATIONS)[number];
 
 export const DESKTOP_V1_OPERATIONS: DesktopOperation[] = [
   "desktop_screenshot",
+  "desktop_stream_start",
+  "desktop_stream_stop",
   "desktop_permission_request",
   "desktop_input",
   "desktop_list_displays",
@@ -356,6 +500,7 @@ export const DESKTOP_V1_OPERATIONS: DesktopOperation[] = [
   "desktop_ui_tree",
   "desktop_ui_action",
   "desktop_browser_connect",
+  "desktop_browser_list_tabs",
   "desktop_browser_snapshot",
   "desktop_browser_action",
   "desktop_browser_disconnect",
@@ -375,6 +520,7 @@ export const DESKTOP_UI_OPERATIONS = [
 
 export const DESKTOP_BROWSER_OPERATIONS = [
   "desktop_browser_connect",
+  "desktop_browser_list_tabs",
   "desktop_browser_snapshot",
   "desktop_browser_action",
   "desktop_browser_disconnect",
@@ -385,6 +531,16 @@ export const DESKTOP_INPUT_OPERATIONS = [
   "desktop_ui_action",
   "desktop_browser_action",
 ] as const;
+
+const BROWSER_TAB_ACTIONS = new Set(["select_tab", "new_tab", "close_tab"]);
+
+export function isBrowserTabAction(params?: unknown): boolean {
+  if (!params || typeof params !== "object") {
+    return false;
+  }
+  const action = (params as Record<string, unknown>).action;
+  return typeof action === "string" && BROWSER_TAB_ACTIONS.has(action);
+}
 
 export const DESKTOP_STREAM_OPERATIONS: DesktopOperation[] = [
   "desktop_stream_start",
@@ -397,6 +553,7 @@ export type DesktopErrorCode =
   | "DESKTOP_INPUT_NOT_APPROVED"
   | "DESKTOP_INPUT_DENIED"
   | "DESKTOP_STREAM_UNSUPPORTED"
+  | "DESKTOP_STREAM_NOT_ACTIVE"
   | "DESKTOP_OPERATION_UNSUPPORTED"
   | "DESKTOP_COMMAND_INVALID"
   | "DESKTOP_CONTROL_DISABLED"
@@ -427,6 +584,8 @@ export interface DesktopCommandPayload {
   operation: DesktopOperation;
   params?:
     | DesktopScreenshotParams
+    | DesktopStreamStartParams
+    | DesktopStreamStopParams
     | DesktopInputParams
     | FileCommandParams
     | Record<string, unknown>;
@@ -467,6 +626,26 @@ function normalizeDesktopScreenshotParams(
     window_id: readString(raw, "window_id", "windowId"),
     format: raw.format === "jpeg" ? "jpeg" : raw.format === "png" ? "png" : undefined,
     quality: typeof raw.quality === "number" ? raw.quality : undefined,
+  };
+}
+
+function normalizeDesktopStreamStartParams(
+  raw: Record<string, unknown>,
+): DesktopStreamStartParams {
+  const base = normalizeDesktopScreenshotParams(raw);
+  const fps =
+    typeof raw.fps === "number" && Number.isFinite(raw.fps) ? raw.fps : undefined;
+  return {
+    ...base,
+    fps,
+  };
+}
+
+function normalizeDesktopStreamStopParams(
+  raw: Record<string, unknown>,
+): DesktopStreamStopParams {
+  return {
+    stream_id: readString(raw, "stream_id", "streamId"),
   };
 }
 
@@ -514,6 +693,10 @@ export function normalizeDesktopCommandPayload(
   let params: DesktopCommandPayload["params"];
   if (operation === "desktop_screenshot") {
     params = normalizeDesktopScreenshotParams(paramsRecord);
+  } else if (operation === "desktop_stream_start") {
+    params = normalizeDesktopStreamStartParams(paramsRecord);
+  } else if (operation === "desktop_stream_stop") {
+    params = normalizeDesktopStreamStopParams(paramsRecord);
   } else if (operation === "desktop_input") {
     params = normalizeDesktopInputParams(paramsRecord);
   } else if (operation === "desktop_ui_tree") {
@@ -529,21 +712,53 @@ export function normalizeDesktopCommandPayload(
       window_id: readString(paramsRecord, "window_id", "windowId"),
     };
   } else if (operation === "desktop_browser_connect") {
+    const port =
+      typeof paramsRecord.port === "number" && Number.isFinite(paramsRecord.port)
+        ? paramsRecord.port
+        : undefined;
+    const autoLaunchRaw =
+      paramsRecord.auto_launch ?? paramsRecord.autoLaunch;
     params = {
       endpoint: readString(paramsRecord, "endpoint"),
+      port,
+      auto_launch: typeof autoLaunchRaw === "boolean" ? autoLaunchRaw : undefined,
+      url: readString(paramsRecord, "url"),
     };
   } else if (operation === "desktop_browser_snapshot") {
+    const qualityRaw = paramsRecord.quality;
+    const formatRaw = readString(
+      paramsRecord,
+      "screenshot_format",
+      "screenshotFormat",
+    );
     params = {
       selector: readString(paramsRecord, "selector"),
       include_html:
         paramsRecord.include_html === true || paramsRecord.includeHtml === true,
+      include_screenshot:
+        paramsRecord.include_screenshot === true ||
+        paramsRecord.includeScreenshot === true,
+      screenshot_format:
+        formatRaw === "png" || formatRaw === "webp" || formatRaw === "jpeg"
+          ? formatRaw
+          : undefined,
+      quality:
+        typeof qualityRaw === "number" && Number.isFinite(qualityRaw)
+          ? qualityRaw
+          : undefined,
+      full_page:
+        paramsRecord.full_page === true || paramsRecord.fullPage === true,
+      tab_id: readString(paramsRecord, "tab_id", "tabId"),
     };
   } else if (operation === "desktop_browser_action") {
     params = {
       action: readString(paramsRecord, "action") ?? "click",
-      selector: readString(paramsRecord, "selector") ?? "",
+      selector: readString(paramsRecord, "selector"),
+      tab_id: readString(paramsRecord, "tab_id", "tabId"),
       value: readString(paramsRecord, "value"),
     };
+  } else if (operation === "desktop_browser_list_tabs") {
+    params = {};
   } else if (isFileOperation(operation)) {
     params = normalizeFileCommandParams(paramsRecord);
   } else if (Object.keys(paramsRecord).length > 0) {
@@ -569,6 +784,10 @@ export function isDesktopBrowserOperation(operation: string): boolean {
   return (DESKTOP_BROWSER_OPERATIONS as readonly string[]).includes(operation);
 }
 
+export function isDesktopStreamOperation(operation: string): boolean {
+  return (DESKTOP_STREAM_OPERATIONS as readonly string[]).includes(operation);
+}
+
 export function isFileOperation(operation: string): operation is FileOperation {
   return FILE_OPERATIONS.includes(operation as FileOperation);
 }
@@ -587,11 +806,23 @@ export function normalizeFileCommandParams(
   };
 }
 
-export function requiresLocalDesktopApproval(operation: string): boolean {
+export function requiresLocalDesktopApproval(
+  operation: string,
+  params?: unknown,
+): boolean {
+  if (operation === "desktop_browser_action" && isBrowserTabAction(params)) {
+    return false;
+  }
   return (DESKTOP_INPUT_OPERATIONS as readonly string[]).includes(operation);
 }
 
-export function requiresRemoteControlBanner(operation: string): boolean {
+export function requiresRemoteControlBanner(
+  operation: string,
+  params?: unknown,
+): boolean {
+  if (operation === "desktop_browser_action" && isBrowserTabAction(params)) {
+    return false;
+  }
   return (
     (DESKTOP_INPUT_OPERATIONS as readonly string[]).includes(operation) ||
     operation === "desktop_permission_request"
@@ -624,6 +855,8 @@ export interface ChatMessage {
   text: string;
   timestamp: string;
   requestId?: string;
+  /** True while chat.response.chunk stream is in progress. */
+  streaming?: boolean;
   /** i18n key for system messages (re-translated on locale change). */
   messageKey?: string;
   messageParams?: Record<string, string | number>;
@@ -763,6 +996,7 @@ export const AGODESK_BASE_CAPABILITIES = [
 
 export const AGODESK_DESKTOP_CAPABILITIES = [
   "remote.desktop.capture",
+  "remote.desktop.stream",
   "remote.desktop.permission_request",
   "remote.desktop.input",
   "remote.desktop.discovery",

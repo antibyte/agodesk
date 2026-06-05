@@ -1,37 +1,98 @@
-// Note: Real browser automation via CDP (chromiumoxide) is not yet implemented.
-// The feature flag + dep in Cargo.toml and some skeleton code remain for future work.
-// All browser_* commands currently return a clear "not implemented" error so that
-// higher-level desktop_browser_* operations fail gracefully instead of faking success.
+mod endpoint;
+#[cfg(feature = "browser-automation")]
+mod cdp;
+#[cfg(feature = "browser-automation")]
+mod launch;
+mod state;
 
-#[allow(dead_code)]
-mod session;
+pub use state::BrowserState;
 
 use crate::computer_use::types::{
     BrowserActionParams, BrowserConnectParams, BrowserSessionInfo, BrowserSnapshotParams,
-    BrowserSnapshotResult,
+    BrowserSnapshotResult, BrowserTabListResult,
 };
 
-#[allow(dead_code)]
+use endpoint::resolve_connect;
+
 pub fn browser_automation_available() -> bool {
-    // Always false for now (real impl pending). Kept for potential future use.
-    false
+    cfg!(feature = "browser-automation")
 }
 
-const NOT_IMPLEMENTED: &str =
-    "Browser automation via Chrome/Edge DevTools Protocol (CDP) is not implemented yet.";
-
-pub fn browser_connect(_params: BrowserConnectParams) -> Result<BrowserSessionInfo, String> {
-    Err(NOT_IMPLEMENTED.to_string())
+#[cfg(feature = "browser-automation")]
+pub async fn connect(
+    state: &BrowserState,
+    params: BrowserConnectParams,
+) -> Result<BrowserSessionInfo, String> {
+    let plan = resolve_connect(&params)?;
+    cdp::connect(state, plan).await
 }
 
-pub fn browser_snapshot(_params: BrowserSnapshotParams) -> Result<BrowserSnapshotResult, String> {
-    Err(NOT_IMPLEMENTED.to_string())
+#[cfg(not(feature = "browser-automation"))]
+pub async fn connect(
+    _state: &BrowserState,
+    _params: BrowserConnectParams,
+) -> Result<BrowserSessionInfo, String> {
+    Err(format!(
+        "{BROWSER_UNAVAILABLE}: Browser automation is not compiled into this build."
+    ))
 }
 
-pub fn browser_action(_params: BrowserActionParams) -> Result<serde_json::Value, String> {
-    Err(NOT_IMPLEMENTED.to_string())
+#[cfg(feature = "browser-automation")]
+pub async fn list_tabs(state: &BrowserState) -> Result<BrowserTabListResult, String> {
+    cdp::list_tabs(state).await
 }
 
-pub fn browser_disconnect() -> Result<(), String> {
-    Err(NOT_IMPLEMENTED.to_string())
+#[cfg(not(feature = "browser-automation"))]
+pub async fn list_tabs(_state: &BrowserState) -> Result<BrowserTabListResult, String> {
+    Err(format!(
+        "{BROWSER_UNAVAILABLE}: Browser automation is not compiled into this build."
+    ))
+}
+
+#[cfg(feature = "browser-automation")]
+pub async fn snapshot(
+    state: &BrowserState,
+    params: BrowserSnapshotParams,
+) -> Result<BrowserSnapshotResult, String> {
+    cdp::snapshot(state, params).await
+}
+
+#[cfg(not(feature = "browser-automation"))]
+pub async fn snapshot(
+    _state: &BrowserState,
+    _params: BrowserSnapshotParams,
+) -> Result<BrowserSnapshotResult, String> {
+    Err(format!(
+        "{BROWSER_UNAVAILABLE}: Browser automation is not compiled into this build."
+    ))
+}
+
+#[cfg(feature = "browser-automation")]
+pub async fn action(
+    state: &BrowserState,
+    params: BrowserActionParams,
+) -> Result<serde_json::Value, String> {
+    cdp::action(state, params).await
+}
+
+#[cfg(not(feature = "browser-automation"))]
+pub async fn action(
+    _state: &BrowserState,
+    _params: BrowserActionParams,
+) -> Result<serde_json::Value, String> {
+    Err(format!(
+        "{BROWSER_UNAVAILABLE}: Browser automation is not compiled into this build."
+    ))
+}
+
+#[cfg(feature = "browser-automation")]
+pub async fn disconnect(state: &BrowserState) -> Result<(), String> {
+    cdp::disconnect(state).await
+}
+
+#[cfg(not(feature = "browser-automation"))]
+pub async fn disconnect(_state: &BrowserState) -> Result<(), String> {
+    Err(format!(
+        "{BROWSER_UNAVAILABLE}: Browser automation is not compiled into this build."
+    ))
 }
