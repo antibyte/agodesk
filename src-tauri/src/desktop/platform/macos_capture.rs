@@ -14,6 +14,10 @@ pub fn screen_capture_available() -> bool {
     Monitor::all().map(|monitors| !monitors.is_empty()).unwrap_or(false)
 }
 
+pub fn input_injection_available() -> bool {
+    true
+}
+
 pub fn ui_automation_available() -> bool {
     crate::computer_use::platform::ui_automation_available()
 }

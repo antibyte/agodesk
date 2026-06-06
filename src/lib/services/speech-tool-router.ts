@@ -14,6 +14,9 @@ export interface SpeechToolContext {
   remoteControlActive: boolean;
   remoteControlPending: boolean;
   canSendChat: boolean;
+  desktopControlEnabled?: boolean;
+  browserControlEnabled?: boolean;
+  getDesktopPermissionStatus?: () => Promise<Record<string, unknown>>;
   sendToAuraGo: (message: string) => Promise<void>;
   onStopListening: () => void | Promise<void>;
   onSystemNotice: (text: string) => void;
@@ -53,7 +56,7 @@ export async function executeSpeechTool(
     }
 
     case "get_client_status": {
-      return {
+      const status: Record<string, unknown> = {
         success: true,
         connectionStatus: context.connectionStatus,
         sessionStatus: context.sessionStatus,
@@ -61,7 +64,18 @@ export async function executeSpeechTool(
         remoteControlActive: context.remoteControlActive,
         remoteControlPending: context.remoteControlPending,
         canSendChat: context.canSendChat,
+        desktopControlEnabled: context.desktopControlEnabled ?? null,
+        browserControlEnabled: context.browserControlEnabled ?? null,
       };
+      if (context.getDesktopPermissionStatus) {
+        try {
+          status.desktopPermissions = await context.getDesktopPermissionStatus();
+        } catch (error) {
+          status.desktopPermissionError =
+            error instanceof Error ? error.message : String(error);
+        }
+      }
+      return status;
     }
 
     case "stop_listening": {

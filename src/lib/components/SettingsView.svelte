@@ -52,6 +52,7 @@
   import { previewUiSoundTheme } from "../services/ui-sounds";
   import WindowControls from "./WindowControls.svelte";
   import { isDesktopShell } from "../services/window-controls";
+  import { onMount } from "svelte";
 
   export type SettingsSavePayload = Pick<
     AppSettings,
@@ -151,6 +152,8 @@
   let hostInfo = $state<HostInfo | null>(null);
   let dirty = $state(false);
   let saving = $state(false);
+
+  let backButtonEl = $state<HTMLButtonElement | null>(null);
 
   let apiKeyInput = $state("");
   let apiKeyStored = $state(false);
@@ -473,11 +476,20 @@
   function handlePreviewUiSound(theme: UiSoundTheme): void {
     previewUiSoundTheme(theme);
   }
+
+  // Quick win: focus back button when settings view is shown (for keyboard users)
+  onMount(() => {
+    // small delay for layout
+    setTimeout(() => {
+      backButtonEl?.focus();
+    }, 20);
+  });
 </script>
 
 <div class="settings-page">
   <header class="settings-header">
     <button
+      bind:this={backButtonEl}
       type="button"
       class="ui-btn ui-btn-secondary back-button"
       onclick={() => onBack?.()}
@@ -495,6 +507,19 @@
         <span class="dirty-badge ui-chip" data-tone="warning">
           {$i18n("settings.unsavedBadge")}
         </span>
+      {/if}
+      {#if dirty}
+        <button
+          type="button"
+          class="ui-btn ui-btn-secondary"
+          onclick={() => {
+            discardChanges();
+            onBack?.();
+          }}
+          disabled={saving}
+        >
+          {$i18n("settings.footer.discard")}
+        </button>
       {/if}
       <button
         type="button"
@@ -1124,6 +1149,20 @@
                     <option value={voice}>{voice}</option>
                   {/each}
                 </select>
+              </label>
+
+              <label class="field">
+                <span class="field-label">{$i18n("settings.speech.bargeInMode.label")}</span>
+                <select
+                  bind:value={draftSpeech.bargeInMode}
+                  onchange={markDirty}
+                  disabled={!draftSpeech.enabled}
+                >
+                  <option value="auto">{$i18n("settings.speech.bargeInMode.auto")}</option>
+                  <option value="silero">{$i18n("settings.speech.bargeInMode.silero")}</option>
+                  <option value="energy">{$i18n("settings.speech.bargeInMode.energy")}</option>
+                </select>
+                <p class="help">{$i18n("settings.speech.bargeInMode.help")}</p>
               </label>
             </section>
 

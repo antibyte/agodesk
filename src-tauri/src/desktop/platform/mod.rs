@@ -26,6 +26,11 @@ pub fn ui_automation_available() -> bool {
 }
 
 #[cfg(not(any(windows, target_os = "linux", target_os = "macos")))]
+pub fn input_injection_available() -> bool {
+    false
+}
+
+#[cfg(not(any(windows, target_os = "linux", target_os = "macos")))]
 pub fn list_displays() -> Result<Vec<super::types::DisplayInfo>, String> {
     Err("Display enumeration is not implemented on this platform.".to_string())
 }

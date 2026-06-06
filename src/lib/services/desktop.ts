@@ -463,7 +463,15 @@ export async function executeDesktopCommand(
       }
       case "desktop_input": {
         const status = await controlPermissionStatus();
-        if (!status.approved_session || !status.input_injection) {
+        if (!status.input_injection) {
+          desktopFailure(
+            result,
+            "DESKTOP_OPERATION_UNSUPPORTED",
+            "Input-Injektion ist auf diesem System nicht verfügbar.",
+          );
+          break;
+        }
+        if (!status.approved_session) {
           desktopFailure(
             result,
             "DESKTOP_INPUT_NOT_APPROVED",
@@ -521,7 +529,15 @@ export async function executeDesktopCommand(
       }
       case "desktop_ui_action": {
         const status = await controlPermissionStatus();
-        if (!status.approved_session || !status.input_injection) {
+        if (!status.input_injection) {
+          desktopFailure(
+            result,
+            "DESKTOP_OPERATION_UNSUPPORTED",
+            "UI-Aktionen sind auf diesem System nicht verfügbar.",
+          );
+          break;
+        }
+        if (!status.approved_session) {
           desktopFailure(
             result,
             "DESKTOP_INPUT_NOT_APPROVED",
@@ -613,14 +629,29 @@ export async function executeDesktopCommand(
         break;
       }
       case "desktop_browser_action": {
-        const status = await controlPermissionStatus();
-        if (!status.approved_session || !status.input_injection) {
-          desktopFailure(
-            result,
-            "DESKTOP_INPUT_NOT_APPROVED",
-            "Browser-Aktionen sind lokal noch nicht freigegeben.",
-          );
-          break;
+        const action = String(params.action ?? "click");
+        const tabOnly =
+          action === "select_tab" ||
+          action === "new_tab" ||
+          action === "close_tab";
+        if (!tabOnly) {
+          const status = await controlPermissionStatus();
+          if (!status.input_injection) {
+            desktopFailure(
+              result,
+              "DESKTOP_OPERATION_UNSUPPORTED",
+              "Browser-Aktionen sind auf diesem System nicht verfügbar.",
+            );
+            break;
+          }
+          if (!status.approved_session) {
+            desktopFailure(
+              result,
+              "DESKTOP_INPUT_NOT_APPROVED",
+              "Browser-Aktionen sind lokal noch nicht freigegeben.",
+            );
+            break;
+          }
         }
         try {
           const browserResult = await browserAction({

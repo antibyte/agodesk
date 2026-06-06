@@ -884,6 +884,8 @@ export interface SpeechSettings {
   agentMode: boolean;
   voiceResponses: boolean;
   voiceName: string;
+  /** Barge-in (user interruption while AI speaks) detection mode. */
+  bargeInMode: "energy" | "silero" | "auto";
 }
 
 export const DEFAULT_SPEECH_SETTINGS: SpeechSettings = {
@@ -894,6 +896,7 @@ export const DEFAULT_SPEECH_SETTINGS: SpeechSettings = {
   agentMode: false,
   voiceResponses: true,
   voiceName: "Zephyr",
+  bargeInMode: "auto",
 };
 
 export const DEFAULT_UI_SOUND_SETTINGS: UiSoundSettings = {
@@ -981,7 +984,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   uiSounds: { ...DEFAULT_UI_SOUND_SETTINGS },
   minimizeToTray: false,
   desktopControlEnabled: true,
-  browserControlEnabled: false,
+  browserControlEnabled: true,
   fileAccess: { ...DEFAULT_FILE_ACCESS_SETTINGS },
 };
 

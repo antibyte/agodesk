@@ -67,9 +67,3 @@ export function cycleTheme(current: ThemeMode): ThemeMode {
   if (current === "light") return "dark";
   return "system";
 }
-
-export const THEME_LABELS: Record<ThemeMode, string> = {
-  system: "System",
-  light: "Hell",
-  dark: "Dunkel",
-};

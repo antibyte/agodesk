@@ -101,6 +101,10 @@ function normalizeSpeechSettings(
       typeof saved.voiceName === "string" && saved.voiceName.trim().length > 0
         ? saved.voiceName.trim()
         : DEFAULT_SPEECH_SETTINGS.voiceName,
+    bargeInMode:
+      saved.bargeInMode === "energy" || saved.bargeInMode === "silero" || saved.bargeInMode === "auto"
+        ? saved.bargeInMode
+        : DEFAULT_SPEECH_SETTINGS.bargeInMode,
   };
 }
 

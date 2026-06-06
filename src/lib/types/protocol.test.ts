@@ -231,7 +231,7 @@ test("DEFAULT_SETTINGS enthaelt uiSounds, locale und browserControlEnabled", () 
   assert.equal(DEFAULT_SETTINGS.uiSounds.theme, "soft");
   assert.equal(DEFAULT_SETTINGS.uiSounds.volume, 0.2);
   assert.equal(DEFAULT_SETTINGS.fileAccess.enabled, false);
-  assert.equal(DEFAULT_SETTINGS.browserControlEnabled, false);
+  assert.equal(DEFAULT_SETTINGS.browserControlEnabled, true);
   assert.equal(DEFAULT_SETTINGS.desktopControlEnabled, true);
 });
 

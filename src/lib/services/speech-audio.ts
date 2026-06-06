@@ -57,6 +57,7 @@ export class SpeechAudioCapture {
   private silentGain: GainNode | null = null;
   private inputRate = TARGET_SAMPLE_RATE;
   private onChunk: AudioChunkHandler | null = null;
+  private vadProcessors: Array<(samples: Float32Array) => void> = [];
 
   async start(onChunk: AudioChunkHandler): Promise<void> {
     if (this.stream) {
@@ -100,16 +101,40 @@ export class SpeechAudioCapture {
     return this.analyser;
   }
 
+  /**
+   * Register a processor that receives raw float32 mic samples (before downsampling).
+   * Used for low-latency barge-in VAD while AI is speaking.
+   */
+  addVadProcessor(processor: (samples: Float32Array) => void): void {
+    if (!this.vadProcessors.includes(processor)) {
+      this.vadProcessors.push(processor);
+    }
+  }
+
+  removeVadProcessor(processor: (samples: Float32Array) => void): void {
+    this.vadProcessors = this.vadProcessors.filter(p => p !== processor);
+  }
+
   private async handleAudioProcess(
     event: AudioProcessingEvent,
   ): Promise<void> {
+    await this.ensureContextRunning();
+
+    const channel = event.inputBuffer.getChannelData(0);
+
+    // Feed raw samples to VAD processors (low latency for barge-in)
+    for (const proc of this.vadProcessors) {
+      try {
+        proc(channel);
+      } catch (e) {
+        // don't let a bad VAD break the pipeline
+      }
+    }
+
     if (!this.onChunk) {
       return;
     }
 
-    await this.ensureContextRunning();
-
-    const channel = event.inputBuffer.getChannelData(0);
     const downsampled = downsampleBuffer(
       channel,
       this.inputRate,
@@ -136,6 +161,7 @@ export class SpeechAudioCapture {
 
   stop(): void {
     this.onChunk = null;
+    this.vadProcessors = [];
 
     this.processor?.disconnect();
     this.source?.disconnect();

@@ -563,6 +563,25 @@ export class GeminiLiveSession {
     this.agentContext = agentContext;
   }
 
+  /** Returns true while the AI is currently playing voice audio (for barge-in detection). */
+  get isAiSpeaking(): boolean {
+    return !!this.audioPlayback?.isActive;
+  }
+
+  /**
+   * Client-initiated immediate stop of AI voice playback (barge-in).
+   * This is local and instant. The ongoing Gemini generation may also
+   * react when new user audio arrives on the wire.
+   */
+  requestClientInterrupt(): void {
+    this.audioPlayback?.interrupt();
+  }
+
+  /** Returns an analyser for the AI voice playback (for lip-sync, visualizers, or enhanced barge metrics). */
+  getPlaybackAnalyser(): AnalyserNode | null {
+    return this.audioPlayback?.getPlaybackAnalyser() ?? null;
+  }
+
   async connect(apiKey: string): Promise<void> {
     const normalizedModel = normalizeModelId(this.speech.modelId);
     const errors: string[] = [];
@@ -908,7 +927,7 @@ export class GeminiLiveSession {
     this.turnFinalizeTimer = window.setTimeout(() => {
       this.turnFinalizeTimer = null;
       this.emitFinalTranscript();
-    }, TURN_FINALIZE_GRACE_MS);
+    }, TURN_FINALIZE_GRACE_MS) as any;
   }
 
   private processInputTranscription(message: GeminiLiveMessage): void {

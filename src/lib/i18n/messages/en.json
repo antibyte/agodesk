@@ -147,6 +147,11 @@
   "settings.speech.language.label": "Language",
   "settings.speech.language.placeholder": "de-DE",
   "settings.speech.voiceName.label": "Gemini Voice",
+  "settings.speech.bargeInMode.label": "Barge-in mode (interrupt while AI speaks)",
+  "settings.speech.bargeInMode.help": "Energy: simple volume detection. Silero: robust ML voice detection (better without headphones, downloads model on first use). Auto: prefer Silero, fall back to energy.",
+  "settings.speech.bargeInMode.auto": "Auto (recommended)",
+  "settings.speech.bargeInMode.silero": "Silero (robust)",
+  "settings.speech.bargeInMode.energy": "Energy (lightweight)",
   "settings.speech.apiKeyHelp": "The API key is stored in the OS keyring, not in app settings. Model can be adjusted (e.g. gemini-3.1-flash-live-preview or gemini-2.5-flash-native-audio-preview-12-2025).",
   "settings.speech.apiKey.title": "Google API key",
   "settings.speech.apiKey.freeKeyPrompt": "Get a free API key here:",
@@ -277,6 +282,7 @@
   "speechBanner.active.agent": "Speech agent active — commands are sent to AuraGo via tools",
   "speechBanner.active.autoSend": "Live speech active — transcripts are sent to AuraGo",
   "speechBanner.active.default": "Live speech active",
+  "speechBanner.vad.loading": "Loading voice detection model (first use may take a moment)…",
 
   "speechControl.connecting": "Connecting speech…",
   "speechControl.listening": "Stop speech input",
@@ -339,6 +345,8 @@
   "speechFlow.error.noApiKey": "No Gemini API key stored. Please save one in settings.",
   "speechFlow.error.toolContextUnavailable": "Tool context unavailable.",
   "speechFlow.error.sessionStartFailed": "Could not start speech session.",
+  "speechFlow.error.vadSileroFailed": "Silero voice detection could not be loaded. Using energy mode instead.",
+  "speechFlow.error.vadSileroFallback": "Silero model could not be loaded: {message}. Falling back to energy mode.",
 
   "chatOutbound.error.emptyMessage": "Empty message cannot be sent.",
 

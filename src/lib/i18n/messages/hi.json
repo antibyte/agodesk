@@ -321,5 +321,13 @@
   "remoteControl.operation.browserConnect": "Browser connect",
   "remoteControl.operation.browserSnapshot": "Browser snapshot",
   "remoteControl.operation.browserAction": "Browser action",
-  "remoteControl.operation.browserDisconnect": "Browser disconnect"
+  "remoteControl.operation.browserDisconnect": "Browser disconnect",
+  "settings.speech.bargeInMode.label": "Barge-in mode (interrupt while AI speaks)",
+  "settings.speech.bargeInMode.help": "Energy: simple volume detection. Silero: robust ML voice detection (better without headphones, downloads model on first use). Auto: prefer Silero, fall back to energy.",
+  "settings.speech.bargeInMode.auto": "Auto (recommended)",
+  "settings.speech.bargeInMode.silero": "Silero (robust)",
+  "settings.speech.bargeInMode.energy": "Energy (lightweight)",
+  "speechBanner.vad.loading": "Loading voice detection model (first use may take a moment)…",
+  "speechFlow.error.vadSileroFailed": "Silero voice detection could not be loaded. Using energy mode instead.",
+  "speechFlow.error.vadSileroFallback": "Silero model could not be loaded: {message}. Falling back to energy mode."
 }

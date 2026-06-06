@@ -36,13 +36,18 @@ AuraGo Computer-Use Integration: [docs/AURAGO_COMPUTER_USE_AGENT.md](docs/AURAGO
 ## Build
 
 ```powershell
-# Standard (produces nsis + msi on Windows)
+# Standard (produces nsis + msi on Windows; on Linux: deb/appimage/rpm)
 npm run tauri build
 
 # Recommended for the classic Windows "setup.exe" installer (NSIS):
 npm run build:win
 # or the helper:
 # .\scripts\build-windows-installer.ps1
+
+# For Linux (.deb + .AppImage + .rpm):
+npm run build:linux
+# or the helper (on Linux):
+# bash scripts/build-linux-installer.sh
 ```
 
 Der klassische Windows-Installer (NSIS-Setup.exe mit Wizard, Shortcuts, Deinstallations-Eintrag) liegt unter:
@@ -66,6 +71,57 @@ Der `build:win*` Befehl aktiviert automatisch das Feature und bundled den `agode
 MSI (für Enterprise) wird bei `targets: "all"` ebenfalls erzeugt, liegt unter `bundle/msi/`.
 
 Voraussetzungen siehe oben (inkl. MS C++ Build Tools auf Windows).
+
+### Für Linux
+Auf einem Linux-System (empfohlen: Ubuntu 22.04 als Build-Basis für glibc-Kompatibilität) oder im CI:
+
+```bash
+# Empfohlen für .deb + .AppImage + .rpm:
+npm run build:linux
+# oder der Helper:
+# bash scripts/build-linux-installer.sh
+# (mit --clean zum Säubern von target/)
+```
+
+Die Pakete liegen unter:
+- `src-tauri/target/release/bundle/deb/agodesk_<version>_amd64.deb`
+- `src-tauri/target/release/bundle/appimage/agodesk_<version>_amd64.AppImage`
+- `src-tauri/target/release/bundle/rpm/agodesk-<version>-1.x86_64.rpm`
+
+**Verwendung:**
+- Debian/Ubuntu: `sudo dpkg -i <deb>` (danach evtl. `sudo apt -f install`)
+- AppImage (portabel, keine Installation): `chmod +x <AppImage> && ./<AppImage>` (manchmal libfuse2 oder fuse3 nötig)
+- Fedora/RHEL/SUSE: `sudo rpm -i <rpm>`
+
+Tauri legt automatisch einen Desktop-Eintrag (`/usr/share/applications/agodesk.desktop`) und das Icon an. Das Programm erscheint im Menü.
+
+**Autostart (Linux-Äquivalent zum Windows Run-Eintrag):**
+Das `postinst`-Skript legt standardmäßig eine Kopie in `/etc/xdg/autostart/agodesk.desktop` ab (systemweit "beim Login starten", analog zum Silent/Default-Verhalten unter Windows). Zum Deaktivieren einfach die Datei löschen:
+```bash
+sudo rm /etc/xdg/autostart/agodesk.desktop
+```
+Oder für den aktuellen User: `rm ~/.config/autostart/agodesk.desktop` (nach Neulogin wirksam).
+
+**Hinweise:**
+- Der Build-Script/CI muss auf Linux (oder kompatiblem Runner) ausgeführt werden. Cross-Compile von Windows aus wird im einfachen Script nicht unterstützt (für CI immer Ubuntu-Runner verwenden).
+- AppImage ist selbst-contained und benötigt keine Root-Rechte.
+- Der Sidecar `agodesk-worker` wird mitgebundelt (für computer-use Features).
+
+Voraussetzungen (Build-Dependencies auf Ubuntu/Debian):
+```bash
+sudo apt-get update
+sudo apt-get install -y \
+  libwebkit2gtk-4.1-dev \
+  libgtk-3-dev \
+  libayatana-appindicator3-dev \
+  librsvg2-dev \
+  patchelf \
+  build-essential \
+  libssl-dev \
+  file \
+  libx11-dev libxcb1-dev libatspi2.0-dev
+```
+(Ähnlich auf anderen Distros; siehe Tauri Docs für Fedora etc.)
 
 ## Konfiguration
 

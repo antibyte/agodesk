@@ -8,6 +8,8 @@
     autoSendToAuraGo?: boolean;
     agentMode?: boolean;
     speechActive?: boolean;
+    vadLoading?: boolean;
+    vadError?: string;
   }
 
   let {
@@ -16,12 +18,36 @@
     autoSendToAuraGo = false,
     agentMode = false,
     speechActive = false,
+    vadLoading = false,
+    vadError = "",
   }: Props = $props();
 
   const bannerTransition = { y: 8, duration: 220 };
 </script>
 
-{#if errorMessage}
+{#if vadLoading}
+  <section
+    class="speech-banner banner-glass"
+    data-tone="info"
+    role="status"
+    in:fly={bannerTransition}
+    out:fly={{ ...bannerTransition, y: -4 }}
+  >
+    <span class="pulse-dot" aria-hidden="true"></span>
+    <span>{$i18n("speechBanner.vad.loading")}</span>
+  </section>
+{:else if vadError}
+  <section
+    class="speech-banner banner-glass"
+    data-tone="warn"
+    role="alert"
+    in:fly={bannerTransition}
+    out:fly={{ ...bannerTransition, y: -4 }}
+  >
+    <span class="icon" aria-hidden="true">⚠</span>
+    <span>{vadError}</span>
+  </section>
+{:else if errorMessage}
   <section
     class="speech-banner banner-glass"
     data-tone="danger"

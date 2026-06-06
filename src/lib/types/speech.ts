@@ -11,6 +11,10 @@ export interface SpeechState {
   partialTranscript: string;
   errorMessage: string;
   agentMode: boolean;
+  /** True while (re)loading the Silero VAD model on first use. */
+  vadLoading: boolean;
+  /** Error message from VAD initialization (e.g. network error on first Silero download). */
+  vadError: string;
 }
 
 export const INITIAL_SPEECH_STATE: SpeechState = {
@@ -19,6 +23,8 @@ export const INITIAL_SPEECH_STATE: SpeechState = {
   partialTranscript: "",
   errorMessage: "",
   agentMode: false,
+  vadLoading: false,
+  vadError: "",
 };
 
 export interface SpeechAgentContext {

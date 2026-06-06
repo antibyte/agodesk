@@ -1,3 +1,5 @@
+import { configureSpeechAnalyser } from "./speech-visualizer-audio";
+
 const DEFAULT_OUTPUT_SAMPLE_RATE = 24_000;
 
 function parseSampleRate(mimeType: string | undefined): number {
@@ -34,12 +36,38 @@ export class SpeechAudioPlayback {
   private queue: Array<{ samples: Float32Array; rate: number }> = [];
   private nextStartTime = 0;
   private draining = false;
+  private active = false;
+  private activeSources = 0;
+  private playbackAnalyser: AnalyserNode | null = null;
+  private sources = new Set<AudioBufferSourceNode>();
+
+  /** True while AI voice audio is queued or actively playing (including the tail of the last buffer). */
+  get isActive(): boolean {
+    return this.active || this.queue.length > 0 || this.activeSources > 0;
+  }
+
+  /**
+   * Returns an AnalyserNode connected to the playback output.
+   * Useful for lip-sync, AI-voice visualizers, or future barge-in metrics based on output.
+   */
+  getPlaybackAnalyser(): AnalyserNode | null {
+    if (!this.context) return null;
+    if (!this.playbackAnalyser) {
+      this.playbackAnalyser = this.context.createAnalyser();
+      configureSpeechAnalyser(this.playbackAnalyser);
+    }
+    return this.playbackAnalyser;
+  }
 
   async enqueueBase64Pcm(base64: string, mimeType?: string): Promise<void> {
     const sourceRate = parseSampleRate(mimeType);
     const pcm = base64ToInt16(base64);
     if (pcm.length === 0) {
       return;
+    }
+
+    if (!this.active) {
+      this.active = true;
     }
 
     const floatSamples = int16ToFloat32(pcm);
@@ -51,6 +79,23 @@ export class SpeechAudioPlayback {
     this.queue = [];
     this.nextStartTime = 0;
     this.draining = false;
+    this.active = false;
+
+    for (const source of this.sources) {
+      try {
+        source.stop();
+      } catch {
+        // Already stopped or never started.
+      }
+      source.disconnect();
+    }
+    this.sources.clear();
+    this.activeSources = 0;
+
+    if (this.playbackAnalyser) {
+      this.playbackAnalyser.disconnect();
+      this.playbackAnalyser = null;
+    }
 
     if (!this.context) {
       return;
@@ -94,7 +139,24 @@ export class SpeechAudioPlayback {
 
         const source = context.createBufferSource();
         source.buffer = buffer;
-        source.connect(context.destination);
+        this.sources.add(source);
+
+        const analyser = this.playbackAnalyser;
+        if (analyser) {
+          source.connect(analyser);
+          analyser.connect(context.destination);
+        } else {
+          source.connect(context.destination);
+        }
+
+        this.activeSources += 1;
+        source.onended = () => {
+          this.sources.delete(source);
+          this.activeSources = Math.max(0, this.activeSources - 1);
+          if (this.activeSources === 0 && this.queue.length === 0) {
+            this.active = false;
+          }
+        };
 
         const startTime = Math.max(context.currentTime + 0.02, this.nextStartTime);
         source.start(startTime);
@@ -104,6 +166,9 @@ export class SpeechAudioPlayback {
       this.draining = false;
       if (this.queue.length > 0) {
         void this.drainQueue();
+      } else if (this.activeSources === 0) {
+        // No more audio queued and no sources playing → no longer actively speaking
+        this.active = false;
       }
     }
   }

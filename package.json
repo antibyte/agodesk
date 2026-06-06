@@ -10,15 +10,20 @@
     "check": "svelte-check --tsconfig ./tsconfig.json",
     "tauri": "tauri",
     "mock-server": "node scripts/mock-server.mjs",
+    "copy:vad": "node scripts/copy-vad-assets.mjs",
     "build:sidecar": "node scripts/copy-sidecar.mjs --ensure-dummy && cd src-tauri && cargo build --release --bin agodesk-worker --features computer-use-sidecar && cd .. && node scripts/copy-sidecar.mjs",
     "build:win": "npm run build && npm run build:sidecar && npm run tauri -- build --bundles nsis --features computer-use-sidecar",
     "build:win-installer": "npm run build:win",
+    "build:linux": "npm run build && npm run build:sidecar && npm run tauri -- build --bundles \"deb,appimage,rpm\" --features computer-use-sidecar",
+    "build:linux-installer": "npm run build:linux",
     "test": "node --import tsx --test src/lib/**/*.test.ts"
   },
   "dependencies": {
+    "@ricky0123/vad-web": "^0.0.7",
     "@tauri-apps/api": "^2",
     "@tauri-apps/plugin-notification": "^2.3.3",
-    "@tauri-apps/plugin-store": "^2"
+    "@tauri-apps/plugin-store": "^2",
+    "onnxruntime-web": "^1.26.0"
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^5.0.0",

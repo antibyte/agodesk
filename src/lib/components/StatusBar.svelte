@@ -2,7 +2,7 @@
   import { i18n } from "../i18n";
   import type { ConnectionStatus, SessionStatus, ThemeMode } from "../types/protocol";
   import { hasAdvertisedRemoteDesktopCapture } from "../types/protocol";
-  import { THEME_LABELS } from "../services/theme";
+  import type { MessageKey } from "../i18n/types";
   import { playUiSound } from "../services/ui-sounds";
   import WindowControls from "./WindowControls.svelte";
 
@@ -32,6 +32,7 @@
     onToggleTheme,
   }: Props = $props();
 
+  const currentThemeLabel = $derived($i18n(`theme.${theme}` as MessageKey));
 
   const sessionHint = $derived.by(() => {
     switch (sessionStatus) {
@@ -108,9 +109,9 @@
     <button
       class="ui-btn ui-btn-secondary ui-btn-icon"
       type="button"
-      title={$i18n("statusBar.theme.toggle.title", { theme: THEME_LABELS[theme] })}
+      title={$i18n("statusBar.theme.toggle.title", { theme: currentThemeLabel })}
       aria-label={$i18n("statusBar.theme.toggle.ariaLabel", {
-        theme: THEME_LABELS[theme],
+        theme: currentThemeLabel,
       })}
       onclick={() => onToggleTheme?.()}
     >

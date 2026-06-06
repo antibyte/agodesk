@@ -25,9 +25,22 @@ pub fn permission_status() -> Result<super::types::ControlPermissionStatus, Stri
     let approved = is_input_approved()?;
     Ok(super::types::ControlPermissionStatus {
         screen_capture: super::platform::screen_capture_available(),
-        input_injection: approved,
+        input_injection: super::platform::input_injection_available(),
         approved_session: approved,
         ui_automation: super::platform::ui_automation_available(),
         browser_automation: crate::computer_use::browser::browser_automation_available(),
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn permission_status_separates_capability_from_approval() {
+        let status = permission_status().expect("permission status");
+        assert!(status.screen_capture);
+        assert!(status.input_injection);
+        assert!(!status.approved_session);
+    }
 }

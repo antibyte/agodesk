@@ -18,9 +18,14 @@ import {
 
 import { speechState } from "../stores/speech";
 import { getTranslateFn } from "../i18n/store";
+import { createBargeInDetector, type BargeInDetector } from "./speech-barge-detector";
+import { createSpeechAudioSampler } from "./speech-visualizer-audio";
+import { tryCreateSileroVAD, type VoiceActivityDetector } from "./speech-vad";
+
 let liveSession: GeminiLiveSession | null = null;
 let audioCapture: SpeechAudioCapture | null = null;
 let activeConnectingSession: GeminiLiveSession | null = null;
+let bargeDetector: BargeInDetector | null = null;
 
 const MAX_PENDING_AUDIO_CHUNKS = 120;
 
@@ -34,12 +39,26 @@ export interface SpeechSessionOptions {
 
   onAssistantText?: (text: string) => void;
 
+  /** Called when client-side barge-in (user interrupting AI speech) is detected. */
+  onBargeIn?: () => void;
 }
 
 export function isSpeechSessionActive(): boolean {
 
   return liveSession !== null || activeConnectingSession !== null;
 
+}
+
+export function isAiSpeaking(): boolean {
+  return liveSession?.isAiSpeaking ?? false;
+}
+
+/**
+ * Immediately stops local AI voice playback (barge-in).
+ * Should be called by a client-side VAD detector.
+ */
+export function requestBargeInInterrupt(): void {
+  liveSession?.requestClientInterrupt();
 }
 
 export async function toggleSpeechSession(
@@ -220,6 +239,85 @@ export async function toggleSpeechSession(
 
       pendingChunks.length = 0;
 
+      // Decide VAD based on settings
+      const mode = speech.bargeInMode ?? "auto";
+      const t = getTranslateFn();
+      speechState.setVadLoading(mode !== "energy");
+      speechState.clearVadError();
+
+      let activeVAD: VoiceActivityDetector | undefined;
+
+      if (mode === "energy") {
+        // force energy only
+        activeVAD = undefined;
+        speechState.setVadLoading(false);
+      } else {
+        // auto or silero → try Silero
+        try {
+          const silero = await tryCreateSileroVAD();
+          if (silero) {
+            activeVAD = silero;
+          } else {
+            throw new Error(t("speechFlow.error.vadSileroFailed"));
+          }
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          console.warn("Silero VAD initialization failed, falling back to energy-based detection.", e);
+          speechState.setVadError(t("speechFlow.error.vadSileroFallback", { message: msg }));
+          activeVAD = undefined;
+        } finally {
+          speechState.setVadLoading(false);
+        }
+      }
+
+      if (mode === "silero" && !activeVAD) {
+        speechState.setVadError(t("speechFlow.error.vadSileroFailed"));
+      }
+
+      const playbackAnalyser = getSpeechPlaybackAnalyser();
+      let playbackSampler: ReturnType<typeof createSpeechAudioSampler> | null = null;
+      if (playbackAnalyser) {
+        playbackSampler = createSpeechAudioSampler(playbackAnalyser);
+      }
+
+      // Start client-side barge-in detector.
+      // Phase 2: uses direct low-latency path via capture VAD processors when possible.
+      bargeDetector?.stop();
+      bargeDetector = createBargeInDetector({
+        getIsAiSpeaking: () => !!liveSession?.isAiSpeaking,
+        onBargeIn: () => {
+          // Immediate local stop of AI voice
+          requestBargeInInterrupt();
+
+          // Give user immediate feedback that we heard them
+          speechState.setPartialTranscript("");
+          speechState.setStatus("listening");
+
+          // Notify the UI layer (ChatView) if they provided a handler
+          options.onBargeIn?.();
+        },
+        energyThreshold: 0.105,
+        minSpeakingSamples: 2,
+        getPlaybackEnergy: () => {
+          if (!playbackSampler) {
+            return 0;
+          }
+          try {
+            return playbackSampler().energy ?? 0;
+          } catch {
+            return 0;
+          }
+        },
+        vad: activeVAD,
+      });
+
+      // Attach direct raw-audio VAD path for low latency (preferred)
+      if (audioCapture && bargeDetector.processRawAudio) {
+        const processRawAudio = bargeDetector.processRawAudio.bind(bargeDetector);
+        audioCapture.addVadProcessor(processRawAudio);
+      }
+
+      bargeDetector.start();
     }
 
   } catch (error) {
@@ -252,6 +350,9 @@ export async function stopSpeechSession(): Promise<void> {
 
   audioCapture = null;
 
+  bargeDetector?.stop();
+  bargeDetector = null;
+
   liveSession?.disconnect();
 
   liveSession = null;
@@ -266,6 +367,11 @@ export async function stopSpeechSession(): Promise<void> {
 
 export function getSpeechAudioAnalyser(): AnalyserNode | null {
   return audioCapture?.getAnalyser() ?? null;
+}
+
+/** Returns analyser for the AI's voice output (playback). Useful for lip-sync or AI-specific metrics. */
+export function getSpeechPlaybackAnalyser(): AnalyserNode | null {
+  return liveSession?.getPlaybackAnalyser() ?? null;
 }
 
 

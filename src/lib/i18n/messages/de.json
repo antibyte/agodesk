@@ -147,6 +147,11 @@
   "settings.speech.language.label": "Sprache",
   "settings.speech.language.placeholder": "de-DE",
   "settings.speech.voiceName.label": "Gemini-Stimme",
+  "settings.speech.bargeInMode.label": "Barge-in-Modus (Unterbrechung während KI spricht)",
+  "settings.speech.bargeInMode.help": "Energy: einfache Lautstärke-Erkennung. Silero: robuste ML-Spracherkennung (besser ohne Kopfhörer, lädt Modell beim ersten Mal). Auto: bevorzugt Silero, fällt auf Energy zurück.",
+  "settings.speech.bargeInMode.auto": "Auto (empfohlen)",
+  "settings.speech.bargeInMode.silero": "Silero (robust)",
+  "settings.speech.bargeInMode.energy": "Energy (leichtgewichtig)",
   "settings.speech.apiKeyHelp": "Der API-Key wird im OS-Keyring gespeichert, nicht in den App-Einstellungen. Modell kann angepasst werden (z. B. gemini-3.1-flash-live-preview oder gemini-2.5-flash-native-audio-preview-12-2025).",
   "settings.speech.apiKey.title": "Google API-Key",
   "settings.speech.apiKey.freeKeyPrompt": "Kostenlosen API-Key hier holen:",
@@ -277,6 +282,7 @@
   "speechBanner.active.agent": "Sprach-Agent aktiv — Befehle werden über Tools an AuraGo gesendet",
   "speechBanner.active.autoSend": "Live-Sprache aktiv — Transkripte werden an AuraGo gesendet",
   "speechBanner.active.default": "Live-Sprache aktiv",
+  "speechBanner.vad.loading": "Lade Spracherkennungs-Modell (beim ersten Mal kann es etwas dauern)…",
 
   "speechControl.connecting": "Verbinde Sprache…",
   "speechControl.listening": "Spracheingabe stoppen",
@@ -339,6 +345,8 @@
   "speechFlow.error.noApiKey": "Kein Gemini API-Key hinterlegt. Bitte in den Einstellungen speichern.",
   "speechFlow.error.toolContextUnavailable": "Tool-Kontext nicht verfügbar.",
   "speechFlow.error.sessionStartFailed": "Sprachsession konnte nicht gestartet werden.",
+  "speechFlow.error.vadSileroFailed": "Silero-Spracherkennung konnte nicht geladen werden. Es wird der Energy-Modus verwendet.",
+  "speechFlow.error.vadSileroFallback": "Silero-Modell konnte nicht geladen werden: {message}. Fallback auf Energy-Modus.",
 
   "chatOutbound.error.emptyMessage": "Leere Nachricht kann nicht gesendet werden.",
 

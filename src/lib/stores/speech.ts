@@ -32,6 +32,15 @@ function createSpeechStore() {
         partialTranscript: "",
       }));
     },
+    setVadLoading(vadLoading: boolean): void {
+      update((state) => ({ ...state, vadLoading }));
+    },
+    setVadError(vadError: string): void {
+      update((state) => ({ ...state, vadError }));
+    },
+    clearVadError(): void {
+      update((state) => ({ ...state, vadError: "" }));
+    },
     reset(): void {
       set({ ...INITIAL_SPEECH_STATE });
     },

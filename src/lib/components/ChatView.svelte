@@ -46,7 +46,7 @@
     rejectPendingInputCommands,
     resetDesktopCommandState,
   } from "../services/desktop-flow";
-  import { resetDesktopSession, setInputApproval } from "../services/desktop";
+  import { controlPermissionStatus, resetDesktopSession, setInputApproval } from "../services/desktop";
   import { playUiSound } from "../services/ui-sounds";
   import { notifyIncomingMessageIfHidden } from "../services/message-notifications";
 import { handleChatResponseChunk } from "../services/chat-inbound";
@@ -435,6 +435,10 @@ import {
       remoteControlActive: $sessionState.remoteControlActive,
       remoteControlPending: $sessionState.remoteControlPending,
       canSendChat: chatAllowed,
+      desktopControlEnabled: $settings.desktopControlEnabled,
+      browserControlEnabled: $settings.browserControlEnabled,
+      getDesktopPermissionStatus: async () =>
+        (await controlPermissionStatus()) as unknown as Record<string, unknown>,
       sendToAuraGo: async (text) => {
         await sendChatMessage(
           (message) => wsService.send(message),
@@ -508,6 +512,11 @@ import {
           timestamp: new Date().toISOString(),
         });
         playUiSound("receive");
+      },
+      onBargeIn: () => {
+        // POC: give a small audible/tactile cue that the interruption was registered
+        playUiSound("receive");
+        // The core interrupt + state reset happens inside speech-flow / detector
       },
     });
   }
@@ -591,6 +600,22 @@ import {
       addSystemMessage("chatView.connectionLost", undefined, "error");
     }
     prevConnection = conn;
+  });
+
+  // Quick win: centralized Escape handling (priority: cert modal > settings panel)
+  $effect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      if (certModalOpen) {
+        e.preventDefault();
+        certModalOpen = false;
+      } else if (settingsOpen) {
+        e.preventDefault();
+        settingsOpen = false;
+      }
+    };
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
   });
 
   onMount(() => {
@@ -684,6 +709,8 @@ import {
         autoSendToAuraGo={$settings.speech.autoSendToAuraGo}
         agentMode={$settings.speech.agentMode}
         speechActive={$speechState.isActive}
+        vadLoading={$speechState.vadLoading}
+        vadError={$speechState.vadError}
       />
 
       <MessageList

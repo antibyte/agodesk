@@ -42,6 +42,10 @@ pub fn screen_capture_available() -> bool {
     true
 }
 
+pub fn input_injection_available() -> bool {
+    true
+}
+
 pub fn ui_automation_available() -> bool {
     crate::computer_use::platform::ui_automation_available()
 }

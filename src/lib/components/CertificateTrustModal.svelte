@@ -25,6 +25,9 @@
   let probeError = $state("");
   let probe = $state<CertificateProbeResult | null>(null);
 
+  let modalEl = $state<HTMLDialogElement | null>(null);
+  let firstActionBtn = $state<HTMLButtonElement | null>(null);
+
   const title = $derived.by(() => {
     switch (errorCode) {
       case "CERTIFICATE_PIN_MISMATCH":
@@ -63,6 +66,17 @@
       });
   });
 
+  // Focus management on open (quick win for a11y)
+  // Note: Escape is handled centrally in parent ChatView for priority (cert > settings)
+  $effect(() => {
+    if (open && modalEl) {
+      // small timeout to allow DOM paint
+      setTimeout(() => {
+        (firstActionBtn || modalEl)?.focus();
+      }, 10);
+    }
+  });
+
   function trust(): void {
     if (probe) {
       onTrust?.(probe);
@@ -79,7 +93,13 @@
 
 {#if open}
   <div class="backdrop" role="presentation" onclick={() => onClose?.()}></div>
-  <dialog class="modal ui-card glass-panel" open aria-labelledby="cert-title">
+  <dialog
+    bind:this={modalEl}
+    class="modal ui-card glass-panel"
+    open
+    aria-labelledby="cert-title"
+    onclick={(e) => e.stopPropagation()}
+  >
     <h2 id="cert-title">{title}</h2>
     <p class="intro">{$i18n("certModal.intro")}</p>
 
@@ -113,7 +133,7 @@
     </dl>
 
     <div class="actions">
-      <button type="button" class="ui-btn ui-btn-secondary" onclick={() => onClose?.()}>
+      <button bind:this={firstActionBtn} type="button" class="ui-btn ui-btn-secondary" onclick={() => onClose?.()}>
         {$i18n("certModal.cancel")}
       </button>
       {#if serverUrl.startsWith("wss://")}
