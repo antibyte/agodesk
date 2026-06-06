@@ -13,6 +13,7 @@ use crate::desktop::{
     permission_status as desktop_permission_status, set_input_approved, CaptureResult,
     CaptureScreenOptions, ControlPermissionStatus, DisplayInfo, InputEvent, WindowInfo,
 };
+use crate::speech::sidecar_client::dispatch_speech_op;
 use keyring::Entry;
 use serde::Serialize;
 use std::fs;
@@ -270,5 +271,72 @@ pub async fn browser_action(
 #[tauri::command]
 pub async fn browser_disconnect(state: State<'_, BrowserState>) -> Result<(), String> {
     browser::disconnect(&state).await
+}
+
+#[tauri::command]
+pub fn speech_asr_status(model: Option<String>) -> Result<serde_json::Value, String> {
+    let status = crate::speech::asr::asr_status(model.as_deref());
+    serde_json::to_value(status).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub fn speech_tts_status(voice: Option<String>) -> Result<serde_json::Value, String> {
+    let status = crate::speech::tts::tts_status(voice.as_deref());
+    serde_json::to_value(status).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn speech_download_asr_model(
+    app: tauri::AppHandle,
+    model: String,
+) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::speech::model_download::download_asr_model(&app, &model)
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
+
+#[tauri::command]
+pub fn speech_sidecar_ping() -> Result<serde_json::Value, String> {
+    dispatch_speech_op("ping", serde_json::json!({}))
+}
+
+#[tauri::command]
+pub fn speech_sidecar_transcribe(
+    pcm_base64: String,
+    sample_rate: Option<u32>,
+    language: Option<String>,
+    model: Option<String>,
+) -> Result<serde_json::Value, String> {
+    dispatch_speech_op(
+        "transcribe",
+        serde_json::json!({
+            "pcm_base64": pcm_base64,
+            "sample_rate": sample_rate.unwrap_or(16_000),
+            "language": language,
+            "model": model,
+        }),
+    )
+}
+
+#[tauri::command]
+pub fn speech_sidecar_synthesize(
+    text: String,
+    voice: String,
+    backend: String,
+    rate: Option<f32>,
+    pitch: Option<f32>,
+) -> Result<serde_json::Value, String> {
+    dispatch_speech_op(
+        "synthesize",
+        serde_json::json!({
+            "text": text,
+            "voice": voice,
+            "backend": backend,
+            "rate": rate,
+            "pitch": pitch,
+        }),
+    )
 }
 

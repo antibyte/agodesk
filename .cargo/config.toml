@@ -1,2 +1,5 @@
 [http]
 check-revoke = false
+
+# Windows speech builds: npm scripts set SHERPA_ONNX_LIB_DIR via scripts/run-with-speech-env.mjs
+# See docs/SPEECH_SIDECAR_PROTOCOL.md

@@ -155,6 +155,7 @@ Dieses Dokument beschreibt Architektur, Komponenten, Tools und das WebSocket-Pro
 | `system.ping` | Client → Server | **Aktiv** | Keepalive (alle 30s) |
 | `system.pong` | Server → Client | **Empfohlen** | Keepalive-Antwort |
 | `chat.response.chunk` | Server → Client | **Aktiv** | Streaming-Chunk |
+| `chat.plan_update` | Server → Client | **Optional** | Live-Plan-Updates (Capability `chat.plan_updates`) |
 | `session.start` | Client → Server | **Aktiv** | Pairing oder Reconnect |
 | `session.accepted` | Server → Client | **Aktiv** | Auth OK, finale Session-ID |
 | `session.clear` | Server → Client | **Aktiv** | Session-Reset: Chat leeren, neue `session_id` |
@@ -247,9 +248,55 @@ interface WsMessage<T = unknown> {
 | `request_id` | string | **Pflicht** — `id` der `chat.message` |
 | `text` | string | Vollständige Antwort (Plaintext im MVP) |
 | `role` | `"assistant"` | Immer `"assistant"` |
-| `metadata` | object? | Optional, z.B. Modell, Token-Count, Tool-Calls |
+| `metadata` | object? | Optional, z.B. Modell, Token-Count, Tool-Calls, `agent_mood`, finaler `plan` |
 
-**Client-Verhalten:** Fügt Assistant-Nachricht hinzu, aktiviert Input wieder.
+**Client-Verhalten:** Fügt Assistant-Nachricht hinzu, aktiviert Input wieder. Bei verhandelter Capability `chat.agent_metadata` wird `metadata.agent_mood` für Gemini-Live-Stilhinweise genutzt (kein UI). Bei `chat.plan_updates` kann `metadata.plan` den Plan-Store final reconcilen.
+
+---
+
+#### Server → Client: `chat.plan_update` (optional)
+
+Live-Updates eines Agent-Aufgabenplans. Der Client advertised `chat.plan_updates` in `session.start.client_capabilities`; der Server spiegelt sie in `session.accepted.advertised_capabilities`.
+
+```json
+{
+  "type": "chat.plan_update",
+  "payload": {
+    "session_id": "sess-abc123",
+    "request_id": "660e8400-e29b-41d4-a716-446655440001",
+    "plan": {
+      "id": "plan-1",
+      "title": "Recherche & Antwort",
+      "status": "active",
+      "progress_pct": 50,
+      "task_counts": { "total": 2, "pending": 0, "in_progress": 1, "completed": 1 },
+      "current_task": { "id": "t2", "title": "Antwort formulieren", "status": "in_progress" },
+      "tasks": [
+        { "id": "t1", "title": "Kontext sammeln", "status": "completed" },
+        { "id": "t2", "title": "Antwort formulieren", "status": "in_progress" }
+      ]
+    }
+  }
+}
+```
+
+`plan: null` löscht das Plan-Panel. Unbekannte Felder werden durchgereicht; der Client rendert nur Plan-relevante Felder.
+
+#### `metadata.agent_mood` (optional)
+
+Gemini-Live-Style-Hints (Capability `chat.agent_metadata`). Beispiel in `chat.response.metadata`:
+
+```json
+"agent_mood": {
+  "mood": "focused",
+  "recommended_response_style": "kurz und sachlich",
+  "valence": 0.2,
+  "arousal": 0.35,
+  "confidence": 0.85
+}
+```
+
+Wirkt nur auf die **Gemini-Live-Sprachsession** (System-Instruction), nicht auf Chat-TTS.
 
 ---
 

@@ -195,6 +195,12 @@ export function isChatResponseChunk(
   return message.type === "chat.response.chunk";
 }
 
+export function isChatPlanUpdate(
+  message: WsMessage,
+): message is WsMessage<import("../types/protocol").ChatPlanUpdatePayload> {
+  return message.type === "chat.plan_update";
+}
+
 export function isChatError(
   message: WsMessage,
 ): message is WsMessage<import("../types/protocol").ChatErrorPayload> {

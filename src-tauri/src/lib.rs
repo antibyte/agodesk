@@ -2,6 +2,7 @@ mod commands;
 pub mod computer_use;
 mod desktop;
 mod files;
+pub mod speech;
 mod tray;
 mod window_effects;
 mod ws;
@@ -18,6 +19,11 @@ pub fn run() {
         .manage(TrayState::default())
         .manage(computer_use::browser::BrowserState::default())
         .setup(|app| {
+            speech::runtime::init_sherpa_runtime();
+            speech::asr::normalize_legacy_model_layouts();
+            if let Ok(dir) = app.path().app_data_dir() {
+                speech::asr::register_models_search_root(dir.join("speech-models"));
+            }
             if let Some(window) = app.get_webview_window("main") {
                 window_effects::apply_main_window_effects(&window);
             }
@@ -67,6 +73,12 @@ pub fn run() {
             ws::transport::agodesk_connect,
             ws::transport::agodesk_send,
             ws::transport::agodesk_disconnect,
+            commands::speech_asr_status,
+            commands::speech_tts_status,
+            commands::speech_download_asr_model,
+            commands::speech_sidecar_ping,
+            commands::speech_sidecar_transcribe,
+            commands::speech_sidecar_synthesize,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

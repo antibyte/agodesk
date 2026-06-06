@@ -21,6 +21,8 @@ export type AgodeskMessageType =
   | "session.accepted"
   | "chat.message"
   | "chat.response"
+  | "chat.response.chunk"
+  | "chat.plan_update"
   | "chat.error"
   | "desktop.command"
   | "desktop.result"
@@ -30,6 +32,8 @@ export type AgodeskMessageType =
 /** Capabilities the client sends in session.start.client_capabilities. */
 export type AgodeskClientCapability =
   | "chat.full_response"
+  | "chat.agent_metadata"
+  | "chat.plan_updates"
   | "persona.assets"
   | "remote.desktop.capture"
   | "remote.desktop.permission_request"
@@ -130,3 +134,40 @@ export const RETRY_AFTER_APPROVAL_ERROR_CODES = [
   "DESKTOP_INPUT_NOT_APPROVED",
   "DESKTOP_SESSION_NOT_APPROVED",
 ] as const;
+
+export interface AgentMoodMetadata {
+  mood?: string;
+  primary_mood?: string;
+  secondary_mood?: string;
+  recommended_response_style?: string;
+  valence?: number;
+  arousal?: number;
+  confidence?: number;
+  source?: string;
+  timestamp?: string;
+  [key: string]: unknown;
+}
+
+export interface AgoDeskPlanTask {
+  id?: string;
+  title?: string;
+  status?: string;
+  [key: string]: unknown;
+}
+
+export interface AgoDeskPlan {
+  id?: string;
+  title?: string;
+  status?: string;
+  tasks?: AgoDeskPlanTask[];
+  task_counts?: Record<string, number>;
+  progress_pct?: number;
+  current_task?: AgoDeskPlanTask;
+  [key: string]: unknown;
+}
+
+export interface ChatPlanUpdatePayload {
+  session_id: string;
+  request_id?: string;
+  plan: AgoDeskPlan | null;
+}

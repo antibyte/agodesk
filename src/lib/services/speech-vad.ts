@@ -28,7 +28,7 @@ function vadAssetUrl(fileName: string): string {
   return `${vadAssetBase()}${fileName}`;
 }
 
-async function configureOnnxRuntime(ort: typeof import("onnxruntime-web")): Promise<void> {
+async function configureOnnxRuntime(ort: typeof import("onnxruntime-web/wasm")): Promise<void> {
   ort.env.wasm.wasmPaths = vadAssetBase();
   // Tauri/WebView2 is often not crossOriginIsolated — single-thread WASM is more reliable.
   ort.env.wasm.numThreads = 1;
@@ -44,10 +44,22 @@ export class EnergyVoiceActivityDetector implements VoiceActivityDetector {
   private consecutiveSpeechFrames = 0;
   private consecutiveSilenceFrames = 0;
 
-  private readonly speakOnThreshold = 0.065;
-  private readonly speakOffThreshold = 0.045;
-  private readonly minSpeechFrames = 3;
-  private readonly minSilenceFrames = 8;
+  private readonly speakOnThreshold: number;
+  private readonly speakOffThreshold: number;
+  private readonly minSpeechFrames: number;
+  private readonly minSilenceFrames: number;
+
+  constructor(options?: {
+    speakOnThreshold?: number;
+    speakOffThreshold?: number;
+    minSpeechFrames?: number;
+    minSilenceFrames?: number;
+  }) {
+    this.speakOnThreshold = options?.speakOnThreshold ?? 0.065;
+    this.speakOffThreshold = options?.speakOffThreshold ?? 0.045;
+    this.minSpeechFrames = options?.minSpeechFrames ?? 3;
+    this.minSilenceFrames = options?.minSilenceFrames ?? 8;
+  }
 
   process(samples: Float32Array): boolean {
     if (!samples || samples.length === 0) {
@@ -101,8 +113,18 @@ export function createDefaultVAD(): VoiceActivityDetector {
   return new EnergyVoiceActivityDetector();
 }
 
+/** Sensitive energy VAD for local utterance endpointing (mic → sidecar ASR). */
+export function createUtteranceVAD(): VoiceActivityDetector {
+  return new EnergyVoiceActivityDetector({
+    speakOnThreshold: 0.028,
+    speakOffThreshold: 0.018,
+    minSpeechFrames: 2,
+    minSilenceFrames: 5,
+  });
+}
+
 /**
- * Silero-based VAD via onnxruntime-web + bundled model in /public/vad.
+ * Silero-based VAD via onnxruntime-web + bundled model at /vad/ (assets/vad/).
  * Uses the non-real-time frame processor (no AudioWorklet) — suitable for Tauri/Vite.
  */
 export class SileroVoiceActivityDetector implements VoiceActivityDetector {
@@ -119,7 +141,7 @@ export class SileroVoiceActivityDetector implements VoiceActivityDetector {
     }
 
     try {
-      const ort = await import("onnxruntime-web");
+      const ort = await import("onnxruntime-web/wasm");
       await configureOnnxRuntime(ort);
 
       const modelUrl = vadAssetUrl("silero_vad.onnx");

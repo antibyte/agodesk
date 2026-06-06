@@ -1,5 +1,6 @@
 import { writable } from "svelte/store";
 import type { SpeechState, SpeechStatus } from "../types/speech";
+import type { SpeechProvider } from "../types/protocol";
 import { INITIAL_SPEECH_STATE } from "../types/speech";
 
 function createSpeechStore() {
@@ -13,12 +14,19 @@ function createSpeechStore() {
       update((state) => ({
         ...state,
         status,
-        isActive: status === "connecting" || status === "listening" || status === "processing",
+        isActive:
+          status === "connecting" ||
+          status === "listening" ||
+          status === "processing" ||
+          status === "speaking",
         errorMessage: status === "error" ? state.errorMessage : "",
       }));
     },
     setAgentMode(agentMode: boolean): void {
       update((state) => ({ ...state, agentMode }));
+    },
+    setProvider(provider: SpeechProvider): void {
+      update((state) => ({ ...state, provider }));
     },
     setPartialTranscript(partialTranscript: string): void {
       update((state) => ({ ...state, partialTranscript }));

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { fly } from "svelte/transition";
   import { i18n } from "../i18n";
+  import type { SpeechProvider } from "../types/protocol";
 
   interface Props {
     partialTranscript?: string;
@@ -10,6 +11,7 @@
     speechActive?: boolean;
     vadLoading?: boolean;
     vadError?: string;
+    speechProvider?: SpeechProvider;
   }
 
   let {
@@ -20,6 +22,7 @@
     speechActive = false,
     vadLoading = false,
     vadError = "",
+    speechProvider = "gemini_live",
   }: Props = $props();
 
   const bannerTransition = { y: 8, duration: 220 };
@@ -76,6 +79,9 @@
       {:else if autoSendToAuraGo}
         <span class="mode-chip ui-chip" data-tone="connected">{$i18n("speechBanner.mode.autoSend")}</span>
       {/if}
+      <span class="mode-chip ui-chip provider-chip" data-tone="info">
+        {$i18n(`speechBanner.provider.${speechProvider}`)}
+      </span>
     </div>
   </section>
 {:else if speechActive}
@@ -95,6 +101,9 @@
       {:else}
         <span>{$i18n("speechBanner.active.default")}</span>
       {/if}
+      <span class="mode-chip ui-chip provider-chip" data-tone="info">
+        {$i18n(`speechBanner.provider.${speechProvider}`)}
+      </span>
     </div>
   </section>
 {/if}

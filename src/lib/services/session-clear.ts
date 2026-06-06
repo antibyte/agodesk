@@ -1,6 +1,8 @@
 import { get } from "svelte/store";
 import { chatMessages } from "../stores/chat";
 import { sessionState } from "../stores/session";
+import { chatPlanState } from "../stores/chat-plan";
+import { agentMoodState } from "../stores/agent-mood";
 import {
   normalizeSessionClearPayload,
 } from "../types/protocol";
@@ -28,6 +30,8 @@ export async function applySessionClear(
   await resetDesktopSession().catch(() => {});
   resetDesktopCommandState();
   clearRemoteControlState();
+  chatPlanState.reset();
+  agentMoodState.reset();
 
   const clearChat = normalized.clear_chat !== false;
   if (clearChat) {

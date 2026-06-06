@@ -25,7 +25,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; connect-src 'self' ws: wss: http: https: ipc: http://ipc.localhost; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'"
+      "csp": "default-src 'self'; connect-src 'self' ws: wss: http: https: ipc: http://ipc.localhost; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'"
     }
   },
   "bundle": {
@@ -39,7 +39,8 @@
       "icons/icon.ico"
     ],
     "externalBin": [
-      "bin/agodesk-worker"
+      "bin/agodesk-worker",
+      "bin/agodesk-speech"
     ],
     "windows": {
       "nsis": {

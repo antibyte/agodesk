@@ -1,6 +1,68 @@
 import { configureSpeechAnalyser } from "./speech-visualizer-audio";
 
 const TARGET_SAMPLE_RATE = 16_000;
+/** Registered processor name (may contain hyphens). */
+const CAPTURE_WORKLET_NAME = "agodesk-speech-capture-processor";
+/** Valid JS class identifier for the inline worklet fallback. */
+const CAPTURE_WORKLET_CLASS = "AgodeskSpeechCaptureProcessor";
+
+const captureWorkletByContext = new WeakMap<AudioContext, Promise<void>>();
+
+function workletModuleUrl(): string {
+  const base = import.meta.env.BASE_URL ?? "/";
+  return `${base}audio-worklets/agodesk-speech-capture-processor.js`;
+}
+
+function captureWorkletSource(): string {
+  return `
+class ${CAPTURE_WORKLET_CLASS} extends AudioWorkletProcessor {
+  process(inputs) {
+    const channel = inputs[0]?.[0];
+    if (channel && channel.length > 0) {
+      this.port.postMessage(channel.slice(0));
+    }
+    return true;
+  }
+}
+registerProcessor("${CAPTURE_WORKLET_NAME}", ${CAPTURE_WORKLET_CLASS});
+`;
+}
+
+async function ensureCaptureWorklet(context: AudioContext): Promise<void> {
+  const existing = captureWorkletByContext.get(context);
+  if (existing) {
+    await existing;
+    return;
+  }
+
+  const loading = (async () => {
+    if (!("audioWorklet" in context)) {
+      throw new Error("AudioWorklet is not supported in this environment.");
+    }
+
+    const moduleUrl = workletModuleUrl();
+    try {
+      await context.audioWorklet.addModule(moduleUrl);
+    } catch (staticError) {
+      console.warn(
+        "Speech capture worklet URL failed, trying inline module fallback.",
+        staticError,
+      );
+      const blob = new Blob([captureWorkletSource()], {
+        type: "application/javascript",
+      });
+      const blobUrl = URL.createObjectURL(blob);
+      try {
+        await context.audioWorklet.addModule(blobUrl);
+      } finally {
+        URL.revokeObjectURL(blobUrl);
+      }
+    }
+  })();
+
+  captureWorkletByContext.set(context, loading);
+  await loading;
+}
 
 export type AudioChunkHandler = (base64Pcm: string) => void;
 
@@ -53,6 +115,7 @@ export class SpeechAudioCapture {
   private context: AudioContext | null = null;
   private source: MediaStreamAudioSourceNode | null = null;
   private analyser: AnalyserNode | null = null;
+  private worklet: AudioWorkletNode | null = null;
   private processor: ScriptProcessorNode | null = null;
   private silentGain: GainNode | null = null;
   private inputRate = TARGET_SAMPLE_RATE;
@@ -83,18 +146,33 @@ export class SpeechAudioCapture {
     this.source = this.context.createMediaStreamSource(this.stream);
     this.analyser = this.context.createAnalyser();
     configureSpeechAnalyser(this.analyser);
-    this.processor = this.context.createScriptProcessor(4096, 1, 1);
     this.silentGain = this.context.createGain();
     this.silentGain.gain.value = 0;
-
-    this.processor.onaudioprocess = (event) => {
-      void this.handleAudioProcess(event);
-    };
-
-    this.source.connect(this.analyser);
-    this.analyser.connect(this.processor);
-    this.processor.connect(this.silentGain);
     this.silentGain.connect(this.context.destination);
+
+    // Visualizer tap — parallel, not in the capture chain.
+    this.source.connect(this.analyser);
+
+    try {
+      await ensureCaptureWorklet(this.context);
+      this.worklet = new AudioWorkletNode(this.context, CAPTURE_WORKLET_NAME);
+      this.worklet.port.onmessage = (event: MessageEvent<Float32Array>) => {
+        void this.handleSamples(event.data);
+      };
+      this.source.connect(this.worklet);
+      this.worklet.connect(this.silentGain);
+    } catch (error) {
+      console.warn(
+        "AudioWorklet capture unavailable, using legacy ScriptProcessor fallback.",
+        error,
+      );
+      this.processor = this.context.createScriptProcessor(4096, 1, 1);
+      this.processor.onaudioprocess = (event) => {
+        void this.handleSamples(event.inputBuffer.getChannelData(0));
+      };
+      this.source.connect(this.processor);
+      this.processor.connect(this.silentGain);
+    }
   }
 
   getAnalyser(): AnalyserNode | null {
@@ -112,21 +190,16 @@ export class SpeechAudioCapture {
   }
 
   removeVadProcessor(processor: (samples: Float32Array) => void): void {
-    this.vadProcessors = this.vadProcessors.filter(p => p !== processor);
+    this.vadProcessors = this.vadProcessors.filter((entry) => entry !== processor);
   }
 
-  private async handleAudioProcess(
-    event: AudioProcessingEvent,
-  ): Promise<void> {
+  private async handleSamples(channel: Float32Array): Promise<void> {
     await this.ensureContextRunning();
 
-    const channel = event.inputBuffer.getChannelData(0);
-
-    // Feed raw samples to VAD processors (low latency for barge-in)
     for (const proc of this.vadProcessors) {
       try {
         proc(channel);
-      } catch (e) {
+      } catch {
         // don't let a bad VAD break the pipeline
       }
     }
@@ -163,10 +236,13 @@ export class SpeechAudioCapture {
     this.onChunk = null;
     this.vadProcessors = [];
 
+    this.worklet?.port.close();
+    this.worklet?.disconnect();
     this.processor?.disconnect();
     this.source?.disconnect();
     this.analyser?.disconnect();
     this.silentGain?.disconnect();
+    this.worklet = null;
     this.processor = null;
     this.source = null;
     this.analyser = null;

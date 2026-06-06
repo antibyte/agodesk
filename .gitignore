@@ -30,5 +30,8 @@ Thumbs.db
 coverage/
 .nyc_output/
 
-# TypeScript / build cache
-*.tsbuildinfo
+# Local speech models (downloaded via npm run download:speech-*)
+models/speech/
+
+# sherpa-onnx native libs (npm run download:sherpa-onnx-libs)
+vendor/sherpa-onnx/

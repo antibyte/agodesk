@@ -1,7 +1,6 @@
 /**
- * Copies Silero + ONNX Runtime WASM assets into public/vad/.
- * These files are committed in the repo — run this script only when updating
- * @ricky0123/vad-web or onnxruntime-web versions.
+ * Copies Silero + ONNX Runtime WASM assets into assets/vad/.
+ * Served at /vad/ via vite.config.ts (not public/, because Vite blocks import() from public).
  *
  * Usage:
  *   node scripts/copy-vad-assets.mjs          # overwrite all bundled assets
@@ -12,7 +11,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const outDir = path.join(root, "public", "vad");
+const outDir = path.join(root, "assets", "vad");
 const ifMissing = process.argv.includes("--if-missing");
 
 const BUNDLED_ASSETS = [
@@ -27,6 +26,14 @@ const BUNDLED_ASSETS = [
   {
     src: "node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.mjs",
     dest: "ort-wasm-simd-threaded.mjs",
+  },
+  {
+    src: "node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.jsep.wasm",
+    dest: "ort-wasm-simd-threaded.jsep.wasm",
+  },
+  {
+    src: "node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.jsep.mjs",
+    dest: "ort-wasm-simd-threaded.jsep.mjs",
   },
 ];
 
@@ -46,7 +53,6 @@ for (const { src, dest } of BUNDLED_ASSETS) {
   console.log(`vad assets: ${dest}`);
 }
 
-// Remove legacy copies from the previous “copy everything” approach.
 for (const name of fs.readdirSync(outDir)) {
   if (name === "README.md") continue;
   if (!BUNDLED_ASSETS.some((asset) => asset.dest === name)) {

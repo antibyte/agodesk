@@ -12,6 +12,15 @@ import {
   normalizePersonaAssetsPayload,
   normalizeSessionAcceptedPayload,
   normalizeSessionClearPayload,
+  normalizeChatPlanUpdatePayload,
+  normalizeChatResponsePayload,
+  normalizeChatResponseMetadata,
+  normalizeAgentMoodMetadata,
+  normalizeAgoDeskPlan,
+  hasAdvertisedAgentMetadata,
+  hasAdvertisedPlanUpdates,
+  AGODESK_AGENT_METADATA_CAPABILITY,
+  AGODESK_PLAN_UPDATES_CAPABILITY,
   requiresLocalDesktopApproval,
   requiresRemoteControlBanner,
   resolvePersonaAssetUrl,
@@ -388,4 +397,62 @@ test("resolvePersonaAssetUrl laesst data-URLs unveraendert", () => {
     resolvePersonaAssetUrl("ws://127.0.0.1:8080/api/agodesk/ws", dataUrl),
     dataUrl,
   );
+});
+
+test("agodeskClientCapabilities enthaelt Mood- und Plan-Capabilities", () => {
+  const caps = agodeskClientCapabilities(false);
+  assert.ok(caps.includes(AGODESK_AGENT_METADATA_CAPABILITY));
+  assert.ok(caps.includes(AGODESK_PLAN_UPDATES_CAPABILITY));
+  assert.ok(AGODESK_BASE_CAPABILITIES.includes(AGODESK_AGENT_METADATA_CAPABILITY));
+});
+
+test("hasAdvertisedCapability prueft verhandelte Server-Caps", () => {
+  const caps = ["chat.full_response", AGODESK_PLAN_UPDATES_CAPABILITY];
+  assert.equal(hasAdvertisedPlanUpdates(caps), true);
+  assert.equal(hasAdvertisedAgentMetadata(caps), false);
+});
+
+test("normalizeAgentMoodMetadata laesst unbekannte Felder durch", () => {
+  assert.deepEqual(
+    normalizeAgentMoodMetadata({
+      mood: "playful",
+      future_field: "ok",
+    }),
+    {
+      mood: "playful",
+      future_field: "ok",
+    },
+  );
+});
+
+test("normalizeChatPlanUpdatePayload akzeptiert plan null", () => {
+  assert.deepEqual(
+    normalizeChatPlanUpdatePayload({
+      session_id: "sess-1",
+      request_id: "req-1",
+      plan: null,
+    }),
+    {
+      session_id: "sess-1",
+      request_id: "req-1",
+      plan: null,
+    },
+  );
+});
+
+test("normalizeChatResponsePayload parst metadata.agent_mood und metadata.plan", () => {
+  const payload = normalizeChatResponsePayload({
+    session_id: "sess-1",
+    request_id: "req-1",
+    text: "Fertig",
+    metadata: {
+      agent_mood: { mood: "focused" },
+      plan: { id: "p1", title: "Plan", status: "completed" },
+      source: "aurago",
+    },
+  });
+  assert.equal(payload?.text, "Fertig");
+  assert.equal(payload?.metadata?.agent_mood?.mood, "focused");
+  assert.equal(normalizeAgoDeskPlan(payload?.metadata?.plan)?.title, "Plan");
+  assert.equal(payload?.metadata?.source, "aurago");
 });

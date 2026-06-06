@@ -9,10 +9,13 @@ import type {
 } from "../types/protocol";
 import {
   DEFAULT_FILE_ACCESS_SETTINGS,
+  DEFAULT_HYBRID_TTS_VOICE,
+  DEFAULT_OFFLINE_TTS_VOICE,
   DEFAULT_SETTINGS,
   DEFAULT_SPEECH_SETTINGS,
   DEFAULT_UI_SOUND_SETTINGS,
   UI_SOUND_THEMES,
+  normalizeSpeechProvider,
 } from "../types/protocol";
 import type { UiLocaleSetting } from "../i18n/locales";
 import { normalizeLocaleSetting } from "../i18n/locales";
@@ -72,19 +75,23 @@ function normalizeSpeechSettings(
       ? navigator.language
       : "de-DE";
 
-  return {
+  const provider = normalizeSpeechProvider(saved.provider);
+  const language =
+    typeof saved.language === "string" && saved.language.trim().length > 0
+      ? saved.language.trim()
+      : browserLanguage;
+
+  const normalized: SpeechSettings = {
     enabled:
       typeof saved.enabled === "boolean"
         ? saved.enabled
         : DEFAULT_SPEECH_SETTINGS.enabled,
+    provider,
     modelId:
       typeof saved.modelId === "string" && saved.modelId.trim().length > 0
         ? saved.modelId.trim()
         : DEFAULT_SPEECH_SETTINGS.modelId,
-    language:
-      typeof saved.language === "string" && saved.language.trim().length > 0
-        ? saved.language.trim()
-        : browserLanguage,
+    language,
     autoSendToAuraGo:
       typeof saved.autoSendToAuraGo === "boolean"
         ? saved.autoSendToAuraGo
@@ -101,11 +108,46 @@ function normalizeSpeechSettings(
       typeof saved.voiceName === "string" && saved.voiceName.trim().length > 0
         ? saved.voiceName.trim()
         : DEFAULT_SPEECH_SETTINGS.voiceName,
+    localAsrModel: (() => {
+      const model = saved.localAsrModel as string | undefined;
+      let resolved: SpeechSettings["localAsrModel"];
+      if (model === "whisper_small_de") {
+        resolved = model;
+      } else if (model === "sense_voice_int8" || model === "omnilingual_ctc_int8") {
+        resolved = "omnilingual_ctc_int8";
+      } else {
+        resolved = DEFAULT_SPEECH_SETTINGS.localAsrModel;
+      }
+
+      if (resolved === "omnilingual_ctc_int8" && language.toLowerCase().startsWith("de")) {
+        return "whisper_small_de";
+      }
+
+      return resolved;
+    })(),
+    hybridTtsBackend:
+      saved.hybridTtsBackend === "azure" || saved.hybridTtsBackend === "edge_tts"
+        ? saved.hybridTtsBackend
+        : DEFAULT_SPEECH_SETTINGS.hybridTtsBackend,
+    hybridTtsVoice:
+      typeof saved.hybridTtsVoice === "string" && saved.hybridTtsVoice.trim().length > 0
+        ? saved.hybridTtsVoice.trim()
+        : DEFAULT_HYBRID_TTS_VOICE,
+    offlineTtsVoice:
+      typeof saved.offlineTtsVoice === "string" && saved.offlineTtsVoice.trim().length > 0
+        ? saved.offlineTtsVoice.trim()
+        : DEFAULT_OFFLINE_TTS_VOICE,
     bargeInMode:
       saved.bargeInMode === "energy" || saved.bargeInMode === "silero" || saved.bargeInMode === "auto"
         ? saved.bargeInMode
         : DEFAULT_SPEECH_SETTINGS.bargeInMode,
   };
+
+  if (provider !== "gemini_live") {
+    normalized.voiceResponses = true;
+  }
+
+  return normalized;
 }
 
 function normalizeFileAccessRoot(raw: Partial<FileAccessRoot>): FileAccessRoot {

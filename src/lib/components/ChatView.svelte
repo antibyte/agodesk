@@ -7,6 +7,7 @@
   import SettingsView from "./SettingsView.svelte";
   import PairingBanner from "./PairingBanner.svelte";
   import RemoteControlBanner from "./RemoteControlBanner.svelte";
+  import ChatPlanFloatingPanel from "./ChatPlanFloatingPanel.svelte";
   import CertificateTrustModal from "./CertificateTrustModal.svelte";
   import SpeechBackgroundVisualizer from "./SpeechBackgroundVisualizer.svelte";
   import SpeechBanner from "./SpeechBanner.svelte";
@@ -24,7 +25,8 @@
   import { applyMinimizeToTraySetting } from "../services/tray";
   import { sendChatMessage } from "../services/chat-outbound";
   import { deliverSpeechTranscript } from "../services/speech-delivery";
-  import { stopSpeechSession, toggleSpeechSession } from "../services/speech-flow";
+  import { stopSpeechSession, toggleSpeechSession, speakLocalAssistantText } from "../services/speech-flow";
+  import { isDevAsrPlaceholder, parseDevAsrDurationMs } from "../services/speech-sidecar";
   import type { SpeechToolContext } from "../services/speech-tool-router";
   import {
     applyPersonaAssets,
@@ -51,9 +53,14 @@
   import { notifyIncomingMessageIfHidden } from "../services/message-notifications";
 import { handleChatResponseChunk } from "../services/chat-inbound";
 import { applySessionClear } from "../services/session-clear";
+import { handleChatPlanUpdate, reconcilePlanFromResponse } from "../services/chat-plan-inbound";
+import { handleChatResponseMood, handleChatChunkMood } from "../services/agent-mood-inbound";
+import { chatPlanState, isChatPlanPanelVisible } from "../stores/chat-plan";
+import { agentMoodState } from "../stores/agent-mood";
 import {
   WebSocketService,
   isChatError,
+  isChatPlanUpdate,
   isChatResponse,
   isChatResponseChunk,
   isDesktopCommand,
@@ -70,8 +77,12 @@ import {
   } from "../types/protocol";
   import {
     canSendChat,
+    hasAdvertisedAgentMetadata,
+    hasAdvertisedPlanUpdates,
     hasAdvertisedRemoteDesktopCapture,
     isTlsFatalError,
+    normalizeChatResponsePayload,
+    speechProviderRequiresGeminiApiKey,
 } from "../types/protocol";
 
   let pending = $state(false);
@@ -101,6 +112,11 @@ import {
   const remoteBannerVisible = $derived(
     $settings.desktopControlEnabled &&
       ($sessionState.remoteControlPending || $sessionState.remoteControlActive),
+  );
+
+  const chatPlanVisible = $derived(
+    hasAdvertisedPlanUpdates($sessionState.advertisedCapabilities) &&
+      isChatPlanPanelVisible($chatPlanState.plan),
   );
 
   const inputHint = $derived.by(() => {
@@ -168,6 +184,11 @@ import {
     void requestPersonaAssets(wsService, session.sessionId);
   }
 
+  function resetPlanAndMoodState(): void {
+    chatPlanState.reset();
+    agentMoodState.reset();
+  }
+
   async function handleIncomingMessage(message: WsMessage): Promise<void> {
     if (isSessionAccepted(message)) {
       pairingBusy = false;
@@ -196,6 +217,7 @@ import {
     if (isSystemConnected(message)) {
       pairingBusy = true;
       sessionState.reset();
+      resetPlanAndMoodState();
       clearPersonaAssets();
       try {
         await handleSystemConnected(
@@ -217,7 +239,21 @@ import {
       return;
     }
 
+    const caps = get(sessionState).advertisedCapabilities;
+
+    if (isChatPlanUpdate(message) && hasAdvertisedPlanUpdates(caps)) {
+      handleChatPlanUpdate(message.payload);
+      return;
+    }
+
     if (isChatResponseChunk(message)) {
+      if (hasAdvertisedAgentMetadata(caps)) {
+        handleChatChunkMood(
+          message.payload.session_id,
+          message.payload.request_id,
+          message.payload.metadata,
+        );
+      }
       const result = handleChatResponseChunk(
         message.payload,
         message.timestamp,
@@ -229,6 +265,7 @@ import {
         pending = false;
         playUiSound("receive");
         void notifyIncomingMessageIfHidden(result.text);
+        void speakLocalAssistantText(result.text, $settings.speech);
       } else {
         pending = true;
       }
@@ -237,9 +274,20 @@ import {
 
     if (isChatResponse(message)) {
       pending = false;
+      const normalized = normalizeChatResponsePayload(message.payload);
+      if (hasAdvertisedAgentMetadata(caps) && normalized) {
+        handleChatResponseMood(normalized);
+      }
+      if (hasAdvertisedPlanUpdates(caps) && normalized) {
+        reconcilePlanFromResponse(normalized.metadata);
+      }
+
+      const responseText = normalized?.text ?? message.payload.text;
+      const responseRequestId = normalized?.request_id ?? message.payload.request_id;
+
       const finalized = chatMessages.finalizeStreamingResponse(
-        message.payload.request_id,
-        message.payload.text,
+        responseRequestId,
+        responseText,
         message.timestamp,
         message.id,
       );
@@ -247,13 +295,14 @@ import {
         chatMessages.addMessage({
           id: message.id,
           role: "assistant",
-          text: message.payload.text,
+          text: responseText,
           timestamp: message.timestamp,
-          requestId: message.payload.request_id,
+          requestId: responseRequestId,
         });
       }
       playUiSound("receive");
-      void notifyIncomingMessageIfHidden(message.payload.text);
+      void notifyIncomingMessageIfHidden(responseText);
+      void speakLocalAssistantText(responseText, $settings.speech);
       return;
     }
 
@@ -315,6 +364,7 @@ import {
     clearRemoteControlState();
     clearPersonaAssets();
     sessionState.reset();
+    resetPlanAndMoodState();
     certModalOpen = false;
     tlsErrorCode = null;
     pending = false;
@@ -459,9 +509,21 @@ import {
   }
 
   async function handleSpeechTranscript(text: string): Promise<void> {
-    if ($settings.speech.agentMode) {
+    const localProvider = !speechProviderRequiresGeminiApiKey($settings.speech.provider);
+    if ($settings.speech.agentMode && !localProvider) {
       return;
     }
+
+    if (isDevAsrPlaceholder(text)) {
+      const durationMs = parseDevAsrDurationMs(text);
+      addSystemMessage(
+        "speechDelivery.devAsrNotice",
+        { duration: String(durationMs ?? "?") },
+        "info",
+      );
+      return;
+    }
+
     try {
       await deliverSpeechTranscript(text, {
         autoSendToAuraGo: $settings.speech.autoSendToAuraGo,
@@ -640,6 +702,12 @@ import {
     onStop={() => void handleStopRemote()}
   />
 
+  <ChatPlanFloatingPanel
+    visible={chatPlanVisible}
+    plan={$chatPlanState.plan}
+    requestId={$chatPlanState.requestId}
+  />
+
   {#if settingsOpen}
     <SettingsView
       serverUrl={$settings.serverUrl}
@@ -711,6 +779,7 @@ import {
         speechActive={$speechState.isActive}
         vadLoading={$speechState.vadLoading}
         vadError={$speechState.vadError}
+        speechProvider={$speechState.isActive ? $speechState.provider : $settings.speech.provider}
       />
 
       <MessageList

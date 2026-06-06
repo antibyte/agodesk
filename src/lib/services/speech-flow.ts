@@ -1,10 +1,9 @@
-import type { SpeechSettings } from "../types/protocol";
+import type { SpeechSettings, AgentMoodMetadata } from "../types/protocol";
+import { speechProviderRequiresGeminiApiKey } from "../types/protocol";
 
 import type { SpeechAgentContext } from "../types/speech";
 
 import { loadGeminiApiKey } from "./gemini-credentials";
-
-import { GeminiLiveSession } from "./gemini-live";
 
 import { isMicrophoneSupported, SpeechAudioCapture } from "./speech-audio";
 
@@ -17,14 +16,20 @@ import {
 } from "./speech-tool-router";
 
 import { speechState } from "../stores/speech";
+import { agentMoodState } from "../stores/agent-mood";
+import { get } from "svelte/store";
 import { getTranslateFn } from "../i18n/store";
 import { createBargeInDetector, type BargeInDetector } from "./speech-barge-detector";
 import { createSpeechAudioSampler } from "./speech-visualizer-audio";
 import { tryCreateSileroVAD, type VoiceActivityDetector } from "./speech-vad";
+import type { ActiveSpeechSession } from "./speech-session";
+import { createActiveSpeechSession } from "./speech-session-factory";
+import { LocalSpeechSession } from "./local-speech-session";
+import { registerActiveLocalSpeechSession } from "./local-speech-tts";
 
-let liveSession: GeminiLiveSession | null = null;
+let liveSession: ActiveSpeechSession | null = null;
 let audioCapture: SpeechAudioCapture | null = null;
-let activeConnectingSession: GeminiLiveSession | null = null;
+let activeConnectingSession: ActiveSpeechSession | null = null;
 let bargeDetector: BargeInDetector | null = null;
 
 const MAX_PENDING_AUDIO_CHUNKS = 120;
@@ -42,6 +47,14 @@ export interface SpeechSessionOptions {
   /** Called when client-side barge-in (user interrupting AI speech) is detected. */
   onBargeIn?: () => void;
 }
+
+export function applyAgentMoodToSpeechSession(mood: AgentMoodMetadata): void {
+  liveSession?.applyAgentMood(mood);
+  activeConnectingSession?.applyAgentMood(mood);
+}
+
+/** @deprecated Use applyAgentMoodToSpeechSession */
+export const applyAgentMoodToLiveSession = applyAgentMoodToSpeechSession;
 
 export function isSpeechSessionActive(): boolean {
 
@@ -93,21 +106,19 @@ export async function toggleSpeechSession(
 
   }
 
-  const apiKey = await loadGeminiApiKey();
-
-  if (!apiKey) {
-
-    speechState.setError(getTranslateFn()("speechFlow.error.noApiKey"));
-
-    return;
-
-  }
-
+  speechState.setProvider(speech.provider);
   speechState.setAgentMode(Boolean(speech.agentMode));
-
   speechState.setStatus("connecting");
-
   speechState.setPartialTranscript("");
+
+  let apiKey: string | undefined;
+  if (speechProviderRequiresGeminiApiKey(speech.provider)) {
+    apiKey = (await loadGeminiApiKey()) ?? undefined;
+    if (!apiKey) {
+      speechState.setError(getTranslateFn()("speechFlow.error.noApiKey"));
+      return;
+    }
+  }
 
   const agentContext =
 
@@ -117,7 +128,9 @@ export async function toggleSpeechSession(
 
       : undefined;
 
-  const session = new GeminiLiveSession(
+  const initialMood = get(agentMoodState).mood;
+
+  const session = createActiveSpeechSession(
 
     speech,
 
@@ -183,6 +196,15 @@ export async function toggleSpeechSession(
 
       onError: (message) => {
 
+        if (session instanceof LocalSpeechSession) {
+          speechState.setStatus("listening");
+          speechState.setPartialTranscript(message);
+          window.setTimeout(() => {
+            speechState.setPartialTranscript("");
+          }, 3000);
+          return;
+        }
+
         speechState.setError(message);
 
         void stopSpeechSession();
@@ -192,6 +214,8 @@ export async function toggleSpeechSession(
     },
 
     agentContext,
+
+    initialMood ?? null,
 
   );
 
@@ -203,7 +227,7 @@ export async function toggleSpeechSession(
 
     await capture.start((chunk) => {
 
-      if (liveSession) {
+      if (liveSession?.sendAudio) {
 
         liveSession.sendAudio(chunk);
 
@@ -223,7 +247,7 @@ export async function toggleSpeechSession(
 
     audioCapture = capture;
 
-    await session.connect(apiKey);
+    await session.connect(apiKey ? { apiKey } : undefined);
 
     if (activeConnectingSession === session) {
 
@@ -231,15 +255,21 @@ export async function toggleSpeechSession(
 
       activeConnectingSession = null;
 
-      for (const chunk of pendingChunks) {
+      registerActiveLocalSpeechSession(
+        session instanceof LocalSpeechSession ? session : null,
+      );
 
-        session.sendAudio(chunk);
+      if (session.sendAudio) {
+        for (const chunk of pendingChunks) {
 
+          session.sendAudio(chunk);
+
+        }
+
+        pendingChunks.length = 0;
       }
 
-      pendingChunks.length = 0;
-
-      // Decide VAD based on settings
+      // Barge-in applies to any pipeline with voice playback (Gemini + local TTS).
       const mode = speech.bargeInMode ?? "auto";
       const t = getTranslateFn();
       speechState.setVadLoading(mode !== "energy");
@@ -325,12 +355,12 @@ export async function toggleSpeechSession(
     if (activeConnectingSession === session) {
 
       capture.stop();
-
       audioCapture = null;
 
       session.disconnect();
 
       activeConnectingSession = null;
+      registerActiveLocalSpeechSession(null);
 
       speechState.setError(
         error instanceof Error
@@ -361,6 +391,8 @@ export async function stopSpeechSession(): Promise<void> {
 
   activeConnectingSession = null;
 
+  registerActiveLocalSpeechSession(null);
+
   speechState.reset();
 
 }
@@ -374,7 +406,7 @@ export function getSpeechPlaybackAnalyser(): AnalyserNode | null {
   return liveSession?.getPlaybackAnalyser() ?? null;
 }
 
-
+export { speakLocalAssistantText, shouldUseLocalSpeechTts } from "./local-speech-tts";
 
 export async function testGeminiConnection(
 
@@ -384,52 +416,33 @@ export async function testGeminiConnection(
 
 ): Promise<void> {
 
-  const session = new GeminiLiveSession(
-
-    speech,
-
-    {
-
-      onError: (message) => {
-
-        throw new Error(message);
-
-      },
-
-    },
-
-    speech.agentMode
-
-      ? {
-
-          connectionStatus: "disconnected",
-
-          sessionStatus: "idle",
-
-          remoteControlActive: false,
-
-          remoteControlPending: false,
-
-          canSendChat: false,
-
-        }
-
-      : undefined,
-
-  );
-
-
-
-  try {
-
-    await session.connect(apiKey.trim());
-
-  } finally {
-
-    session.disconnect();
-
+  if (!speechProviderRequiresGeminiApiKey(speech.provider)) {
+    throw new Error(getTranslateFn()("settings.speech.apiKey.error.testGeminiOnly"));
   }
 
+  const session = createActiveSpeechSession(
+    speech,
+    {
+      onError: (message) => {
+        throw new Error(message);
+      },
+    },
+    speech.agentMode
+      ? {
+          connectionStatus: "disconnected",
+          sessionStatus: "idle",
+          remoteControlActive: false,
+          remoteControlPending: false,
+          canSendChat: false,
+        }
+      : undefined,
+  );
+
+  try {
+    await session.connect({ apiKey: apiKey.trim() });
+  } finally {
+    session.disconnect();
+  }
 }
 
 

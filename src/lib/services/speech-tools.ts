@@ -1,7 +1,8 @@
-import type { SpeechSettings } from "../types/protocol";
+import type { SpeechSettings, AgentMoodMetadata } from "../types/protocol";
 import type { SpeechAgentContext } from "../types/speech";
 import { get } from "svelte/store";
 import { personaState } from "../stores/persona";
+import { appendAgentMoodHint } from "./speech-mood";
 
 export interface GeminiFunctionCall {
   id: string;
@@ -71,6 +72,7 @@ function resolvePersonaInstructionLead(fallback: string): string {
 export function buildTranscriptionSystemInstruction(
   speech: SpeechSettings,
   usesAudioOutput = false,
+  agentMood?: AgentMoodMetadata | null,
 ): string {
   const languageHint =
     speech.language.trim().length > 0 ? speech.language.trim() : "de-DE";
@@ -79,7 +81,8 @@ export function buildTranscriptionSystemInstruction(
     const personaLead = resolvePersonaInstructionLead(
       `Du bist ein gesprochener Sprach-Assistent in ${languageHint}.`,
     );
-    return `${personaLead} Höre dem Nutzer zu und antworte natürlich, klar und auf Deutsch (${languageHint}). Halte Antworten kurz und im Stil der Persona.`;
+    const base = `${personaLead} Höre dem Nutzer zu und antworte natürlich, klar und auf Deutsch (${languageHint}). Halte Antworten kurz und im Stil der Persona.`;
+    return appendAgentMoodHint(base, agentMood);
   }
 
   if (usesAudioOutput) {
@@ -92,6 +95,7 @@ export function buildTranscriptionSystemInstruction(
 export function buildAgentSystemInstruction(
   speech: SpeechSettings,
   context: SpeechAgentContext,
+  agentMood?: AgentMoodMetadata | null,
 ): string {
   const languageHint =
     speech.language.trim().length > 0 ? speech.language.trim() : "de-DE";
@@ -100,7 +104,7 @@ export function buildAgentSystemInstruction(
     "Du bist der Sprach-Assistent von agodesk. Der Nutzer spricht über das Mikrofon.",
   );
 
-  return `${promptBody}
+  const base = `${promptBody}
 
 AuraGo ist der Backend-Agent für Chat, Screenshots und Desktop-Steuerung. Desktop-Befehle werden ausschließlich von AuraGo ausgelöst — du leitest Anfragen per Tool weiter.
 
@@ -117,4 +121,8 @@ Regeln:
 - Zum Beenden stop_listening nutzen.
 - Bestätige Aktionen kurz auf Deutsch (${languageHint}), gesprochen und verständlich.
 - Erfinde keine Desktop-Aktionen — sende stattdessen an AuraGo.`;
+
+  return appendAgentMoodHint(base, agentMood);
 }
+
+export { appendAgentMoodHint } from "./speech-mood";

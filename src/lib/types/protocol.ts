@@ -29,6 +29,7 @@ export type MessageType =
   | "chat.message"
   | "chat.response"
   | "chat.response.chunk"
+  | "chat.plan_update"
   | "chat.error"
   | "system.ping"
   | "system.pong"
@@ -174,12 +175,60 @@ export interface ChatMessagePayload {
   source?: "user" | "speech" | "tool";
 }
 
+export interface AgentMoodMetadata {
+  mood?: string;
+  primary_mood?: string;
+  secondary_mood?: string;
+  description?: string;
+  valence?: number;
+  arousal?: number;
+  confidence?: number;
+  recommended_response_style?: string;
+  source?: string;
+  timestamp?: string;
+  [key: string]: unknown;
+}
+
+export interface AgoDeskPlanTaskCounts {
+  total?: number;
+  pending?: number;
+  in_progress?: number;
+  completed?: number;
+  [key: string]: unknown;
+}
+
+export interface AgoDeskPlanTask {
+  id?: string;
+  title?: string;
+  status?: string;
+  [key: string]: unknown;
+}
+
+export interface AgoDeskPlan {
+  id?: string;
+  title?: string;
+  status?: string;
+  tasks?: AgoDeskPlanTask[];
+  task_counts?: AgoDeskPlanTaskCounts;
+  progress_pct?: number;
+  current_task?: string;
+  [key: string]: unknown;
+}
+
+export interface ChatResponseMetadata {
+  source?: string;
+  server_push?: boolean;
+  agent_mood?: AgentMoodMetadata;
+  plan?: AgoDeskPlan | null;
+  [key: string]: unknown;
+}
+
 export interface ChatResponsePayload {
   session_id: string;
   request_id: string;
   text: string;
   role: "assistant";
-  metadata?: Record<string, unknown>;
+  metadata?: ChatResponseMetadata;
 }
 
 export interface ChatResponseChunkPayload {
@@ -187,12 +236,224 @@ export interface ChatResponseChunkPayload {
   request_id: string;
   delta: string;
   done: boolean;
+  metadata?: ChatResponseMetadata;
+}
+
+export interface ChatPlanUpdatePayload {
+  session_id: string;
+  request_id?: string;
+  plan: AgoDeskPlan | null;
 }
 
 export interface ChatErrorPayload {
   request_id?: string;
   code: string;
   message: string;
+}
+
+function readOptionalFiniteNumber(value: unknown): number | undefined {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+  return undefined;
+}
+
+export function normalizeAgentMoodMetadata(raw: unknown): AgentMoodMetadata | null {
+  if (!raw || typeof raw !== "object") {
+    return null;
+  }
+
+  const record = raw as Record<string, unknown>;
+  const mood = readString(record, "mood");
+  const primaryMood = readString(record, "primary_mood", "primaryMood");
+  const secondaryMood = readString(record, "secondary_mood", "secondaryMood");
+  const description = readString(record, "description");
+  const recommendedStyle = readString(
+    record,
+    "recommended_response_style",
+    "recommendedResponseStyle",
+  );
+  const source = readString(record, "source");
+  const timestamp = readString(record, "timestamp");
+
+  if (
+    !mood &&
+    !primaryMood &&
+    !secondaryMood &&
+    !description &&
+    !recommendedStyle &&
+    readOptionalFiniteNumber(record.valence) === undefined &&
+    readOptionalFiniteNumber(record.arousal) === undefined &&
+    readOptionalFiniteNumber(record.confidence) === undefined
+  ) {
+    return null;
+  }
+
+  return {
+    ...record,
+    ...(mood ? { mood } : {}),
+    ...(primaryMood ? { primary_mood: primaryMood } : {}),
+    ...(secondaryMood ? { secondary_mood: secondaryMood } : {}),
+    ...(description ? { description } : {}),
+    ...(recommendedStyle ? { recommended_response_style: recommendedStyle } : {}),
+    ...(source ? { source } : {}),
+    ...(timestamp ? { timestamp } : {}),
+    ...(readOptionalFiniteNumber(record.valence) !== undefined
+      ? { valence: readOptionalFiniteNumber(record.valence) }
+      : {}),
+    ...(readOptionalFiniteNumber(record.arousal) !== undefined
+      ? { arousal: readOptionalFiniteNumber(record.arousal) }
+      : {}),
+    ...(readOptionalFiniteNumber(record.confidence) !== undefined
+      ? { confidence: readOptionalFiniteNumber(record.confidence) }
+      : {}),
+  };
+}
+
+export function normalizeAgoDeskPlan(raw: unknown): AgoDeskPlan | null {
+  if (raw === null) {
+    return null;
+  }
+  if (!raw || typeof raw !== "object") {
+    return null;
+  }
+
+  const record = raw as Record<string, unknown>;
+  const title = readString(record, "title");
+  const status = readString(record, "status");
+  const id = readString(record, "id");
+  const currentTask = readString(record, "current_task", "currentTask");
+  const progressPct = readOptionalFiniteNumber(record.progress_pct ?? record.progressPct);
+
+  let tasks: AgoDeskPlanTask[] | undefined;
+  if (Array.isArray(record.tasks)) {
+    tasks = record.tasks
+      .filter((task): task is Record<string, unknown> => !!task && typeof task === "object")
+      .map((task) => ({
+        ...task,
+        ...(readString(task, "id") ? { id: readString(task, "id") } : {}),
+        ...(readString(task, "title") ? { title: readString(task, "title") } : {}),
+        ...(readString(task, "status") ? { status: readString(task, "status") } : {}),
+      }));
+  }
+
+  let taskCounts: AgoDeskPlanTaskCounts | undefined;
+  const countsRaw = record.task_counts ?? record.taskCounts;
+  if (countsRaw && typeof countsRaw === "object") {
+    const counts = countsRaw as Record<string, unknown>;
+    taskCounts = {
+      ...counts,
+      ...(readOptionalFiniteNumber(counts.total) !== undefined
+        ? { total: readOptionalFiniteNumber(counts.total) }
+        : {}),
+      ...(readOptionalFiniteNumber(counts.pending) !== undefined
+        ? { pending: readOptionalFiniteNumber(counts.pending) }
+        : {}),
+      ...(readOptionalFiniteNumber(counts.in_progress ?? counts.inProgress) !== undefined
+        ? {
+            in_progress: readOptionalFiniteNumber(counts.in_progress ?? counts.inProgress),
+          }
+        : {}),
+      ...(readOptionalFiniteNumber(counts.completed) !== undefined
+        ? { completed: readOptionalFiniteNumber(counts.completed) }
+        : {}),
+    };
+  }
+
+  return {
+    ...record,
+    ...(id ? { id } : {}),
+    ...(title ? { title } : {}),
+    ...(status ? { status } : {}),
+    ...(currentTask ? { current_task: currentTask } : {}),
+    ...(progressPct !== undefined ? { progress_pct: progressPct } : {}),
+    ...(tasks ? { tasks } : {}),
+    ...(taskCounts ? { task_counts: taskCounts } : {}),
+  };
+}
+
+export function normalizeChatResponseMetadata(raw: unknown): ChatResponseMetadata | undefined {
+  if (!raw || typeof raw !== "object") {
+    return undefined;
+  }
+
+  const record = raw as Record<string, unknown>;
+  const source = readString(record, "source");
+  const serverPushRaw = record.server_push ?? record.serverPush;
+  const agentMoodRaw = record.agent_mood ?? record.agentMood;
+  const planRaw = record.plan;
+
+  const agentMood =
+    agentMoodRaw === undefined ? undefined : normalizeAgentMoodMetadata(agentMoodRaw) ?? undefined;
+  const plan =
+    planRaw === undefined ? undefined : normalizeAgoDeskPlan(planRaw);
+
+  const metadata: ChatResponseMetadata = { ...record };
+  if (source) {
+    metadata.source = source;
+  }
+  if (typeof serverPushRaw === "boolean") {
+    metadata.server_push = serverPushRaw;
+  }
+  if (agentMood) {
+    metadata.agent_mood = agentMood;
+  }
+  if (planRaw !== undefined) {
+    metadata.plan = plan;
+  }
+
+  return metadata;
+}
+
+export function normalizeChatResponsePayload(payload: unknown): ChatResponsePayload | null {
+  if (!payload || typeof payload !== "object") {
+    return null;
+  }
+
+  const record = payload as Record<string, unknown>;
+  const sessionId = record.session_id ?? record.sessionId;
+  const requestId = record.request_id ?? record.requestId;
+  const text = record.text;
+
+  if (typeof sessionId !== "string" || typeof requestId !== "string" || typeof text !== "string") {
+    return null;
+  }
+
+  const metadata = normalizeChatResponseMetadata(record.metadata);
+
+  return {
+    session_id: sessionId,
+    request_id: requestId,
+    text,
+    role: "assistant",
+    ...(metadata ? { metadata } : {}),
+  };
+}
+
+export function normalizeChatPlanUpdatePayload(payload: unknown): ChatPlanUpdatePayload | null {
+  if (!payload || typeof payload !== "object") {
+    return null;
+  }
+
+  const record = payload as Record<string, unknown>;
+  const sessionId = record.session_id ?? record.sessionId;
+  if (typeof sessionId !== "string") {
+    return null;
+  }
+
+  const requestId = readString(record, "request_id", "requestId");
+  const planRaw = record.plan;
+  if (planRaw !== null && planRaw !== undefined && typeof planRaw !== "object") {
+    return null;
+  }
+
+  const plan = planRaw === undefined ? null : normalizeAgoDeskPlan(planRaw);
+
+  return {
+    session_id: sessionId,
+    ...(requestId ? { request_id: requestId } : {}),
+    plan,
+  };
 }
 
 export function normalizeChatResponseChunkPayload(
@@ -218,11 +479,14 @@ export function normalizeChatResponseChunkPayload(
     return null;
   }
 
+  const metadata = normalizeChatResponseMetadata(record.metadata);
+
   return {
     session_id: sessionId,
     request_id: requestId,
     delta,
     done,
+    ...(metadata ? { metadata } : {}),
   };
 }
 
@@ -876,28 +1140,74 @@ export interface UiSoundSettings {
   volume: number;
 }
 
+/** Speech pipeline backend: cloud Gemini, hybrid local ASR + online TTS, or fully offline. */
+export type SpeechProvider = "gemini_live" | "hybrid" | "offline";
+
+export const SPEECH_PROVIDERS: readonly SpeechProvider[] = [
+  "gemini_live",
+  "hybrid",
+  "offline",
+] as const;
+
+export type LocalAsrModel = "omnilingual_ctc_int8" | "whisper_small_de";
+
+export type HybridTtsBackend = "edge_tts" | "azure";
+
 export interface SpeechSettings {
   enabled: boolean;
+  /** Which speech stack to use (Google / hybrid / offline). */
+  provider: SpeechProvider;
   modelId: string;
   language: string;
   autoSendToAuraGo: boolean;
   agentMode: boolean;
   voiceResponses: boolean;
   voiceName: string;
+  /** Local ASR model for hybrid and offline modes. */
+  localAsrModel: LocalAsrModel;
+  /** Online TTS backend for hybrid mode. */
+  hybridTtsBackend: HybridTtsBackend;
+  /** Voice id for hybrid online TTS (e.g. de-DE-KatjaNeural). */
+  hybridTtsVoice: string;
+  /** Piper voice id for offline TTS (e.g. de_DE-thorsten-high). */
+  offlineTtsVoice: string;
   /** Barge-in (user interruption while AI speaks) detection mode. */
   bargeInMode: "energy" | "silero" | "auto";
 }
 
+export const DEFAULT_HYBRID_TTS_VOICE = "de-DE-KatjaNeural";
+export const DEFAULT_OFFLINE_TTS_VOICE = "de_DE-thorsten-high";
+
 export const DEFAULT_SPEECH_SETTINGS: SpeechSettings = {
   enabled: true,
+  provider: "gemini_live",
   modelId: "gemini-2.5-flash-native-audio-preview-12-2025",
   language: "de-DE",
   autoSendToAuraGo: false,
   agentMode: false,
   voiceResponses: true,
   voiceName: "Zephyr",
+  localAsrModel: "whisper_small_de",
+  hybridTtsBackend: "edge_tts",
+  hybridTtsVoice: DEFAULT_HYBRID_TTS_VOICE,
+  offlineTtsVoice: DEFAULT_OFFLINE_TTS_VOICE,
   bargeInMode: "auto",
 };
+
+export function normalizeSpeechProvider(value: unknown): SpeechProvider {
+  if (value === "hybrid" || value === "offline" || value === "gemini_live") {
+    return value;
+  }
+  return DEFAULT_SPEECH_SETTINGS.provider;
+}
+
+export function isGeminiSpeechProvider(provider: SpeechProvider): boolean {
+  return provider === "gemini_live";
+}
+
+export function speechProviderRequiresGeminiApiKey(provider: SpeechProvider): boolean {
+  return provider === "gemini_live";
+}
 
 export const DEFAULT_UI_SOUND_SETTINGS: UiSoundSettings = {
   enabled: true,
@@ -994,8 +1304,13 @@ export const AGODESK_CLIENT_VERSION = "0.1.0";
 
 export const AGODESK_BASE_CAPABILITIES = [
   "chat.full_response",
+  "chat.agent_metadata",
+  "chat.plan_updates",
   "persona.assets",
 ] as const;
+
+export const AGODESK_AGENT_METADATA_CAPABILITY = "chat.agent_metadata";
+export const AGODESK_PLAN_UPDATES_CAPABILITY = "chat.plan_updates";
 
 export const AGODESK_DESKTOP_CAPABILITIES = [
   "remote.desktop.capture",
@@ -1011,6 +1326,8 @@ export const AGODESK_BROWSER_CAPABILITY = "remote.desktop.browser";
 /** Capabilities advertised to AuraGo when desktop control is fully enabled. */
 export const AGODESK_CLIENT_CAPABILITIES = [
   "chat.full_response",
+  "chat.agent_metadata",
+  "chat.plan_updates",
   ...AGODESK_DESKTOP_CAPABILITIES,
   "persona.assets",
 ] as const;
@@ -1181,6 +1498,21 @@ export function hasAdvertisedRemoteDesktopCapture(
   return capabilities.includes("remote.desktop.capture");
 }
 
+export function hasAdvertisedCapability(
+  capabilities: readonly string[],
+  capability: string,
+): boolean {
+  return capabilities.includes(capability);
+}
+
+export function hasAdvertisedAgentMetadata(capabilities: readonly string[]): boolean {
+  return hasAdvertisedCapability(capabilities, AGODESK_AGENT_METADATA_CAPABILITY);
+}
+
+export function hasAdvertisedPlanUpdates(capabilities: readonly string[]): boolean {
+  return hasAdvertisedCapability(capabilities, AGODESK_PLAN_UPDATES_CAPABILITY);
+}
+
 export function buildFileAccessSessionPayload(
   fileAccess: FileAccessSettings,
 ): FileAccessSessionPayload | undefined {
@@ -1217,7 +1549,11 @@ export function agodeskClientCapabilities(
   fileAccess: FileAccessSettings = DEFAULT_FILE_ACCESS_SETTINGS,
   browserControlEnabled = false,
 ): string[] {
-  const caps: string[] = ["chat.full_response"];
+  const caps: string[] = [
+    "chat.full_response",
+    AGODESK_AGENT_METADATA_CAPABILITY,
+    AGODESK_PLAN_UPDATES_CAPABILITY,
+  ];
 
   if (desktopControlEnabled) {
     caps.push(...AGODESK_DESKTOP_CAPABILITIES);

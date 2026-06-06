@@ -10,13 +10,17 @@
     UiSoundSettings,
     UiSoundTheme,
   } from "../types/protocol";
-  import {
-    DEFAULT_FILE_ACCESS_SETTINGS,
-    DEFAULT_SPEECH_SETTINGS,
-    DEFAULT_UI_SOUND_SETTINGS,
-    UI_SOUND_THEMES,
-    getWsOrigin,
-  } from "../types/protocol";
+import {
+  DEFAULT_FILE_ACCESS_SETTINGS,
+  DEFAULT_SPEECH_SETTINGS,
+  DEFAULT_UI_SOUND_SETTINGS,
+  UI_SOUND_THEMES,
+  getWsOrigin,
+  SPEECH_PROVIDERS,
+  type SpeechProvider,
+  type LocalAsrModel,
+  isGeminiSpeechProvider,
+} from "../types/protocol";
   import {
     APP_LOCALES,
     LOCALE_LABELS,
@@ -33,6 +37,7 @@
     saveGeminiApiKey,
   } from "../services/gemini-credentials";
   import { testGeminiConnection } from "../services/speech-flow";
+  import { speechAsrStatus, speechTtsStatus, downloadSpeechAsrModel, listenSpeechModelDownload, type SpeechAsrStatus, type SpeechTtsStatus } from "../services/speech-sidecar";
   import { collectHostInfo, probeBrowserConnection, type HostInfo } from "../services/desktop";
   import {
     buildPathDisplay,
@@ -75,6 +80,24 @@
     "Fenrir",
     "Aoede",
   ] as const;
+
+  const HYBRID_TTS_VOICE_OPTIONS = [
+    "de-DE-KatjaNeural",
+    "de-DE-ConradNeural",
+    "de-DE-AmalaNeural",
+    "de-DE-FlorianMultilingualNeural",
+  ] as const;
+
+  const OFFLINE_TTS_VOICE_OPTIONS = [
+    "de_DE-thorsten-high",
+    "de_DE-thorsten-low",
+    "de_DE-kerstin-low",
+  ] as const;
+
+  const LOCAL_ASR_MODEL_OPTIONS: LocalAsrModel[] = [
+    "whisper_small_de",
+    "omnilingual_ctc_int8",
+  ];
 
   const THEME_MODES: ThemeMode[] = ["system", "light", "dark"];
 
@@ -200,6 +223,25 @@
     draftSpeech.enabled && draftSpeech.agentMode && !draftSpeech.autoSendToAuraGo,
   );
 
+  const isGeminiSpeechSelected = $derived(isGeminiSpeechProvider(draftSpeech.provider));
+  const isHybridSpeechSelected = $derived(draftSpeech.provider === "hybrid");
+  const isOfflineSpeechSelected = $derived(draftSpeech.provider === "offline");
+  const usesLocalAsr = $derived(isHybridSpeechSelected || isOfflineSpeechSelected);
+  const showOmnilingualGermanHint = $derived(
+    usesLocalAsr
+      && draftSpeech.localAsrModel === "omnilingual_ctc_int8"
+      && draftSpeech.language.toLowerCase().startsWith("de"),
+  );
+
+  let asrStatus: SpeechAsrStatus | null = $state(null);
+  let asrStatusLoading = $state(false);
+  let asrDownloading = $state(false);
+  let asrDownloadProgress = $state(0);
+  let asrDownloadPhase = $state<"downloading" | "extracting" | "complete" | "error" | null>(null);
+  let asrDownloadError = $state<string | null>(null);
+  let ttsStatus: SpeechTtsStatus | null = $state(null);
+  let ttsStatusLoading = $state(false);
+
   function connectionLabel(status: ConnectionStatus): string {
     return $i18n(`connection.status.${status}` as MessageKey);
   }
@@ -246,6 +288,91 @@
   $effect(() => {
     void refreshApiKeyStatus();
   });
+
+  $effect(() => {
+    if (!usesLocalAsr || !draftSpeech.enabled) {
+      asrStatus = null;
+      return;
+    }
+    void refreshAsrStatus(draftSpeech.localAsrModel);
+  });
+
+  $effect(() => {
+    if (!isOfflineSpeechSelected || !draftSpeech.enabled) {
+      ttsStatus = null;
+      return;
+    }
+    void refreshTtsStatus(draftSpeech.offlineTtsVoice);
+  });
+
+  async function refreshAsrStatus(model: LocalAsrModel): Promise<void> {
+    asrStatusLoading = true;
+    try {
+      asrStatus = await speechAsrStatus(model);
+    } catch {
+      asrStatus = null;
+    } finally {
+      asrStatusLoading = false;
+    }
+  }
+
+  async function ensureAsrModelDownload(model: LocalAsrModel): Promise<void> {
+    if (asrDownloading) return;
+
+    await refreshAsrStatus(model);
+    if (asrStatus?.ready) return;
+
+    asrDownloading = true;
+    asrDownloadProgress = 0;
+    asrDownloadPhase = "downloading";
+    asrDownloadError = null;
+
+    const unlisten = await listenSpeechModelDownload((progress) => {
+      if (progress.model_id !== model) return;
+      asrDownloadProgress = progress.progress;
+      asrDownloadPhase = progress.phase;
+      if (progress.phase === "error" && progress.message) {
+        asrDownloadError = progress.message;
+      }
+    });
+
+    try {
+      await downloadSpeechAsrModel(model);
+      await refreshAsrStatus(model);
+      if (asrStatus?.ready) {
+        asrDownloadError = null;
+        asrDownloadPhase = "complete";
+      }
+    } catch (error) {
+      await refreshAsrStatus(model);
+      if (asrStatus?.ready) {
+        asrDownloadError = null;
+        asrDownloadPhase = "complete";
+      } else {
+        asrDownloadError = error instanceof Error ? error.message : String(error);
+        asrDownloadPhase = "error";
+      }
+    } finally {
+      asrDownloading = false;
+      unlisten();
+    }
+  }
+
+  async function handleLocalAsrModelChange(model: LocalAsrModel): Promise<void> {
+    markDirty();
+    await ensureAsrModelDownload(model);
+  }
+
+  async function refreshTtsStatus(voice: string): Promise<void> {
+    ttsStatusLoading = true;
+    try {
+      ttsStatus = await speechTtsStatus(voice);
+    } catch {
+      ttsStatus = null;
+    } finally {
+      ttsStatusLoading = false;
+    }
+  }
 
   async function refreshApiKeyStatus(): Promise<void> {
     apiKeyStored = await hasGeminiApiKey();
@@ -317,6 +444,15 @@
       ...draftSpeech,
       autoSendToAuraGo: enabled,
       agentMode: enabled ? false : draftSpeech.agentMode,
+    };
+    markDirty();
+  }
+
+  function setSpeechProvider(provider: SpeechProvider): void {
+    draftSpeech = {
+      ...draftSpeech,
+      provider,
+      voiceResponses: isGeminiSpeechProvider(provider) ? draftSpeech.voiceResponses : true,
     };
     markDirty();
   }
@@ -1070,6 +1206,34 @@
                 <span>{$i18n("settings.speech.enable")}</span>
               </label>
 
+              <fieldset class="provider-fieldset" disabled={!draftSpeech.enabled}>
+                <legend>{$i18n("settings.speech.provider.legend")}</legend>
+                <div class="provider-grid">
+                  {#each SPEECH_PROVIDERS as provider (provider)}
+                    <label class="provider-card" class:selected={draftSpeech.provider === provider}>
+                      <input
+                        type="radio"
+                        name="speech-provider"
+                        value={provider}
+                        checked={draftSpeech.provider === provider}
+                        onchange={() => setSpeechProvider(provider)}
+                      />
+                      <span class="provider-title">
+                        {$i18n(`settings.speech.provider.${provider}.title` as MessageKey)}
+                      </span>
+                      <span class="provider-hint">
+                        {$i18n(`settings.speech.provider.${provider}.hint` as MessageKey)}
+                      </span>
+                    </label>
+                  {/each}
+                </div>
+              </fieldset>
+
+              {#if isHybridSpeechSelected || isOfflineSpeechSelected}
+                <p class="help warn">{$i18n("settings.speech.provider.comingSoon")}</p>
+              {/if}
+
+              {#if isGeminiSpeechSelected}
               <label class="field checkbox-field">
                 <input
                   type="checkbox"
@@ -1086,6 +1250,11 @@
                 <span>{$i18n("settings.speech.voiceResponses")}</span>
               </label>
               <p class="help">{$i18n("settings.speech.voiceResponsesHelp")}</p>
+              {/if}
+
+              {#if isHybridSpeechSelected || isOfflineSpeechSelected}
+              <p class="help">{$i18n("settings.speech.localVoiceResponsesHelp")}</p>
+              {/if}
 
               <label class="field checkbox-field">
                 <input
@@ -1116,6 +1285,7 @@
               <p class="help">{$i18n("settings.speech.agentModeHelp")}</p>
               <p class="help">{$i18n("settings.speech.manualEditHelp")}</p>
 
+              {#if isGeminiSpeechSelected}
               <label class="field">
                 <span class="field-label">{$i18n("settings.speech.modelId.label")}</span>
                 <input
@@ -1126,6 +1296,7 @@
                   disabled={!draftSpeech.enabled}
                 />
               </label>
+              {/if}
 
               <label class="field">
                 <span class="field-label">{$i18n("settings.speech.language.label")}</span>
@@ -1138,6 +1309,7 @@
                 />
               </label>
 
+              {#if isGeminiSpeechSelected}
               <label class="field">
                 <span class="field-label">{$i18n("settings.speech.voiceName.label")}</span>
                 <select
@@ -1150,6 +1322,120 @@
                   {/each}
                 </select>
               </label>
+              {/if}
+
+              {#if isHybridSpeechSelected}
+              <label class="field">
+                <span class="field-label">{$i18n("settings.speech.hybridTtsBackend.label")}</span>
+                <select
+                  bind:value={draftSpeech.hybridTtsBackend}
+                  onchange={markDirty}
+                  disabled={!draftSpeech.enabled}
+                >
+                  <option value="edge_tts">{$i18n("settings.speech.hybridTtsBackend.edgeTts")}</option>
+                  <option value="azure">{$i18n("settings.speech.hybridTtsBackend.azure")}</option>
+                </select>
+              </label>
+              <label class="field">
+                <span class="field-label">{$i18n("settings.speech.hybridTtsVoice.label")}</span>
+                <select
+                  bind:value={draftSpeech.hybridTtsVoice}
+                  onchange={markDirty}
+                  disabled={!draftSpeech.enabled}
+                >
+                  {#each HYBRID_TTS_VOICE_OPTIONS as voice (voice)}
+                    <option value={voice}>{voice}</option>
+                  {/each}
+                </select>
+              </label>
+              {/if}
+
+              {#if isOfflineSpeechSelected}
+              <label class="field">
+                <span class="field-label">{$i18n("settings.speech.offlineTtsVoice.label")}</span>
+                <select
+                  bind:value={draftSpeech.offlineTtsVoice}
+                  onchange={markDirty}
+                  disabled={!draftSpeech.enabled}
+                >
+                  {#each OFFLINE_TTS_VOICE_OPTIONS as voice (voice)}
+                    <option value={voice}>{voice}</option>
+                  {/each}
+                </select>
+              </label>
+              <p class="help" class:warn={!ttsStatus?.ready}>
+                {#if ttsStatusLoading}
+                  {$i18n("settings.speech.ttsStatus.loading")}
+                {:else if ttsStatus?.ready}
+                  {$i18n("settings.speech.ttsStatus.ready")}
+                {:else}
+                  {$i18n("settings.speech.ttsStatus.missing")} {ttsStatus?.download_hint ?? $i18n("settings.speech.ttsStatus.downloadHint")}
+                {/if}
+              </p>
+              {/if}
+
+              {#if isHybridSpeechSelected || isOfflineSpeechSelected}
+              <label class="field">
+                <span class="field-label">{$i18n("settings.speech.localAsrModel.label")}</span>
+                <select
+                  bind:value={draftSpeech.localAsrModel}
+                  onchange={(event) => void handleLocalAsrModelChange(event.currentTarget.value as LocalAsrModel)}
+                  disabled={!draftSpeech.enabled || asrDownloading}
+                >
+                  {#each LOCAL_ASR_MODEL_OPTIONS as model (model)}
+                    <option value={model}>
+                      {$i18n(`settings.speech.localAsrModel.${model}` as MessageKey)}
+                    </option>
+                  {/each}
+                </select>
+                {#if showOmnilingualGermanHint}
+                  <p class="help warn">{$i18n("settings.speech.localAsrModel.omnilingualGermanHint")}</p>
+                {/if}
+              </label>
+              {#if asrDownloading}
+                <div class="asr-download">
+                  <p class="help">
+                    {#if asrDownloadPhase === "extracting"}
+                      {$i18n("settings.speech.asrStatus.extracting")}
+                    {:else}
+                      {$i18n("settings.speech.asrStatus.downloading")}
+                    {/if}
+                  </p>
+                  <progress class="asr-progress" value={asrDownloadProgress} max="100"></progress>
+                  <span class="asr-progress-label">{Math.round(asrDownloadProgress)}%</span>
+                </div>
+              {:else if asrDownloadError}
+                <p class="help warn">
+                  {$i18n("settings.speech.asrStatus.downloadFailed")} {asrDownloadError}
+                </p>
+                <button
+                  type="button"
+                  class="ui-btn ui-btn-secondary asr-download-btn"
+                  onclick={() => void ensureAsrModelDownload(draftSpeech.localAsrModel)}
+                  disabled={!draftSpeech.enabled}
+                >
+                  {$i18n("settings.speech.asrStatus.downloadButton")}
+                </button>
+              {:else}
+              <div class="help" class:warn={!asrStatus?.ready}>
+                {#if asrStatusLoading}
+                  {$i18n("settings.speech.asrStatus.loading")}
+                {:else if asrStatus?.ready}
+                  {$i18n(`settings.speech.asrStatus.ready.${draftSpeech.localAsrModel}` as MessageKey)}
+                {:else}
+                  <p class="asr-missing-text">{$i18n("settings.speech.asrStatus.missing")}</p>
+                  <button
+                    type="button"
+                    class="ui-btn ui-btn-secondary asr-download-btn"
+                    onclick={() => void ensureAsrModelDownload(draftSpeech.localAsrModel)}
+                    disabled={!draftSpeech.enabled}
+                  >
+                    {$i18n("settings.speech.asrStatus.downloadButton")}
+                  </button>
+                {/if}
+              </div>
+              {/if}
+              {/if}
 
               <label class="field">
                 <span class="field-label">{$i18n("settings.speech.bargeInMode.label")}</span>
@@ -1166,6 +1452,7 @@
               </label>
             </section>
 
+            {#if isGeminiSpeechSelected}
             <section class="ui-card">
               <div class="card-header">
                 <h2>{$i18n("settings.speech.apiKey.title")}</h2>
@@ -1247,6 +1534,7 @@
                 </button>
               </div>
             </section>
+            {/if}
           {/if}
 
           {#if activeSection === "about"}
@@ -1525,6 +1813,31 @@
     background: color-mix(in srgb, var(--color-accent) 8%, var(--color-input-bg));
   }
 
+  .asr-download {
+    margin-top: 0.75rem;
+    display: grid;
+    gap: 0.45rem;
+  }
+
+  .asr-progress {
+    width: 100%;
+    height: 0.45rem;
+    accent-color: var(--color-accent);
+  }
+
+  .asr-progress-label {
+    font-size: 0.75rem;
+    color: var(--color-muted);
+  }
+
+  .asr-download-btn {
+    margin-top: 0.65rem;
+  }
+
+  .asr-missing-text {
+    margin: 0;
+  }
+
   .preset-grid,
   .theme-grid,
   .locale-grid,
@@ -1547,10 +1860,46 @@
     grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr));
   }
 
+  .provider-fieldset {
+    border: none;
+    margin: var(--space-3) 0 0;
+    padding: 0;
+  }
+
+  .provider-fieldset legend {
+    font-size: 0.8125rem;
+    font-weight: 600;
+    margin-bottom: var(--space-2);
+  }
+
+  .provider-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+    gap: var(--space-2);
+  }
+
+  .provider-card input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .provider-title {
+    font-weight: 600;
+    font-size: 0.875rem;
+  }
+
+  .provider-hint {
+    font-size: 0.75rem;
+    color: var(--color-muted);
+    line-height: 1.4;
+  }
+
   .preset-card,
   .theme-card,
   .locale-card,
-  .sound-theme-card {
+  .sound-theme-card,
+  .provider-card {
     display: grid;
     gap: 0.25rem;
     text-align: left;
@@ -1569,7 +1918,8 @@
   .preset-card.selected,
   .theme-card.selected,
   .locale-card.selected,
-  .sound-theme-card.selected {
+  .sound-theme-card.selected,
+  .provider-card.selected {
     border-color: color-mix(in srgb, var(--color-accent) 45%, var(--glass-border));
     background: color-mix(in srgb, var(--color-accent) 10%, var(--color-input-bg));
     box-shadow: var(--accent-glow);

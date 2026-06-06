@@ -1,4 +1,4 @@
-import type { SpeechSettings } from "../types/protocol";
+import type { SpeechSettings, AgentMoodMetadata } from "../types/protocol";
 import { SpeechAudioPlayback } from "./speech-audio-playback";
 import {
   buildAgentSystemInstruction,
@@ -399,6 +399,7 @@ function buildInputAudioTranscription(): Record<string, unknown> {
 export function buildGeminiSetupMessage(
   speech: SpeechSettings,
   agentContext?: SpeechAgentContext,
+  agentMood?: AgentMoodMetadata | null,
 ): Record<string, unknown> {
   const agentMode = speech.agentMode && !!agentContext;
   const normalizedModel = normalizeModelId(speech.modelId);
@@ -416,8 +417,8 @@ export function buildGeminiSetupMessage(
         parts: [
           {
             text: agentMode
-              ? buildAgentSystemInstruction(speech, agentContext)
-              : buildTranscriptionSystemInstruction(speech, usesAudioOutput),
+              ? buildAgentSystemInstruction(speech, agentContext, agentMood)
+              : buildTranscriptionSystemInstruction(speech, usesAudioOutput, agentMood),
           },
         ],
       },
@@ -552,15 +553,22 @@ export class GeminiLiveSession {
   private inputTranscripts = new InputTranscriptAccumulator();
   private turnFinalizeTimer: ReturnType<typeof window.setTimeout> | null = null;
   private audioPlayback: SpeechAudioPlayback | null = null;
+  private agentMood: AgentMoodMetadata | null = null;
 
   constructor(
     speech: SpeechSettings,
     callbacks: GeminiLiveCallbacks,
     agentContext?: SpeechAgentContext,
+    agentMood?: AgentMoodMetadata | null,
   ) {
     this.speech = speech;
     this.callbacks = callbacks;
     this.agentContext = agentContext;
+    this.agentMood = agentMood ?? null;
+  }
+
+  applyAgentMood(mood: AgentMoodMetadata | null): void {
+    this.agentMood = mood;
   }
 
   /** Returns true while the AI is currently playing voice audio (for barge-in detection). */
@@ -582,13 +590,17 @@ export class GeminiLiveSession {
     return this.audioPlayback?.getPlaybackAnalyser() ?? null;
   }
 
-  async connect(apiKey: string): Promise<void> {
+  async connect(options?: { apiKey?: string }): Promise<void> {
+    const apiKey = options?.apiKey?.trim();
+    if (!apiKey) {
+      throw new Error("Gemini API-Key fehlt.");
+    }
     const normalizedModel = normalizeModelId(this.speech.modelId);
     const errors: string[] = [];
 
     for (const apiVersion of resolveLiveApiVersions(normalizedModel)) {
       try {
-        await this.connectOnce(apiKey, apiVersion);
+        await this.connectOnce(apiKey, apiVersion, false);
         return;
       } catch (error) {
         const message =
@@ -597,6 +609,20 @@ export class GeminiLiveSession {
             : "Gemini Live Verbindung fehlgeschlagen.";
         errors.push(`[${apiVersion}] ${message}`);
         this.cleanupConnection();
+
+        if (this.agentMood) {
+          try {
+            await this.connectOnce(apiKey, apiVersion, true);
+            return;
+          } catch (retryError) {
+            const retryMessage =
+              retryError instanceof Error
+                ? retryError.message
+                : "Gemini Live Verbindung fehlgeschlagen.";
+            errors.push(`[${apiVersion}, ohne Mood-Hint] ${retryMessage}`);
+            this.cleanupConnection();
+          }
+        }
       }
     }
 
@@ -638,6 +664,7 @@ export class GeminiLiveSession {
   private async connectOnce(
     apiKey: string,
     apiVersion: "v1beta" | "v1alpha",
+    skipAgentMood = false,
   ): Promise<void> {
     if (this.ws) {
       return;
@@ -738,7 +765,11 @@ export class GeminiLiveSession {
         window.clearTimeout(timeout);
         ws.send(
           JSON.stringify(
-            buildGeminiSetupMessage(this.speech, this.agentContext),
+            buildGeminiSetupMessage(
+              this.speech,
+              this.agentContext,
+              skipAgentMood ? null : this.agentMood,
+            ),
           ),
         );
         resolve();

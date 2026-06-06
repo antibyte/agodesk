@@ -1,8 +1,12 @@
+import type { SpeechProvider } from "./protocol";
+import { DEFAULT_SPEECH_SETTINGS } from "./protocol";
+
 export type SpeechStatus =
   | "idle"
   | "connecting"
   | "listening"
   | "processing"
+  | "speaking"
   | "error";
 
 export interface SpeechState {
@@ -11,6 +15,7 @@ export interface SpeechState {
   partialTranscript: string;
   errorMessage: string;
   agentMode: boolean;
+  provider: SpeechProvider;
   /** True while (re)loading the Silero VAD model on first use. */
   vadLoading: boolean;
   /** Error message from VAD initialization (e.g. network error on first Silero download). */
@@ -23,6 +28,7 @@ export const INITIAL_SPEECH_STATE: SpeechState = {
   partialTranscript: "",
   errorMessage: "",
   agentMode: false,
+  provider: DEFAULT_SPEECH_SETTINGS.provider,
   vadLoading: false,
   vadError: "",
 };

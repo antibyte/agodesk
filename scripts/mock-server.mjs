@@ -17,6 +17,8 @@ const socketSessions = new WeakMap();
 
 const DEFAULT_ADVERTISED_CAPABILITIES = [
   "chat.full_response",
+  "chat.agent_metadata",
+  "chat.plan_updates",
   "remote.desktop.capture",
   "remote.desktop.stream",
   "remote.desktop.permission_request",
@@ -72,6 +74,8 @@ wss.on("connection", (socket, request) => {
         "remote.desktop.discovery",
         "remote.desktop.ui_automation",
         "chat.full_response",
+        "chat.agent_metadata",
+        "chat.plan_updates",
         "persona.assets",
       ],
     },
@@ -656,6 +660,25 @@ function handleChatMessage(message, session, send) {
     return;
   }
 
+  if (text.trim().toLowerCase() === "/plan") {
+    sendMockPlanFlow(send, session, requestId, mockReply(text));
+    return;
+  }
+
+  if (text.trim().toLowerCase() === "/plan-clear") {
+    send({
+      id: randomUUID(),
+      type: "chat.plan_update",
+      timestamp: new Date().toISOString(),
+      payload: {
+        session_id: session.sessionId,
+        request_id: requestId,
+        plan: null,
+      },
+    });
+    return;
+  }
+
   setTimeout(() => {
     send({
       id: randomUUID(),
@@ -666,10 +689,108 @@ function handleChatMessage(message, session, send) {
         request_id: requestId,
         text: mockReply(text),
         role: "assistant",
-        metadata: { model: "mock-agent" },
+        metadata: {
+          model: "mock-agent",
+          agent_mood: buildMockAgentMood("curious"),
+        },
       },
     });
   }, 600);
+}
+
+function buildMockAgentMood(mood = "focused") {
+  return {
+    mood,
+    primary_mood: mood,
+    recommended_response_style: "kurz und sachlich",
+    valence: 0.2,
+    arousal: 0.35,
+    confidence: 0.85,
+    source: "mock-agent",
+  };
+}
+
+function buildMockPlan(phase = 1) {
+  const tasks = [
+    {
+      id: "t1",
+      title: "Kontext sammeln",
+      status: phase >= 2 ? "completed" : "in_progress",
+    },
+    {
+      id: "t2",
+      title: "Antwort formulieren",
+      status: phase >= 3 ? "completed" : phase >= 2 ? "in_progress" : "pending",
+    },
+    {
+      id: "t3",
+      title: "Ergebnis prüfen",
+      status: phase >= 3 ? "completed" : "pending",
+    },
+  ];
+  const completed = tasks.filter((task) => task.status === "completed").length;
+  const inProgress = tasks.filter((task) => task.status === "in_progress").length;
+  const pending = tasks.filter((task) => task.status === "pending").length;
+
+  return {
+    id: "plan-mock-1",
+    title: "Mock-Aufgabenplan",
+    status: phase >= 3 ? "completed" : "active",
+    progress_pct: Math.round((completed / tasks.length) * 100),
+    task_counts: {
+      total: tasks.length,
+      pending,
+      in_progress: inProgress,
+      completed,
+    },
+    current_task: tasks.find((task) => task.status === "in_progress") ?? tasks[0],
+    tasks,
+  };
+}
+
+function sendMockPlanFlow(send, session, requestId, replyText) {
+  send({
+    id: randomUUID(),
+    type: "chat.plan_update",
+    timestamp: new Date().toISOString(),
+    payload: {
+      session_id: session.sessionId,
+      request_id: requestId,
+      plan: buildMockPlan(1),
+    },
+  });
+
+  setTimeout(() => {
+    send({
+      id: randomUUID(),
+      type: "chat.plan_update",
+      timestamp: new Date().toISOString(),
+      payload: {
+        session_id: session.sessionId,
+        request_id: requestId,
+        plan: buildMockPlan(2),
+      },
+    });
+  }, 350);
+
+  setTimeout(() => {
+    send({
+      id: randomUUID(),
+      type: "chat.response",
+      timestamp: new Date().toISOString(),
+      payload: {
+        session_id: session.sessionId,
+        request_id: requestId,
+        text: replyText,
+        role: "assistant",
+        metadata: {
+          model: "mock-agent",
+          agent_mood: buildMockAgentMood("focused"),
+          plan: buildMockPlan(3),
+        },
+      },
+    });
+  }, 900);
 }
 
 function mockReply(text) {
