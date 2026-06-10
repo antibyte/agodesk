@@ -1,4 +1,5 @@
 import { formatInvokeError } from "./errors";
+import { getPinnedFingerprint } from "./tls";
 
 interface FetchedAsset {
   dataUrl: string;
@@ -26,10 +27,12 @@ export async function fetchPersonaAssetDisplayUrl(
   }
 
   try {
+    const pinnedFingerprint = await getPinnedFingerprint(serverUrl).catch(() => null);
     const { invoke } = await import("@tauri-apps/api/core");
     const result = await invoke<FetchedAsset>("fetch_server_asset", {
       serverUrl,
       assetUrl: fetchUrl,
+      ...(pinnedFingerprint ? { pinnedFingerprint } : {}),
     });
     return result.dataUrl;
   } catch (error) {
@@ -39,6 +42,6 @@ export async function fetchPersonaAssetDisplayUrl(
         fetchUrl,
       );
     }
-    return fetchUrl;
+    return "";
   }
 }

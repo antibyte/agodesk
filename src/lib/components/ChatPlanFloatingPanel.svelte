@@ -162,11 +162,12 @@
 
 <style>
   .plan-panel {
-    position: fixed;
+    position: absolute;
+    top: calc(100% + var(--space-3));
     right: var(--space-4);
-    bottom: calc(var(--space-4) + env(safe-area-inset-bottom, 0px));
-    width: min(22rem, calc(100vw - var(--space-8)));
-    z-index: 25;
+    z-index: 10;
+    width: max-content;
+    max-width: min(22rem, calc(100vw - var(--space-8)));
     border-radius: var(--radius-lg);
     padding: var(--space-3) var(--space-4);
     box-shadow: var(--shadow-md);

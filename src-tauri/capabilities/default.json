@@ -13,13 +13,20 @@
     "core:window:allow-hide",
     "core:window:allow-unminimize",
     "core:window:allow-set-skip-taskbar",
+    "core:window:allow-show",
+    "core:window:allow-set-focus",
+    "core:window:allow-maximize",
+    "core:window:allow-is-visible",
+    "core:window:allow-is-minimized",
+    "global-shortcut:default",
     "core:window:allow-set-shadow",
     {
       "identifier": "core:event:allow-listen",
       "allow": [
         "agodesk:connection-state",
         "agodesk:message",
-        "agodesk:error"
+        "agodesk:error",
+        "integration-embed-closed"
       ]
     }
   ]

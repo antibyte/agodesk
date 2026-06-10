@@ -153,9 +153,10 @@ export async function handleSessionAccepted(
   }
 
   sessionState.setAcceptedSession(normalized.session_id, normalized.device_id);
-  sessionState.setAdvertisedCapabilities(
-    normalized.advertised_capabilities ?? normalized.capabilities ?? [],
-  );
+  const advertised = normalized.advertised_capabilities?.length
+    ? normalized.advertised_capabilities
+    : (normalized.capabilities ?? []);
+  sessionState.setAdvertisedCapabilities(advertised);
   sessionState.setStatus("accepted");
 }
 

@@ -31,6 +31,21 @@ export type MessageType =
   | "chat.response.chunk"
   | "chat.plan_update"
   | "chat.error"
+  | "chat.sessions.list"
+  | "chat.sessions"
+  | "chat.session.create"
+  | "chat.session.load"
+  | "chat.session"
+  | "chat.cancel"
+  | "chat.cancelled"
+  | "chat.audio"
+  | "chat.media"
+  | "chat.voice_output.status"
+  | "integrations.webhosts.list"
+  | "integrations.webhosts"
+  | "system.warnings.list"
+  | "system.warnings"
+  | "system.warning.acknowledge"
   | "system.ping"
   | "system.pong"
   | "system.connected"
@@ -170,10 +185,181 @@ export function normalizeSessionAcceptedPayload(
 
 export interface ChatMessagePayload {
   session_id: string;
+  /** Shared AuraGo chat session id (sess-*). Omitted on legacy servers. */
+  conversation_id?: string;
   text: string;
   role: "user";
   source?: "user" | "speech" | "tool";
+  /** Request AuraGo TTS when chat.voice_output is negotiated. */
+  voice_output?: boolean;
 }
+
+export interface ChatSessionSummary {
+  id: string;
+  preview: string;
+  created_at: string;
+  last_active_at: string;
+  message_count: number;
+}
+
+export interface ChatSessionsListPayload {
+  session_id: string;
+  limit?: number;
+}
+
+export interface ChatSessionsPayload {
+  session_id: string;
+  sessions: ChatSessionSummary[];
+}
+
+export interface ChatSessionCreatePayload {
+  session_id: string;
+}
+
+export interface ChatSessionLoadPayload {
+  session_id: string;
+  conversation_id: string;
+}
+
+export interface LoadedConversationMessage {
+  role: ChatRole;
+  content: string;
+  timestamp?: string;
+}
+
+export interface ChatSessionPayload {
+  session_id: string;
+  conversation_id: string;
+  session: ChatSessionSummary;
+  messages?: LoadedConversationMessage[];
+}
+
+export interface ChatCancelPayload {
+  session_id: string;
+  conversation_id: string;
+  request_id: string;
+}
+
+export interface ChatCancelledPayload {
+  session_id: string;
+  conversation_id: string;
+  request_id: string;
+  status: "cancelled" | "not_active" | string;
+}
+
+export interface ChatAudioPayload {
+  session_id: string;
+  conversation_id: string;
+  request_id: string;
+  path: string;
+  title?: string;
+  mime_type?: string;
+  filename?: string;
+}
+
+export type ChatMediaKind =
+  | "image"
+  | "audio"
+  | "document"
+  | "video"
+  | "live_stream"
+  | "youtube_video"
+  | "stl"
+  | "link"
+  | string;
+
+export interface ChatMediaItem {
+  id: string;
+  conversation_id: string;
+  request_id?: string;
+  kind: ChatMediaKind;
+  path?: string;
+  preview_url?: string;
+  url?: string;
+  embed_url?: string;
+  title?: string;
+  caption?: string;
+  filename?: string;
+  description?: string;
+  mime_type?: string;
+  timestamp?: string;
+}
+
+export interface ChatMediaPayload {
+  session_id: string;
+  conversation_id: string;
+  request_id?: string;
+  item: ChatMediaItem;
+}
+
+export type WebhostIntegrationStatus = "running" | "starting" | "stopped" | string;
+
+export interface WebhostIntegration {
+  id: string;
+  name: string;
+  description?: string;
+  status: WebhostIntegrationStatus;
+  url: string;
+  icon?: string;
+}
+
+export interface IntegrationsWebhostsPayload {
+  session_id: string;
+  webhosts: WebhostIntegration[];
+}
+
+export interface IntegrationsWebhostsListPayload {
+  session_id: string;
+}
+
+export type SystemWarningSeverity = "info" | "warning" | "error" | string;
+
+export interface SystemWarning {
+  id: string;
+  severity: SystemWarningSeverity;
+  title: string;
+  description?: string;
+  category?: string;
+  timestamp?: string;
+  acknowledged: boolean;
+}
+
+export interface SystemWarningsPayload {
+  session_id: string;
+  warnings: SystemWarning[];
+  total: number;
+  unacknowledged: number;
+}
+
+export interface SystemWarningsListPayload {
+  session_id: string;
+}
+
+export interface SystemWarningAcknowledgePayload {
+  session_id: string;
+  id?: string;
+  all?: boolean;
+}
+
+export type ChatVoiceOutputProtocolMode = "on" | "off";
+
+export type ChatVoiceOutputStatusReason =
+  | "user_disabled"
+  | "user_enabled"
+  | "settings_changed"
+  | "session_sync";
+
+export interface ChatVoiceOutputStatusPayload {
+  session_id: string;
+  conversation_id?: string;
+  speaker_mode: boolean;
+  mode: ChatVoiceOutputProtocolMode;
+  reason?: ChatVoiceOutputStatusReason | string;
+  /** Present on server acknowledgements. */
+  status?: "ok" | string;
+}
+
+export type ChatTtsMode = "auto" | "aurago" | "frontend" | "off";
 
 export interface AgentMoodMetadata {
   mood?: string;
@@ -225,6 +411,7 @@ export interface ChatResponseMetadata {
 
 export interface ChatResponsePayload {
   session_id: string;
+  conversation_id?: string;
   request_id: string;
   text: string;
   role: "assistant";
@@ -233,6 +420,7 @@ export interface ChatResponsePayload {
 
 export interface ChatResponseChunkPayload {
   session_id: string;
+  conversation_id?: string;
   request_id: string;
   delta: string;
   done: boolean;
@@ -241,6 +429,7 @@ export interface ChatResponseChunkPayload {
 
 export interface ChatPlanUpdatePayload {
   session_id: string;
+  conversation_id?: string;
   request_id?: string;
   plan: AgoDeskPlan | null;
 }
@@ -420,12 +609,14 @@ export function normalizeChatResponsePayload(payload: unknown): ChatResponsePayl
   }
 
   const metadata = normalizeChatResponseMetadata(record.metadata);
+  const conversationId = readString(record, "conversation_id", "conversationId");
 
   return {
     session_id: sessionId,
     request_id: requestId,
     text,
     role: "assistant",
+    ...(conversationId ? { conversation_id: conversationId } : {}),
     ...(metadata ? { metadata } : {}),
   };
 }
@@ -448,9 +639,11 @@ export function normalizeChatPlanUpdatePayload(payload: unknown): ChatPlanUpdate
   }
 
   const plan = planRaw === undefined ? null : normalizeAgoDeskPlan(planRaw);
+  const conversationId = readString(record, "conversation_id", "conversationId");
 
   return {
     session_id: sessionId,
+    ...(conversationId ? { conversation_id: conversationId } : {}),
     ...(requestId ? { request_id: requestId } : {}),
     plan,
   };
@@ -480,13 +673,505 @@ export function normalizeChatResponseChunkPayload(
   }
 
   const metadata = normalizeChatResponseMetadata(record.metadata);
+  const conversationId = readString(record, "conversation_id", "conversationId");
 
   return {
     session_id: sessionId,
     request_id: requestId,
     delta,
     done,
+    ...(conversationId ? { conversation_id: conversationId } : {}),
     ...(metadata ? { metadata } : {}),
+  };
+}
+
+function isTransportSessionId(value: string): boolean {
+  return value.startsWith("agodesk:");
+}
+
+/** Any non-transport session id (incl. UUIDs without sess- prefix). */
+function looksLikeConversationId(value: string): boolean {
+  return value.length > 0 && !isTransportSessionId(value);
+}
+
+/** Unwrap AuraGo ok/data/result envelopes for session payloads. */
+export function unwrapNestedWsPayload(payload: unknown): unknown {
+  if (!payload || typeof payload !== "object") {
+    return payload;
+  }
+  const record = payload as Record<string, unknown>;
+  for (const key of ["data", "result"]) {
+    const nested = record[key];
+    if (nested && typeof nested === "object" && !Array.isArray(nested)) {
+      return unwrapNestedWsPayload(nested);
+    }
+  }
+  return payload;
+}
+
+function normalizeChatSessionSummary(raw: unknown): ChatSessionSummary | null {
+  if (!raw || typeof raw !== "object") {
+    return null;
+  }
+  const record = raw as Record<string, unknown>;
+  let id =
+    readString(record, "id", "conversation_id", "conversationId", "chat_session_id", "chatSessionId") ??
+    undefined;
+  if (!id) {
+    const sessionIdCandidate = readString(record, "session_id", "sessionId");
+    if (sessionIdCandidate && !isTransportSessionId(sessionIdCandidate)) {
+      id = sessionIdCandidate;
+    }
+  }
+  const preview = readString(record, "preview") ?? "";
+  const createdAt = readString(record, "created_at", "createdAt") ?? "";
+  const lastActiveAt = readString(record, "last_active_at", "lastActiveAt") ?? "";
+  const messageCount =
+    typeof record.message_count === "number"
+      ? record.message_count
+      : typeof record.messageCount === "number"
+        ? record.messageCount
+        : 0;
+  if (!id) {
+    return null;
+  }
+  return {
+    id,
+    preview,
+    created_at: createdAt,
+    last_active_at: lastActiveAt,
+    message_count: messageCount,
+  };
+}
+
+/** Sessions with no messages are hidden from history but may still be active. */
+export function isVisibleChatSession(session: ChatSessionSummary): boolean {
+  return session.message_count > 0;
+}
+
+export function filterVisibleChatSessions(
+  sessions: ChatSessionSummary[],
+): ChatSessionSummary[] {
+  return sessions.filter(isVisibleChatSession);
+}
+
+export function normalizeChatSessionsPayload(payload: unknown): ChatSessionsPayload | null {
+  const unwrapped = unwrapNestedWsPayload(payload);
+  if (!unwrapped || typeof unwrapped !== "object") {
+    return null;
+  }
+  const record = unwrapped as Record<string, unknown>;
+  const sessionId = readString(record, "session_id", "sessionId") ?? "";
+  const sessionsRaw = record.sessions ?? record.items ?? record.conversations;
+  const sessions = Array.isArray(sessionsRaw)
+    ? sessionsRaw
+        .map((entry) => normalizeChatSessionSummary(entry))
+        .filter((entry): entry is ChatSessionSummary => entry !== null)
+    : [];
+  return { session_id: sessionId, sessions };
+}
+
+export function extractConversationIdFromPayload(payload: unknown): string | null {
+  const unwrapped = unwrapNestedWsPayload(payload);
+  if (!unwrapped || typeof unwrapped !== "object") {
+    return null;
+  }
+  const record = unwrapped as Record<string, unknown>;
+  let conversationId = readString(
+    record,
+    "conversation_id",
+    "conversationId",
+    "chat_session_id",
+    "chatSessionId",
+    "id",
+  );
+  const sessionIdField = readString(record, "session_id", "sessionId");
+  if (!conversationId && sessionIdField && looksLikeConversationId(sessionIdField)) {
+    conversationId = sessionIdField;
+  }
+  const nestedSession = normalizeChatSessionSummary(record.session);
+  if (!conversationId && nestedSession?.id) {
+    conversationId = nestedSession.id;
+  }
+  return conversationId ?? null;
+}
+
+export function normalizeLoadedConversationMessage(
+  raw: unknown,
+): LoadedConversationMessage | null {
+  if (!raw || typeof raw !== "object") {
+    return null;
+  }
+  const record = raw as Record<string, unknown>;
+  const roleRaw = readString(record, "role");
+  const content = readString(record, "content") ?? readString(record, "text");
+  if (!roleRaw || !content) {
+    return null;
+  }
+  if (roleRaw !== "user" && roleRaw !== "assistant" && roleRaw !== "system") {
+    return null;
+  }
+  const timestamp = readString(record, "timestamp");
+  return {
+    role: roleRaw,
+    content,
+    ...(timestamp ? { timestamp } : {}),
+  };
+}
+
+export function normalizeChatSessionPayload(payload: unknown): ChatSessionPayload | null {
+  const unwrapped = unwrapNestedWsPayload(payload);
+  if (!unwrapped || typeof unwrapped !== "object") {
+    return null;
+  }
+  const record = unwrapped as Record<string, unknown>;
+  let transportSessionId = readString(record, "session_id", "sessionId");
+  let conversationId = readString(
+    record,
+    "conversation_id",
+    "conversationId",
+    "chat_session_id",
+    "chatSessionId",
+    "id",
+  );
+
+  if (
+    !conversationId &&
+    transportSessionId &&
+    looksLikeConversationId(transportSessionId)
+  ) {
+    conversationId = transportSessionId;
+    transportSessionId = undefined;
+  }
+
+  const messagesRaw = record.messages;
+  const messages = Array.isArray(messagesRaw)
+    ? messagesRaw
+        .map((entry) => normalizeLoadedConversationMessage(entry))
+        .filter((entry): entry is LoadedConversationMessage => entry !== null)
+    : undefined;
+
+  let session = normalizeChatSessionSummary(record.session);
+  if (!conversationId && session?.id) {
+    conversationId = session.id;
+  }
+  if (!conversationId) {
+    conversationId = extractConversationIdFromPayload(record) ?? undefined;
+  }
+  if (!conversationId) {
+    return null;
+  }
+
+  if (!session) {
+    session = {
+      id: conversationId,
+      preview: readString(record, "preview") ?? "",
+      created_at: readString(record, "created_at", "createdAt") ?? "",
+      last_active_at: readString(record, "last_active_at", "lastActiveAt") ?? "",
+      message_count: messages?.length ?? 0,
+    };
+  } else if (session.message_count <= 0 && messages && messages.length > 0) {
+    session = { ...session, message_count: messages.length };
+  }
+  if (session.id !== conversationId) {
+    session = { ...session, id: conversationId };
+  }
+
+  return {
+    session_id: transportSessionId ?? "",
+    conversation_id: conversationId,
+    session,
+    ...(messages ? { messages } : {}),
+  };
+}
+
+export function normalizeChatCancelledPayload(
+  payload: unknown,
+): ChatCancelledPayload | null {
+  if (!payload || typeof payload !== "object") {
+    return null;
+  }
+  const record = payload as Record<string, unknown>;
+  const sessionId = readString(record, "session_id", "sessionId");
+  const conversationId = readString(record, "conversation_id", "conversationId");
+  const requestId = readString(record, "request_id", "requestId");
+  const status = readString(record, "status") ?? "cancelled";
+  if (!sessionId || !conversationId || !requestId) {
+    return null;
+  }
+  return {
+    session_id: sessionId,
+    conversation_id: conversationId,
+    request_id: requestId,
+    status,
+  };
+}
+
+export function normalizeChatAudioPayload(payload: unknown): ChatAudioPayload | null {
+  if (!payload || typeof payload !== "object") {
+    return null;
+  }
+  const record = payload as Record<string, unknown>;
+  const sessionId = readString(record, "session_id", "sessionId");
+  const conversationId = readString(record, "conversation_id", "conversationId");
+  const requestId = readString(record, "request_id", "requestId");
+  const path = readString(record, "path", "url");
+  if (!requestId || !path) {
+    return null;
+  }
+  const title = readString(record, "title");
+  const mimeType = readString(record, "mime_type", "mimeType");
+  const filename = readString(record, "filename");
+  return {
+    session_id: sessionId ?? "",
+    conversation_id: conversationId ?? "",
+    request_id: requestId,
+    path,
+    ...(title ? { title } : {}),
+    ...(mimeType ? { mime_type: mimeType } : {}),
+    ...(filename ? { filename } : {}),
+  };
+}
+
+function normalizeChatMediaKind(value: unknown): ChatMediaKind | null {
+  if (typeof value !== "string" || !value.trim()) {
+    return null;
+  }
+  return value.trim() as ChatMediaKind;
+}
+
+function normalizeChatMediaItem(
+  raw: unknown,
+  fallbackConversationId: string,
+  fallbackRequestId?: string,
+  fallbackId?: string,
+  fallbackTimestamp?: string,
+): ChatMediaItem | null {
+  if (!raw || typeof raw !== "object") {
+    return null;
+  }
+  const record = raw as Record<string, unknown>;
+  const kind = normalizeChatMediaKind(record.kind ?? record.type);
+  if (!kind) {
+    return null;
+  }
+  const id =
+    readString(record, "id") ??
+    fallbackId ??
+    crypto.randomUUID();
+  const conversationId =
+    readString(record, "conversation_id", "conversationId") ?? fallbackConversationId;
+  const requestId =
+    readString(record, "request_id", "requestId") ?? fallbackRequestId;
+  const path = readString(record, "path", "web_path", "webPath");
+  const previewUrl = readString(record, "preview_url", "previewUrl");
+  const url = readString(record, "url");
+  const embedUrl = readString(record, "embed_url", "embedUrl");
+  const title = readString(record, "title");
+  const caption = readString(record, "caption");
+  const filename = readString(record, "filename");
+  const description = readString(record, "description");
+  const mimeType = readString(record, "mime_type", "mimeType");
+  const timestamp = readString(record, "timestamp") ?? fallbackTimestamp;
+
+  return {
+    id,
+    conversation_id: conversationId,
+    kind,
+    ...(requestId ? { request_id: requestId } : {}),
+    ...(path ? { path } : {}),
+    ...(previewUrl ? { preview_url: previewUrl } : {}),
+    ...(url ? { url } : {}),
+    ...(embedUrl ? { embed_url: embedUrl } : {}),
+    ...(title ? { title } : {}),
+    ...(caption ? { caption } : {}),
+    ...(filename ? { filename } : {}),
+    ...(description ? { description } : {}),
+    ...(mimeType ? { mime_type: mimeType } : {}),
+    ...(timestamp ? { timestamp } : {}),
+  };
+}
+
+export function normalizeChatMediaPayload(
+  payload: unknown,
+  envelopeId?: string,
+  envelopeTimestamp?: string,
+): ChatMediaPayload | null {
+  if (!payload || typeof payload !== "object") {
+    return null;
+  }
+  const record = payload as Record<string, unknown>;
+  const sessionId = readString(record, "session_id", "sessionId");
+  const conversationId = readString(record, "conversation_id", "conversationId");
+  const requestId = readString(record, "request_id", "requestId");
+  if (!conversationId) {
+    return null;
+  }
+
+  const nestedItem = record.item ?? record.media ?? record.artifact;
+  if (nestedItem) {
+    const item = normalizeChatMediaItem(
+      nestedItem,
+      conversationId,
+      requestId,
+      envelopeId,
+      envelopeTimestamp,
+    );
+    if (!item) {
+      return null;
+    }
+    return {
+      session_id: sessionId ?? "",
+      conversation_id: conversationId,
+      ...(requestId ? { request_id: requestId } : {}),
+      item,
+    };
+  }
+
+  const flatItem = normalizeChatMediaItem(
+    record,
+    conversationId,
+    requestId,
+    envelopeId,
+    envelopeTimestamp,
+  );
+  if (!flatItem || !flatItem.kind) {
+    return null;
+  }
+  return {
+    session_id: sessionId ?? "",
+    conversation_id: conversationId,
+    ...(requestId ? { request_id: requestId } : {}),
+    item: flatItem,
+  };
+}
+
+function normalizeWebhostIntegration(raw: unknown): WebhostIntegration | null {
+  if (!raw || typeof raw !== "object") {
+    return null;
+  }
+  const record = raw as Record<string, unknown>;
+  const id = readString(record, "id");
+  const name = readString(record, "name");
+  const url = readString(record, "url");
+  const status = readString(record, "status") ?? "stopped";
+  if (!id || !name || !url) {
+    return null;
+  }
+  const description = readString(record, "description");
+  const icon = readString(record, "icon", "icon_url", "iconUrl");
+  return {
+    id,
+    name,
+    status,
+    url,
+    ...(description ? { description } : {}),
+    ...(icon ? { icon } : {}),
+  };
+}
+
+export function normalizeIntegrationsWebhostsPayload(
+  payload: unknown,
+): IntegrationsWebhostsPayload | null {
+  if (!payload || typeof payload !== "object") {
+    return null;
+  }
+  const record = payload as Record<string, unknown>;
+  const sessionId = readString(record, "session_id", "sessionId");
+  const rawWebhosts = record.webhosts ?? record.items ?? record.integrations;
+  if (!sessionId || !Array.isArray(rawWebhosts)) {
+    return null;
+  }
+  const webhosts = rawWebhosts
+    .map((entry) => normalizeWebhostIntegration(entry))
+    .filter((entry): entry is WebhostIntegration => entry !== null);
+  return { session_id: sessionId, webhosts };
+}
+
+function normalizeSystemWarning(raw: unknown): SystemWarning | null {
+  if (!raw || typeof raw !== "object") {
+    return null;
+  }
+  const record = raw as Record<string, unknown>;
+  const id = readString(record, "id");
+  const title = readString(record, "title");
+  if (!id || !title) {
+    return null;
+  }
+  const severity = readString(record, "severity") ?? "info";
+  const description = readString(record, "description");
+  const category = readString(record, "category");
+  const timestamp = readString(record, "timestamp", "created_at", "createdAt");
+  const acknowledgedRaw = record.acknowledged ?? record.is_acknowledged ?? record.isAcknowledged;
+  const acknowledged = typeof acknowledgedRaw === "boolean" ? acknowledgedRaw : false;
+  return {
+    id,
+    severity,
+    title,
+    acknowledged,
+    ...(description ? { description } : {}),
+    ...(category ? { category } : {}),
+    ...(timestamp ? { timestamp } : {}),
+  };
+}
+
+export function normalizeSystemWarningsPayload(
+  payload: unknown,
+): SystemWarningsPayload | null {
+  if (!payload || typeof payload !== "object") {
+    return null;
+  }
+  const record = payload as Record<string, unknown>;
+  const sessionId = readString(record, "session_id", "sessionId");
+  const rawWarnings = record.warnings ?? record.items;
+  if (!sessionId || !Array.isArray(rawWarnings)) {
+    return null;
+  }
+  const warnings = rawWarnings
+    .map((entry) => normalizeSystemWarning(entry))
+    .filter((entry): entry is SystemWarning => entry !== null);
+  const totalRaw = record.total;
+  const unackRaw = record.unacknowledged ?? record.unacknowledged_count ?? record.unacknowledgedCount;
+  const total = typeof totalRaw === "number" ? totalRaw : warnings.length;
+  const unacknowledged =
+    typeof unackRaw === "number"
+      ? unackRaw
+      : warnings.filter((warning) => !warning.acknowledged).length;
+  return { session_id: sessionId, warnings, total, unacknowledged };
+}
+
+export function normalizeChatVoiceOutputStatusPayload(
+  payload: unknown,
+): ChatVoiceOutputStatusPayload | null {
+  if (!payload || typeof payload !== "object") {
+    return null;
+  }
+  const record = payload as Record<string, unknown>;
+  const sessionId = readString(record, "session_id", "sessionId");
+  if (!sessionId) {
+    return null;
+  }
+  const conversationId = readString(record, "conversation_id", "conversationId");
+  const speakerModeRaw = record.speaker_mode ?? record.speakerMode;
+  if (typeof speakerModeRaw !== "boolean") {
+    return null;
+  }
+  const modeRaw = readString(record, "mode");
+  const mode: ChatVoiceOutputProtocolMode =
+    modeRaw === "on" || modeRaw === "off"
+      ? modeRaw
+      : speakerModeRaw
+        ? "on"
+        : "off";
+  const reason = readString(record, "reason");
+  const status = readString(record, "status");
+  return {
+    session_id: sessionId,
+    ...(conversationId ? { conversation_id: conversationId } : {}),
+    speaker_mode: speakerModeRaw,
+    mode,
+    ...(reason ? { reason } : {}),
+    ...(status ? { status } : {}),
   };
 }
 
@@ -745,9 +1430,15 @@ export type DesktopOperation =
   | "desktop_browser_disconnect"
   | "file_list"
   | "file_read"
-  | "file_write";
+  | "file_write"
+  | "file_search";
 
-export const FILE_OPERATIONS = ["file_list", "file_read", "file_write"] as const;
+export const FILE_OPERATIONS = [
+  "file_list",
+  "file_read",
+  "file_write",
+  "file_search",
+] as const;
 
 export type FileOperation = (typeof FILE_OPERATIONS)[number];
 
@@ -822,9 +1513,12 @@ export type DesktopErrorCode =
   | "DESKTOP_COMMAND_INVALID"
   | "DESKTOP_CONTROL_DISABLED"
   | "FILE_ACCESS_DISABLED"
+  | "FILE_ACCESS_DENIED"
   | "FILE_ROOT_UNKNOWN"
   | "FILE_PATH_DENIED"
   | "FILE_NOT_FOUND"
+  | "FILE_NOT_TEXT"
+  | "FILE_SEARCH_INDEX_TIMEOUT"
   | "FILE_TOO_LARGE"
   | "FILE_WRITE_DENIED"
   | "FILE_HASH_MISMATCH"
@@ -837,10 +1531,14 @@ export interface FileCommandParams {
   root_id?: string;
   path: string;
   recursive?: boolean;
-  encoding?: "utf-8";
+  encoding?: "utf-8" | "base64" | "auto";
   content?: string;
   expected_hash?: string;
   create_only?: boolean;
+  operation?: string;
+  pattern?: string;
+  glob?: string;
+  output_mode?: string;
 }
 
 export interface DesktopCommandPayload {
@@ -1061,13 +1759,50 @@ export function normalizeFileCommandParams(
 ): FileCommandParams {
   return {
     root_id: readString(raw, "root_id", "rootId"),
-    path: readString(raw, "path") ?? "",
+    path:
+      readString(
+        raw,
+        "path",
+        "file_path",
+        "filePath",
+        "filepath",
+        "relative_path",
+        "relativePath",
+        "directory",
+        "dir",
+      ) ?? "",
     recursive: raw.recursive === true,
-    encoding: raw.encoding === "utf-8" ? "utf-8" : undefined,
+    encoding:
+      raw.encoding === "utf-8" ||
+      raw.encoding === "base64" ||
+      raw.encoding === "auto"
+        ? raw.encoding
+        : undefined,
     content: readString(raw, "content"),
     expected_hash: readString(raw, "expected_hash", "expectedHash"),
     create_only: raw.create_only === true || raw.createOnly === true,
+    operation:
+      readString(raw, "operation") ??
+      readString(raw, "search_type", "searchType", "search_mode", "searchMode"),
+    pattern: readString(raw, "pattern"),
+    glob: readString(raw, "glob"),
+    output_mode: readString(raw, "output_mode", "outputMode"),
   };
+}
+
+/** Resolves file command path; defaults to root (`.`) for list/search when omitted. */
+export function resolveFileCommandPath(
+  params: Pick<FileCommandParams, "path">,
+  options: { defaultPath?: string; required?: boolean } = {},
+): string | null {
+  const trimmed = params.path?.trim() ?? "";
+  if (trimmed) {
+    return trimmed;
+  }
+  if (options.required) {
+    return null;
+  }
+  return options.defaultPath ?? ".";
 }
 
 export function requiresLocalDesktopApproval(
@@ -1149,9 +1884,9 @@ export const SPEECH_PROVIDERS: readonly SpeechProvider[] = [
   "offline",
 ] as const;
 
-export type LocalAsrModel = "omnilingual_ctc_int8" | "whisper_small_de";
+export type LocalAsrModel = "whisper_small_de" | "sense_voice_int8";
 
-export type HybridTtsBackend = "edge_tts" | "azure";
+export type HybridTtsBackend = "piper" | "edge_tts" | "azure";
 
 export interface SpeechSettings {
   enabled: boolean;
@@ -1278,12 +2013,18 @@ export interface AppSettings {
   uiSounds: UiSoundSettings;
   /** Fenster in den Infobereich minimieren statt beenden. */
   minimizeToTray: boolean;
+  /** Globaler Hotkey zum Anzeigen/Fokussieren (leer = deaktiviert). */
+  showWindowHotkey: string;
   /** Screenshots und Remote-Eingaben über desktop.command erlauben. */
   desktopControlEnabled: boolean;
   /** Browser-Automatisierung (CDP) separat freigeben. */
   browserControlEnabled: boolean;
   /** Lokale Ordnerfreigaben für Remote-Dateizugriff. */
   fileAccess: FileAccessSettings;
+  /** TTS-Modus für AuraGo-Chat-Antworten (nicht Gemini Live). */
+  chatTtsMode: ChatTtsMode;
+  /** Lautsprecher/Stummschaltung für Chat-Sprachausgabe (Statusleiste). */
+  chatSpeakerMode: boolean;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -1293,24 +2034,43 @@ export const DEFAULT_SETTINGS: AppSettings = {
   speech: { ...DEFAULT_SPEECH_SETTINGS },
   uiSounds: { ...DEFAULT_UI_SOUND_SETTINGS },
   minimizeToTray: false,
+  showWindowHotkey: "Alt+Shift+G",
   desktopControlEnabled: true,
   browserControlEnabled: true,
   fileAccess: { ...DEFAULT_FILE_ACCESS_SETTINGS },
+  chatTtsMode: "auto",
+  chatSpeakerMode: true,
 };
 
 export const PROTOCOL_VERSION = "agodesk.v1";
 
 export const AGODESK_CLIENT_VERSION = "0.1.0";
 
+export const AGODESK_AGENT_METADATA_CAPABILITY = "chat.agent_metadata";
+export const AGODESK_PLAN_UPDATES_CAPABILITY = "chat.plan_updates";
+export const AGODESK_CHAT_SESSIONS_CAPABILITY = "chat.sessions";
+export const AGODESK_CHAT_CANCEL_CAPABILITY = "chat.cancel";
+export const AGODESK_CHAT_AUDIO_EVENTS_CAPABILITY = "chat.audio_events";
+export const AGODESK_CHAT_VOICE_OUTPUT_CAPABILITY = "chat.voice_output";
+export const AGODESK_CHAT_VOICE_OUTPUT_STATUS_CAPABILITY = "chat.voice_output_status";
+export const AGODESK_CHAT_MEDIA_EVENTS_CAPABILITY = "chat.media_events";
+export const AGODESK_INTEGRATIONS_WEBHOSTS_CAPABILITY = "integrations.webhosts";
+export const AGODESK_SYSTEM_WARNINGS_CAPABILITY = "system.warnings";
+
 export const AGODESK_BASE_CAPABILITIES = [
   "chat.full_response",
   "chat.agent_metadata",
   "chat.plan_updates",
+  AGODESK_CHAT_SESSIONS_CAPABILITY,
+  AGODESK_CHAT_CANCEL_CAPABILITY,
+  AGODESK_CHAT_AUDIO_EVENTS_CAPABILITY,
+  AGODESK_CHAT_VOICE_OUTPUT_CAPABILITY,
+  AGODESK_CHAT_VOICE_OUTPUT_STATUS_CAPABILITY,
+  AGODESK_CHAT_MEDIA_EVENTS_CAPABILITY,
+  AGODESK_INTEGRATIONS_WEBHOSTS_CAPABILITY,
+  AGODESK_SYSTEM_WARNINGS_CAPABILITY,
   "persona.assets",
 ] as const;
-
-export const AGODESK_AGENT_METADATA_CAPABILITY = "chat.agent_metadata";
-export const AGODESK_PLAN_UPDATES_CAPABILITY = "chat.plan_updates";
 
 export const AGODESK_DESKTOP_CAPABILITIES = [
   "remote.desktop.capture",
@@ -1326,8 +2086,16 @@ export const AGODESK_BROWSER_CAPABILITY = "remote.desktop.browser";
 /** Capabilities advertised to AuraGo when desktop control is fully enabled. */
 export const AGODESK_CLIENT_CAPABILITIES = [
   "chat.full_response",
-  "chat.agent_metadata",
-  "chat.plan_updates",
+  AGODESK_AGENT_METADATA_CAPABILITY,
+  AGODESK_PLAN_UPDATES_CAPABILITY,
+  AGODESK_CHAT_SESSIONS_CAPABILITY,
+  AGODESK_CHAT_CANCEL_CAPABILITY,
+  AGODESK_CHAT_AUDIO_EVENTS_CAPABILITY,
+  AGODESK_CHAT_VOICE_OUTPUT_CAPABILITY,
+  AGODESK_CHAT_VOICE_OUTPUT_STATUS_CAPABILITY,
+  AGODESK_CHAT_MEDIA_EVENTS_CAPABILITY,
+  AGODESK_INTEGRATIONS_WEBHOSTS_CAPABILITY,
+  AGODESK_SYSTEM_WARNINGS_CAPABILITY,
   ...AGODESK_DESKTOP_CAPABILITIES,
   "persona.assets",
 ] as const;
@@ -1498,6 +2266,14 @@ export function hasAdvertisedRemoteDesktopCapture(
   return capabilities.includes("remote.desktop.capture");
 }
 
+export function hasAdvertisedFileRead(capabilities: readonly string[]): boolean {
+  return hasAdvertisedCapability(capabilities, AGODESK_FILE_READ_CAPABILITY);
+}
+
+export function hasAdvertisedFileWrite(capabilities: readonly string[]): boolean {
+  return hasAdvertisedCapability(capabilities, AGODESK_FILE_WRITE_CAPABILITY);
+}
+
 export function hasAdvertisedCapability(
   capabilities: readonly string[],
   capability: string,
@@ -1511,6 +2287,48 @@ export function hasAdvertisedAgentMetadata(capabilities: readonly string[]): boo
 
 export function hasAdvertisedPlanUpdates(capabilities: readonly string[]): boolean {
   return hasAdvertisedCapability(capabilities, AGODESK_PLAN_UPDATES_CAPABILITY);
+}
+
+export function hasAdvertisedChatSessions(capabilities: readonly string[]): boolean {
+  return hasAdvertisedCapability(capabilities, AGODESK_CHAT_SESSIONS_CAPABILITY);
+}
+
+export function hasAdvertisedChatCancel(capabilities: readonly string[]): boolean {
+  return hasAdvertisedCapability(capabilities, AGODESK_CHAT_CANCEL_CAPABILITY);
+}
+
+export function hasAdvertisedChatAudioEvents(capabilities: readonly string[]): boolean {
+  return hasAdvertisedCapability(capabilities, AGODESK_CHAT_AUDIO_EVENTS_CAPABILITY);
+}
+
+export function hasAdvertisedChatVoiceOutput(capabilities: readonly string[]): boolean {
+  return hasAdvertisedCapability(capabilities, AGODESK_CHAT_VOICE_OUTPUT_CAPABILITY);
+}
+
+export function hasAdvertisedChatVoiceOutputStatus(capabilities: readonly string[]): boolean {
+  return hasAdvertisedCapability(
+    capabilities,
+    AGODESK_CHAT_VOICE_OUTPUT_STATUS_CAPABILITY,
+  );
+}
+
+export function hasAdvertisedChatMediaEvents(capabilities: readonly string[]): boolean {
+  return hasAdvertisedCapability(capabilities, AGODESK_CHAT_MEDIA_EVENTS_CAPABILITY);
+}
+
+export function hasAdvertisedIntegrationsWebhosts(capabilities: readonly string[]): boolean {
+  return hasAdvertisedCapability(capabilities, AGODESK_INTEGRATIONS_WEBHOSTS_CAPABILITY);
+}
+
+export function hasAdvertisedSystemWarnings(capabilities: readonly string[]): boolean {
+  return hasAdvertisedCapability(capabilities, AGODESK_SYSTEM_WARNINGS_CAPABILITY);
+}
+
+export function auragoServerTtsAvailable(capabilities: readonly string[]): boolean {
+  return (
+    hasAdvertisedChatVoiceOutput(capabilities) &&
+    hasAdvertisedChatAudioEvents(capabilities)
+  );
 }
 
 export function buildFileAccessSessionPayload(
@@ -1553,6 +2371,14 @@ export function agodeskClientCapabilities(
     "chat.full_response",
     AGODESK_AGENT_METADATA_CAPABILITY,
     AGODESK_PLAN_UPDATES_CAPABILITY,
+    AGODESK_CHAT_SESSIONS_CAPABILITY,
+    AGODESK_CHAT_CANCEL_CAPABILITY,
+    AGODESK_CHAT_AUDIO_EVENTS_CAPABILITY,
+    AGODESK_CHAT_VOICE_OUTPUT_CAPABILITY,
+    AGODESK_CHAT_VOICE_OUTPUT_STATUS_CAPABILITY,
+    AGODESK_CHAT_MEDIA_EVENTS_CAPABILITY,
+    AGODESK_INTEGRATIONS_WEBHOSTS_CAPABILITY,
+    AGODESK_SYSTEM_WARNINGS_CAPABILITY,
   ];
 
   if (desktopControlEnabled) {

@@ -3,6 +3,7 @@ use serde_json::{json, Value};
 
 use super::asr::{asr_model_ready, asr_status, models_root, transcribe_pcm};
 use super::tts::{piper_voice_ready, synthesize_piper, tts_status};
+use super::tts_edge::synthesize_edge_tts;
 use super::types::{
     SpeechSidecarRequest, SpeechSidecarResponse, SynthesizeParams, TranscribeParams,
     SPEECH_SIDECAR_VERSION,
@@ -257,11 +258,35 @@ fn handle_synthesize(id: String, params: SynthesizeParams) -> SpeechSidecarRespo
         );
     }
 
-    if params.backend == "edge_tts" && !dev_mode_enabled() {
-        return SpeechSidecarResponse::failure(
-            id,
-            "edge_tts online synthesis is not wired yet. Use Piper offline or AGODESK_SPEECH_DEV=1 for placeholder audio.",
-        );
+    if params.backend == "edge_tts" {
+        match synthesize_edge_tts(text, &params.voice, params.rate, params.pitch) {
+            Ok(audio) if !audio.is_empty() => {
+                return SpeechSidecarResponse::success(
+                    id,
+                    json!({
+                        "audio_base64": base64::engine::general_purpose::STANDARD.encode(&audio),
+                        "mime_type": "audio/mpeg",
+                        "sample_rate": 24_000,
+                        "dev_mode": false,
+                        "model_ready": true,
+                        "voice": params.voice,
+                        "backend": "edge_tts",
+                    }),
+                );
+            }
+            Ok(_) => {
+                return SpeechSidecarResponse::failure(
+                    id,
+                    "Edge TTS synthesis returned empty audio.",
+                );
+            }
+            Err(error) => {
+                return SpeechSidecarResponse::failure(
+                    id,
+                    format!("Edge TTS synthesis failed: {error}"),
+                );
+            }
+        }
     }
 
     let sample_rate = 22_050;

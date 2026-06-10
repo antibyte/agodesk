@@ -23,6 +23,23 @@ function base64ToInt16(base64: string): Int16Array {
   return new Int16Array(bytes.buffer, bytes.byteOffset, bytes.byteLength / 2);
 }
 
+function base64ToBytes(base64: string): Uint8Array {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+  return bytes;
+}
+
+function isPcmMimeType(mimeType: string | undefined): boolean {
+  if (!mimeType) {
+    return true;
+  }
+  const base = mimeType.split(";")[0]?.trim().toLowerCase() ?? "";
+  return base === "audio/pcm" || base === "audio/l16" || base === "audio/raw";
+}
+
 function int16ToFloat32(pcm: Int16Array): Float32Array {
   const output = new Float32Array(pcm.length);
   for (let index = 0; index < pcm.length; index += 1) {
@@ -75,6 +92,29 @@ export class SpeechAudioPlayback {
     await this.drainQueue();
   }
 
+  async enqueueBase64Audio(base64: string, mimeType?: string): Promise<void> {
+    if (isPcmMimeType(mimeType)) {
+      await this.enqueueBase64Pcm(base64, mimeType);
+      return;
+    }
+
+    const bytes = base64ToBytes(base64);
+    if (bytes.length === 0) {
+      return;
+    }
+
+    if (!this.active) {
+      this.active = true;
+    }
+
+    const context = await this.ensureContext();
+    const copy = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+    const audioBuffer = await context.decodeAudioData(copy);
+    const channel = audioBuffer.getChannelData(0);
+    this.queue.push({ samples: channel.slice(), rate: audioBuffer.sampleRate });
+    await this.drainQueue();
+  }
+
   interrupt(): void {
     this.queue = [];
     this.nextStartTime = 0;
@@ -118,6 +158,27 @@ export class SpeechAudioPlayback {
       await this.context.resume();
     }
     return this.context;
+  }
+
+  /** Unlock output after a user gesture (required in many WebView/browser builds). */
+  async warmUp(): Promise<void> {
+    const context = await this.ensureContext();
+    const buffer = context.createBuffer(1, 1, context.sampleRate);
+    buffer.getChannelData(0)[0] = 0;
+    const source = context.createBufferSource();
+    source.buffer = buffer;
+    source.connect(context.destination);
+    source.start();
+  }
+
+  async waitUntilIdle(timeoutMs = 60_000): Promise<void> {
+    const started = Date.now();
+    while (this.isActive) {
+      if (Date.now() - started > timeoutMs) {
+        throw new Error("Speech playback timed out.");
+      }
+      await new Promise((resolve) => window.setTimeout(resolve, 40));
+    }
   }
 
   private async drainQueue(): Promise<void> {

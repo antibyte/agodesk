@@ -9,8 +9,10 @@
     draft?: string;
     speechStatus?: SpeechStatus;
     speechEnabled?: boolean;
+    stopVisible?: boolean;
     onSubmit?: (text: string) => void;
     onSpeechToggle?: () => void;
+    onStop?: () => void;
   }
 
   let {
@@ -19,8 +21,10 @@
     draft = $bindable(""),
     speechStatus = "idle",
     speechEnabled = false,
+    stopVisible = false,
     onSubmit,
     onSpeechToggle,
+    onStop,
   }: Props = $props();
 
   let textareaEl = $state<HTMLTextAreaElement>();
@@ -82,6 +86,17 @@
         onkeydown={handleKeydown}
         oninput={resizeTextarea}
       ></textarea>
+      {#if stopVisible}
+        <button
+          type="button"
+          class="stop-btn ui-btn ui-btn-icon"
+          aria-label={$i18n("chatView.stop.ariaLabel")}
+          title={$i18n("chatView.stop.title")}
+          onclick={() => onStop?.()}
+        >
+          <span class="stop-icon" aria-hidden="true"></span>
+        </button>
+      {/if}
       <button
         type="submit"
         class="ui-btn ui-btn-primary send-btn"
@@ -131,7 +146,7 @@
   .row {
     display: flex;
     gap: var(--space-2);
-    align-items: flex-end;
+    align-items: center;
   }
 
   textarea {
@@ -160,11 +175,34 @@
 
   .composer:focus-within {
     border-color: color-mix(in srgb, var(--color-accent) 45%, var(--color-border));
-    box-shadow: var(--accent-glow);
+    box-shadow: var(--focus-ring);
+  }
+
+  .stop-btn {
+    width: 2.625rem;
+    height: 2.625rem;
+    min-width: 2.625rem;
+    padding: 0;
+    border-radius: var(--radius-sm);
+    border-color: color-mix(in srgb, var(--color-danger) 45%, var(--color-border));
+    background: color-mix(in srgb, var(--color-danger) 12%, transparent);
+    flex-shrink: 0;
+  }
+
+  .stop-btn:not(:disabled):hover {
+    background: color-mix(in srgb, var(--color-danger) 22%, transparent);
+    border-color: var(--color-danger);
+  }
+
+  .stop-icon {
+    display: block;
+    width: 0.875rem;
+    height: 0.875rem;
+    border-radius: 2px;
+    background: var(--color-danger);
   }
 
   .send-btn {
-    align-self: flex-end;
     width: 2.625rem;
     height: 2.625rem;
     min-width: 2.625rem;
@@ -173,6 +211,7 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    flex-shrink: 0;
     transition:
       transform var(--transition-fast),
       background var(--transition-fast),

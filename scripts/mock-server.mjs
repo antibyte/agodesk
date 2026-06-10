@@ -1,8 +1,14 @@
 import { createHmac, randomUUID } from "node:crypto";
+import http from "node:http";
 import { WebSocketServer } from "ws";
 
 const PORT = Number(process.env.PORT ?? 8080);
 const PATH = "/api/agodesk/ws";
+
+const MOCK_CHART_PNG = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+  "base64",
+);
 
 const MOCK_PERSONA_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#2563eb"/><stop offset="100%" stop-color="#7c3aed"/></linearGradient></defs><circle cx="64" cy="64" r="64" fill="url(#g)"/><text x="64" y="78" text-anchor="middle" fill="#fff" font-size="52" font-family="Segoe UI,sans-serif" font-weight="700">A</text></svg>`;
 const MOCK_PERSONA_AVATAR_URL = `data:image/svg+xml;base64,${Buffer.from(MOCK_PERSONA_SVG).toString("base64")}`;
@@ -12,13 +18,23 @@ const MOCK_PERSONA_AVATAR_URL = `data:image/svg+xml;base64,${Buffer.from(MOCK_PE
 /** @type {Map<string, string>} */
 const deviceKeys = new Map();
 
-/** @type {WeakMap<import('ws').WebSocket, { connectionSessionId: string; sessionId: string; deviceId: string | null; chatAccepted: boolean; clientCapabilities: string[]; activeStreamId: string | null; streamFramesSeen: number }>} */
+/** @typedef {{ id: string; preview: string; created_at: string; last_active_at: string; messages: Array<{ role: string; content: string; timestamp: string }> }} MockConversation */
+
+/** @type {WeakMap<import('ws').WebSocket, { connectionSessionId: string; sessionId: string; deviceId: string | null; chatAccepted: boolean; speakerMode: boolean; clientCapabilities: string[]; activeStreamId: string | null; streamFramesSeen: number; conversations: Map<string, MockConversation>; activeRequests: Map<string, { timeout: ReturnType<typeof setTimeout> | null; conversationId: string | null }>; mockWarnings: Array<{ id: string; severity: string; title: string; description?: string; category?: string; timestamp: string; acknowledged: boolean }> }>} */
 const socketSessions = new WeakMap();
 
 const DEFAULT_ADVERTISED_CAPABILITIES = [
   "chat.full_response",
   "chat.agent_metadata",
   "chat.plan_updates",
+  "chat.sessions",
+  "chat.cancel",
+  "chat.audio_events",
+  "chat.voice_output",
+  "chat.voice_output_status",
+  "chat.media_events",
+  "integrations.webhosts",
+  "system.warnings",
   "remote.desktop.capture",
   "remote.desktop.stream",
   "remote.desktop.permission_request",
@@ -28,9 +44,86 @@ const DEFAULT_ADVERTISED_CAPABILITIES = [
   "persona.assets",
 ];
 
-const wss = new WebSocketServer({ port: PORT, path: PATH });
+const wss = new WebSocketServer({ noServer: true });
 
-console.log(`Mock AuraGo backend: ws://localhost:${PORT}${PATH}`);
+const MOCK_MEDIA_SECRET = process.env.MOCK_MEDIA_SECRET ?? "mock-agodesk-media-secret";
+const MOCK_MEDIA_TTL_SECONDS = 15 * 60;
+
+function signMockAgodeskMediaPath(pathValue, now = Date.now()) {
+  const pathOnly = pathValue.split("?")[0] ?? pathValue;
+  if (!pathOnly.startsWith("/api/agodesk/media/")) {
+    return pathValue;
+  }
+  const params = new URLSearchParams(pathValue.includes("?") ? pathValue.split("?")[1] : "");
+  params.set("agodesk_exp", String(Math.floor(now / 1000) + MOCK_MEDIA_TTL_SECONDS));
+  params.delete("agodesk_sig");
+  const material = `${encodeURI(pathOnly)}\n${params.toString()}`;
+  params.set(
+    "agodesk_sig",
+    createHmac("sha256", MOCK_MEDIA_SECRET).update(material).digest("hex"),
+  );
+  return `${pathOnly}?${params.toString()}`;
+}
+
+function verifyMockAgodeskMediaRequest(requestUrl) {
+  if (!requestUrl.pathname.startsWith("/api/agodesk/media/")) {
+    return false;
+  }
+  const expRaw = requestUrl.searchParams.get("agodesk_exp");
+  const sig = requestUrl.searchParams.get("agodesk_sig");
+  if (!expRaw || !sig) {
+    return false;
+  }
+  const expires = Number.parseInt(expRaw, 10);
+  if (!Number.isFinite(expires) || Math.floor(Date.now() / 1000) > expires) {
+    return false;
+  }
+  const params = new URLSearchParams(requestUrl.search);
+  params.delete("agodesk_sig");
+  const material = `${requestUrl.pathname}\n${params.toString()}`;
+  const expected = createHmac("sha256", MOCK_MEDIA_SECRET).update(material).digest("hex");
+  return expected.toLowerCase() === sig.toLowerCase();
+}
+
+const server = http.createServer((req, res) => {
+  const requestUrl = new URL(req.url ?? "/", `http://127.0.0.1:${PORT}`);
+  if (requestUrl.pathname.startsWith("/api/agodesk/media/")) {
+    if (!verifyMockAgodeskMediaRequest(requestUrl)) {
+      res.writeHead(401, { "Content-Type": "text/plain" });
+      res.end("unauthorized");
+      return;
+    }
+    if (requestUrl.pathname === "/api/agodesk/media/mock-chart.png") {
+      res.writeHead(200, {
+        "Content-Type": "image/png",
+        "Content-Length": MOCK_CHART_PNG.length,
+      });
+      res.end(MOCK_CHART_PNG);
+      return;
+    }
+    res.writeHead(404, { "Content-Type": "text/plain" });
+    res.end("Not found");
+    return;
+  }
+  res.writeHead(404, { "Content-Type": "text/plain" });
+  res.end("Not found");
+});
+
+server.on("upgrade", (request, socket, head) => {
+  const requestUrl = new URL(request.url ?? PATH, "http://localhost");
+  if (requestUrl.pathname !== PATH) {
+    socket.destroy();
+    return;
+  }
+  wss.handleUpgrade(request, socket, head, (socket) => {
+    wss.emit("connection", socket, request);
+  });
+});
+
+server.listen(PORT, () => {
+  console.log(`Mock AuraGo backend: ws://localhost:${PORT}${PATH}`);
+  console.log(`Mock media: http://localhost:${PORT}/api/agodesk/media/mock-chart.png`);
+});
 
 wss.on("connection", (socket, request) => {
   const requestUrl = new URL(request.url ?? PATH, "http://localhost");
@@ -46,9 +139,23 @@ wss.on("connection", (socket, request) => {
     sessionId: connectionSessionId,
     deviceId: null,
     chatAccepted: insecureLoopback,
+    speakerMode: true,
     clientCapabilities: [...DEFAULT_ADVERTISED_CAPABILITIES],
     activeStreamId: null,
     streamFramesSeen: 0,
+    conversations: new Map(),
+    activeRequests: new Map(),
+    mockWarnings: [
+      {
+        id: "warn-mock-1",
+        severity: "warning",
+        title: "Mock: Speicher knapp",
+        description: "Der AuraGo-Host meldet **80 %** Speicherauslastung.",
+        category: "system",
+        timestamp: new Date().toISOString(),
+        acknowledged: false,
+      },
+    ],
   });
 
   /** @param {WsMessage} message */
@@ -76,6 +183,14 @@ wss.on("connection", (socket, request) => {
         "chat.full_response",
         "chat.agent_metadata",
         "chat.plan_updates",
+        "chat.sessions",
+        "chat.cancel",
+        "chat.audio_events",
+        "chat.voice_output",
+        "chat.voice_output_status",
+        "chat.media_events",
+        "integrations.webhosts",
+        "system.warnings",
         "persona.assets",
       ],
     },
@@ -127,6 +242,38 @@ wss.on("connection", (socket, request) => {
           break;
         }
         handleChatMessage(message, session, send);
+        break;
+
+      case "chat.sessions.list":
+        handleChatSessionsList(message, session, send);
+        break;
+
+      case "chat.session.create":
+        handleChatSessionCreate(message, session, send);
+        break;
+
+      case "chat.session.load":
+        handleChatSessionLoad(message, session, send);
+        break;
+
+      case "chat.cancel":
+        handleChatCancel(message, session, send);
+        break;
+
+      case "chat.voice_output.status":
+        handleChatVoiceOutputStatus(message, session, send);
+        break;
+
+      case "integrations.webhosts.list":
+        sendMockIntegrationsWebhosts(session, send);
+        break;
+
+      case "system.warnings.list":
+        sendMockSystemWarnings(session, send);
+        break;
+
+      case "system.warning.acknowledge":
+        handleSystemWarningAcknowledge(message, session, send);
         break;
 
       case "persona.assets.request":
@@ -350,6 +497,205 @@ function sendSessionError(send, requestId, code, messageText) {
 }
 
 /**
+ * @param {{ sessionId: string; conversations: Map<string, MockConversation> }} session
+ */
+function createMockConversation(session) {
+  const id = `sess-${randomUUID().slice(0, 8)}`;
+  const now = new Date().toISOString();
+  /** @type {MockConversation} */
+  const conversation = {
+    id,
+    preview: "",
+    created_at: now,
+    last_active_at: now,
+    messages: [],
+  };
+  session.conversations.set(id, conversation);
+  return conversation;
+}
+
+/**
+ * @param {MockConversation} conversation
+ */
+function toSessionSummary(conversation) {
+  return {
+    id: conversation.id,
+    preview: conversation.preview || "Mock chat",
+    created_at: conversation.created_at,
+    last_active_at: conversation.last_active_at,
+    message_count: conversation.messages.length,
+  };
+}
+
+/**
+ * @param {{ sessionId: string; conversations: Map<string, MockConversation> }} session
+ * @param {(message: WsMessage) => void} send
+ * @param {string} conversationId
+ * @param {boolean} includeMessages
+ */
+function sendChatSession(session, send, conversationId, includeMessages = false) {
+  const conversation = session.conversations.get(conversationId);
+  if (!conversation) {
+    sendSessionError(send, randomUUID(), "SESSION_NOT_FOUND", "Unbekannte Unterhaltung.");
+    return;
+  }
+
+  send({
+    id: randomUUID(),
+    type: "chat.session",
+    timestamp: new Date().toISOString(),
+    payload: {
+      session_id: session.sessionId,
+      conversation_id: conversationId,
+      session: toSessionSummary(conversation),
+      ...(includeMessages
+        ? {
+            messages: conversation.messages.map((message) => ({
+              role: message.role,
+              content: message.content,
+              timestamp: message.timestamp,
+            })),
+          }
+        : {}),
+    },
+  });
+}
+
+/**
+ * @param {WsMessage} message
+ * @param {{ sessionId: string; conversations: Map<string, MockConversation> }} session
+ * @param {(message: WsMessage) => void} send
+ */
+function handleChatSessionsList(message, session, send) {
+  const clientSessionId = String(message.payload?.session_id ?? "");
+  if (clientSessionId !== session.sessionId) {
+    sendSessionError(send, message.id, "SESSION_NOT_FOUND", "Session nicht gefunden.");
+    return;
+  }
+
+  const limit = Number(message.payload?.limit ?? 20);
+  const sessions = [...session.conversations.values()]
+    .sort((a, b) => b.last_active_at.localeCompare(a.last_active_at))
+    .slice(0, Number.isFinite(limit) ? Math.max(1, limit) : 20)
+    .map((conversation) => toSessionSummary(conversation));
+
+  send({
+    id: randomUUID(),
+    type: "chat.sessions",
+    timestamp: new Date().toISOString(),
+    payload: {
+      session_id: session.sessionId,
+      sessions,
+    },
+  });
+}
+
+/**
+ * @param {WsMessage} message
+ * @param {{ sessionId: string; conversations: Map<string, MockConversation> }} session
+ * @param {(message: WsMessage) => void} send
+ */
+function handleChatSessionCreate(message, session, send) {
+  const clientSessionId = String(message.payload?.session_id ?? "");
+  if (clientSessionId !== session.sessionId) {
+    sendSessionError(send, message.id, "SESSION_NOT_FOUND", "Session nicht gefunden.");
+    return;
+  }
+
+  const conversation = createMockConversation(session);
+  sendChatSession(session, send, conversation.id, false);
+}
+
+/**
+ * @param {WsMessage} message
+ * @param {{ sessionId: string; conversations: Map<string, MockConversation> }} session
+ * @param {(message: WsMessage) => void} send
+ */
+function handleChatSessionLoad(message, session, send) {
+  const clientSessionId = String(message.payload?.session_id ?? "");
+  const conversationId = String(message.payload?.conversation_id ?? "");
+  if (clientSessionId !== session.sessionId) {
+    sendSessionError(send, message.id, "SESSION_NOT_FOUND", "Session nicht gefunden.");
+    return;
+  }
+
+  sendChatSession(session, send, conversationId, true);
+}
+
+/**
+ * @param {WsMessage} message
+ * @param {{ sessionId: string; activeRequests: Map<string, { timeout: ReturnType<typeof setTimeout> | null; conversationId: string | null }> }} session
+ * @param {(message: WsMessage) => void} send
+ */
+function handleChatCancel(message, session, send) {
+  const clientSessionId = String(message.payload?.session_id ?? "");
+  const conversationId = String(message.payload?.conversation_id ?? "");
+  const requestId = String(message.payload?.request_id ?? "");
+
+  if (clientSessionId !== session.sessionId) {
+    send({
+      id: randomUUID(),
+      type: "chat.error",
+      timestamp: new Date().toISOString(),
+      payload: {
+        request_id: requestId || message.id,
+        code: "SESSION_NOT_FOUND",
+        message: "Session nicht gefunden.",
+      },
+    });
+    return;
+  }
+
+  const active = session.activeRequests.get(requestId);
+  if (active?.timeout) {
+    clearTimeout(active.timeout);
+  }
+  session.activeRequests.delete(requestId);
+
+  send({
+    id: randomUUID(),
+    type: "chat.cancelled",
+    timestamp: new Date().toISOString(),
+    payload: {
+      session_id: session.sessionId,
+      conversation_id: conversationId,
+      request_id: requestId,
+      status: active ? "cancelled" : "not_active",
+    },
+  });
+}
+
+/**
+ * @param {WsMessage} message
+ * @param {{ sessionId: string; speakerMode: boolean }} session
+ * @param {(message: WsMessage) => void} send
+ */
+function handleChatVoiceOutputStatus(message, session, send) {
+  const clientSessionId = String(message.payload?.session_id ?? "");
+  if (clientSessionId !== session.sessionId) {
+    return;
+  }
+
+  const speakerMode = message.payload?.speaker_mode === true;
+  session.speakerMode = speakerMode;
+
+  send({
+    id: message.id,
+    type: "chat.voice_output.status",
+    timestamp: new Date().toISOString(),
+    payload: {
+      session_id: session.sessionId,
+      ...(message.payload?.conversation_id
+        ? { conversation_id: String(message.payload.conversation_id) }
+        : {}),
+      speaker_mode: speakerMode,
+      mode: speakerMode ? "on" : "off",
+      status: "ok",
+    },
+  });
+}
+
+/**
  * @param {(message: WsMessage) => void} send
  * @param {string} operation
  * @param {Record<string, unknown>} params
@@ -376,6 +722,8 @@ function handleChatMessage(message, session, send) {
   const text = String(message.payload?.text ?? "");
   const requestId = message.id;
   const clientSessionId = String(message.payload?.session_id ?? "");
+  const conversationId = String(message.payload?.conversation_id ?? "");
+  const voiceOutput = message.payload?.voice_output === true;
 
   if (clientSessionId !== session.sessionId) {
     send({
@@ -391,6 +739,26 @@ function handleChatMessage(message, session, send) {
     });
     return;
   }
+
+  let conversation = conversationId ? session.conversations.get(conversationId) : null;
+  if (conversationId && !conversation) {
+    sendSessionError(send, requestId, "SESSION_NOT_FOUND", "Unbekannte Unterhaltung.");
+    return;
+  }
+
+  if (text.trim()) {
+    const now = new Date().toISOString();
+    if (!conversation) {
+      conversation = createMockConversation(session);
+    }
+    conversation.messages.push({ role: "user", content: text, timestamp: now });
+    conversation.last_active_at = now;
+    if (!conversation.preview) {
+      conversation.preview = text.trim().slice(0, 80);
+    }
+  }
+
+  const activeConversationId = conversation?.id ?? conversationId || null;
 
   if (text.trim().toLowerCase() === "/error") {
     send({
@@ -679,15 +1047,62 @@ function handleChatMessage(message, session, send) {
     return;
   }
 
-  setTimeout(() => {
+  if (text.trim().toLowerCase() === "/media") {
+    sendMockChatMedia(send, session, requestId, activeConversationId);
     send({
       id: randomUUID(),
       type: "chat.response",
       timestamp: new Date().toISOString(),
       payload: {
         session_id: session.sessionId,
+        conversation_id: activeConversationId,
         request_id: requestId,
-        text: mockReply(text),
+        text: "Mock-Medienartefakte gesendet (Bild, Audio, Link).",
+        role: "assistant",
+      },
+    });
+    return;
+  }
+
+  const replyText = mockReply(text);
+  const timeout = setTimeout(() => {
+    session.activeRequests.delete(requestId);
+    if (voiceOutput && session.speakerMode) {
+      send({
+        id: randomUUID(),
+        type: "chat.audio",
+        timestamp: new Date().toISOString(),
+        payload: {
+          session_id: session.sessionId,
+          conversation_id: activeConversationId,
+          request_id: requestId,
+          path: "/api/agodesk/tts/response.mp3",
+          title: "Mock TTS",
+          mime_type: "audio/mpeg",
+          filename: "response.mp3",
+        },
+      });
+    }
+
+    if (conversation) {
+      const now = new Date().toISOString();
+      conversation.messages.push({
+        role: "assistant",
+        content: replyText,
+        timestamp: now,
+      });
+      conversation.last_active_at = now;
+    }
+
+    send({
+      id: randomUUID(),
+      type: "chat.response",
+      timestamp: new Date().toISOString(),
+      payload: {
+        session_id: session.sessionId,
+        conversation_id: activeConversationId ?? undefined,
+        request_id: requestId,
+        text: replyText,
         role: "assistant",
         metadata: {
           model: "mock-agent",
@@ -696,6 +1111,11 @@ function handleChatMessage(message, session, send) {
       },
     });
   }, 600);
+
+  session.activeRequests.set(requestId, {
+    timeout,
+    conversationId: activeConversationId,
+  });
 }
 
 function buildMockAgentMood(mood = "focused") {
@@ -855,6 +1275,100 @@ function computeSharedKeyProof(
 ) {
   const material = `agodesk.v1\nsession.start\n${envelopeId}\n${deviceId}\n${nonce}\n${timestamp}`;
   return createHmac("sha256", sharedKeyBytes(sharedKey)).update(material).digest("hex");
+}
+
+function sendMockIntegrationsWebhosts(session, send) {
+  send({
+    id: randomUUID(),
+    type: "integrations.webhosts",
+    timestamp: new Date().toISOString(),
+    payload: {
+      session_id: session.sessionId,
+      webhosts: [
+        {
+          id: "webhost-grafana",
+          name: "Grafana",
+          description: "Monitoring Dashboard",
+          status: "running",
+          url: "http://127.0.0.1:3000",
+          icon: MOCK_PERSONA_AVATAR_URL,
+        },
+        {
+          id: "webhost-docs",
+          name: "AuraGo Docs",
+          description: "Internal documentation",
+          status: "starting",
+          url: "/docs/",
+        },
+      ],
+    },
+  });
+}
+
+function sendMockSystemWarnings(session, send) {
+  const warnings = session.mockWarnings ?? [];
+  const unacknowledged = warnings.filter((entry) => !entry.acknowledged).length;
+  send({
+    id: randomUUID(),
+    type: "system.warnings",
+    timestamp: new Date().toISOString(),
+    payload: {
+      session_id: session.sessionId,
+      warnings,
+      total: warnings.length,
+      unacknowledged,
+    },
+  });
+}
+
+function handleSystemWarningAcknowledge(message, session, send) {
+  const all = message.payload?.all === true;
+  const id = String(message.payload?.id ?? "");
+  session.mockWarnings = (session.mockWarnings ?? []).map((entry) => {
+    if (all || entry.id === id) {
+      return { ...entry, acknowledged: true };
+    }
+    return entry;
+  });
+  sendMockSystemWarnings(session, send);
+}
+
+function sendMockChatMedia(send, session, requestId, conversationId) {
+  const base = {
+    session_id: session.sessionId,
+    conversation_id: conversationId,
+    request_id: requestId,
+  };
+  send({
+    id: randomUUID(),
+    type: "chat.media",
+    timestamp: new Date().toISOString(),
+    payload: {
+      ...base,
+      item: {
+        id: randomUUID(),
+        kind: "image",
+        path: signMockAgodeskMediaPath("/api/agodesk/media/mock-chart.png"),
+        title: "Mock Chart",
+        caption: "Generiertes **Diagramm** aus dem Mock-Agent.",
+      },
+    },
+  });
+  send({
+    id: randomUUID(),
+    type: "chat.media",
+    timestamp: new Date().toISOString(),
+    payload: {
+      ...base,
+      item: {
+        id: randomUUID(),
+        kind: "link",
+        url: "https://example.com/mock-report",
+        title: "Mock Report",
+        description: "Externer Bericht",
+      },
+    },
+  });
 }
 
 wss.on("error", (error) => {

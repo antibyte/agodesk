@@ -14,13 +14,13 @@ pub fn register_models_search_root(path: PathBuf) {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AsrModelKind {
-    OmnilingualCtcInt8,
+    SenseVoiceInt8,
     WhisperSmallDe,
 }
 
 #[derive(Debug, Clone)]
 pub enum AsrModelLayout {
-    OmnilingualCtc {
+    SenseVoice {
         model_path: PathBuf,
         tokens_path: PathBuf,
     },
@@ -90,17 +90,21 @@ pub fn models_search_roots() -> Vec<PathBuf> {
     roots
 }
 
-const OMNILINGUAL_EXTRACTED_DIR: &str =
-    "sherpa-onnx-omnilingual-asr-1600-languages-300M-ctc-int8-2025-11-12";
-const OMNILINGUAL_TARGET_DIR: &str = "omnilingual-ctc-int8";
+const SENSE_VOICE_EXTRACTED_DIRS: &[&str] = &[
+    "sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2025-09-09",
+    "sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17",
+];
+const SENSE_VOICE_TARGET_DIR: &str = "sense-voice-int8";
 
 /// Renames legacy extracted ASR folders to the canonical layout.
 pub fn normalize_legacy_model_layouts() {
     for root in models_search_roots() {
-        let legacy_omnilingual = root.join(OMNILINGUAL_EXTRACTED_DIR);
-        let target_omnilingual = root.join(OMNILINGUAL_TARGET_DIR);
-        if legacy_omnilingual.is_dir() && !target_omnilingual.exists() {
-            let _ = std::fs::rename(&legacy_omnilingual, &target_omnilingual);
+        for extracted_dir in SENSE_VOICE_EXTRACTED_DIRS {
+            let legacy = root.join(extracted_dir);
+            let target = root.join(SENSE_VOICE_TARGET_DIR);
+            if legacy.is_dir() && !target.exists() {
+                let _ = std::fs::rename(&legacy, &target);
+            }
         }
     }
 }
@@ -109,7 +113,7 @@ pub fn models_root() -> PathBuf {
     models_search_roots()
         .into_iter()
         .find(|root| {
-            root.join(OMNILINGUAL_TARGET_DIR).exists() || root.join("whisper-small-de").exists()
+            root.join(SENSE_VOICE_TARGET_DIR).exists() || root.join("whisper-small-de").exists()
         })
         .or_else(|| {
             models_search_roots()
@@ -123,55 +127,40 @@ fn file_exists(path: &Path) -> bool {
     path.is_file()
 }
 
+pub fn default_asr_model_for_language(language: Option<&str>) -> String {
+    if prefers_sense_voice_for_language(language) {
+        "sense_voice_int8".to_string()
+    } else {
+        "whisper_small_de".to_string()
+    }
+}
+
 pub fn normalize_model_id(model_id: Option<&str>) -> String {
-    match model_id.unwrap_or("omnilingual_ctc_int8") {
+    match model_id.unwrap_or("whisper_small_de") {
         "whisper_small_de" => "whisper_small_de".to_string(),
-        "sense_voice_int8" | "omnilingual_ctc_int8" => "omnilingual_ctc_int8".to_string(),
+        "sense_voice_int8" => "sense_voice_int8".to_string(),
+        "omnilingual_ctc_int8" => "sense_voice_int8".to_string(),
         other => other.to_string(),
     }
 }
 
-pub fn resolve_asr_model_id(model_id: Option<&str>, language: Option<&str>) -> String {
-    let configured = normalize_model_id(model_id);
-    if configured != "omnilingual_ctc_int8" {
-        return configured;
-    }
-
-    let prefer_whisper = language
-        .map(|value| {
-            let lower = value.to_lowercase();
-            lower.starts_with("de")
-                || lower.starts_with("at-")
-                || lower.starts_with("ch-")
-                || lower == "at"
-                || lower == "ch"
-        })
-        .unwrap_or(true);
-
-    if prefer_whisper && discover_asr_model(Some("whisper_small_de")).is_some() {
-        return "whisper_small_de".to_string();
-    }
-
-    configured
+pub fn resolve_asr_model_id(model_id: Option<&str>, _language: Option<&str>) -> String {
+    normalize_model_id(model_id)
 }
 
-pub fn prefers_whisper_for_language(language: Option<&str>) -> bool {
+pub fn prefers_sense_voice_for_language(language: Option<&str>) -> bool {
     language
         .map(|value| {
             let lower = value.to_lowercase();
-            lower.starts_with("de")
-                || lower.starts_with("at-")
-                || lower.starts_with("ch-")
-                || lower == "at"
-                || lower == "ch"
+            lower.starts_with("ja") || lower.starts_with("zh")
         })
-        .unwrap_or(true)
+        .unwrap_or(false)
 }
 
 pub fn parse_model_kind(model_id: Option<&str>) -> AsrModelKind {
     match normalize_model_id(model_id).as_str() {
         "whisper_small_de" => AsrModelKind::WhisperSmallDe,
-        _ => AsrModelKind::OmnilingualCtcInt8,
+        _ => AsrModelKind::SenseVoiceInt8,
     }
 }
 
@@ -191,23 +180,24 @@ fn discover_in_root(root: &Path, kind: AsrModelKind) -> Option<AsrModelFiles> {
     }
 
     match kind {
-        AsrModelKind::OmnilingualCtcInt8 => discover_omnilingual_ctc(root),
+        AsrModelKind::SenseVoiceInt8 => discover_sense_voice(root),
         AsrModelKind::WhisperSmallDe => discover_whisper_small(root),
     }
 }
 
-fn discover_omnilingual_ctc(root: &Path) -> Option<AsrModelFiles> {
-    let candidates = [
-        root.join(OMNILINGUAL_TARGET_DIR),
-        root.join(OMNILINGUAL_EXTRACTED_DIR),
-    ];
+fn discover_sense_voice(root: &Path) -> Option<AsrModelFiles> {
+    let mut candidates = vec![root.join(SENSE_VOICE_TARGET_DIR)];
+    for extracted_dir in SENSE_VOICE_EXTRACTED_DIRS {
+        candidates.push(root.join(extracted_dir));
+    }
+
     for dir in candidates {
         let model_path = dir.join("model.int8.onnx");
         let tokens_path = dir.join("tokens.txt");
         if file_exists(&model_path) && file_exists(&tokens_path) {
             return Some(AsrModelFiles {
-                kind: AsrModelKind::OmnilingualCtcInt8,
-                layout: AsrModelLayout::OmnilingualCtc {
+                kind: AsrModelKind::SenseVoiceInt8,
+                layout: AsrModelLayout::SenseVoice {
                     model_path,
                     tokens_path,
                 },
@@ -283,7 +273,7 @@ pub fn asr_status(model_id: Option<&str>) -> AsrStatus {
     let root = models_root();
     let discovered = discover_asr_model(Some(&model_key));
     let (model_path, tokens_path) = match discovered.as_ref().map(|files| &files.layout) {
-        Some(AsrModelLayout::OmnilingualCtc {
+        Some(AsrModelLayout::SenseVoice {
             model_path,
             tokens_path,
         }) => (
@@ -312,18 +302,19 @@ pub fn asr_status(model_id: Option<&str>) -> AsrStatus {
 
 pub fn download_hint_for(model_id: &str) -> String {
     match normalize_model_id(Some(model_id)).as_str() {
-        "whisper_small_de" => "Select the model in settings to download Whisper small.".to_string(),
-        _ => "Select the model in settings to download Omnilingual ASR.".to_string(),
+        "whisper_small_de" => {
+            "Select Whisper in settings to download the model (~610 MB).".to_string()
+        }
+        _ => "Select SenseVoice in settings to download the model (~160 MB).".to_string(),
     }
 }
 
-pub fn map_language_hint(language: Option<&str>) -> String {
+pub fn map_sense_voice_language(language: Option<&str>) -> String {
     match language {
-        Some(value) if value.starts_with("de") => "de".to_string(),
-        Some(value) if value.starts_with("en") => "en".to_string(),
         Some(value) if value.starts_with("ja") => "ja".to_string(),
-        Some(value) if value.starts_with("ko") => "ko".to_string(),
         Some(value) if value.starts_with("zh") => "zh".to_string(),
+        Some(value) if value.starts_with("ko") => "ko".to_string(),
+        Some(value) if value.starts_with("en") => "en".to_string(),
         Some(value) if !value.trim().is_empty() => "auto".to_string(),
         _ => "auto".to_string(),
     }
@@ -359,4 +350,37 @@ pub fn transcribe_pcm(
     _model_id: Option<&str>,
 ) -> Result<(String, String), String> {
     Err("Speech ASR feature not enabled. Rebuild with --features speech-asr.".to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn default_model_prefers_whisper_for_german() {
+        assert_eq!(
+            default_asr_model_for_language(Some("de-DE")),
+            "whisper_small_de"
+        );
+    }
+
+    #[test]
+    fn default_model_prefers_sense_voice_for_japanese_and_chinese() {
+        assert_eq!(
+            default_asr_model_for_language(Some("ja-JP")),
+            "sense_voice_int8"
+        );
+        assert_eq!(
+            default_asr_model_for_language(Some("zh-CN")),
+            "sense_voice_int8"
+        );
+    }
+
+    #[test]
+    fn legacy_omnilingual_id_maps_to_sense_voice() {
+        assert_eq!(
+            normalize_model_id(Some("omnilingual_ctc_int8")),
+            "sense_voice_int8"
+        );
+    }
 }

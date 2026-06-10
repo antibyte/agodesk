@@ -3,17 +3,22 @@
   import { fly } from "svelte/transition";
   import { i18n } from "../i18n";
   import MessageBubble from "./MessageBubble.svelte";
+  import ChatMediaBlock from "./ChatMediaBlock.svelte";
   import PersonaAvatar from "./PersonaAvatar.svelte";
   import { chatMessages } from "../stores/chat";
   import { personaState } from "../stores/persona";
   import { formatDayLabel } from "../services/chat-format";
-  import type { ConnectionStatus, SessionStatus } from "../types/protocol";
+  import type { ChatMediaItem, ConnectionStatus, SessionStatus } from "../types/protocol";
 
   interface Props {
     awaitingResponse?: boolean;
     sessionStatus?: SessionStatus;
     connectionStatus?: ConnectionStatus;
     speechActive?: boolean;
+    mediaItems?: ChatMediaItem[];
+    mediaEnabled?: boolean;
+    serverUrl?: string;
+    onOpenEmbedded?: (url: string, title?: string) => void;
     onOpenSettings?: () => void;
   }
 
@@ -22,6 +27,10 @@
     sessionStatus = "idle",
     connectionStatus = "disconnected",
     speechActive = false,
+    mediaItems = [],
+    mediaEnabled = false,
+    serverUrl = "",
+    onOpenEmbedded,
     onOpenSettings,
   }: Props = $props();
 
@@ -134,6 +143,13 @@
         {/if}
         <MessageBubble {message} {index} />
       {/each}
+      {#if mediaEnabled && mediaItems.length > 0}
+        <div class="media-strip">
+          {#each mediaItems as item (item.id)}
+            <ChatMediaBlock {item} {serverUrl} {onOpenEmbedded} />
+          {/each}
+        </div>
+      {/if}
       {#if awaitingResponse}
         <div class="typing" aria-label={$i18n("messageList.typing.ariaLabel")}>
           <span></span><span></span><span></span>
@@ -208,7 +224,8 @@
     color: var(--color-text);
     font-size: 1.375rem;
     font-weight: 650;
-    letter-spacing: -0.02em;
+    letter-spacing: -0.025em;
+    text-wrap: balance;
   }
 
   .empty p {
@@ -305,6 +322,13 @@
     animation-delay: 0.3s;
   }
 
+  .media-strip {
+    display: grid;
+    gap: var(--space-2);
+    align-self: stretch;
+    max-width: min(88%, 680px);
+  }
+
   .scroll-fab {
     position: absolute;
     right: var(--space-5);
@@ -330,6 +354,15 @@
   .scroll-fab:hover {
     transform: translateY(-2px);
     box-shadow: var(--accent-glow);
+  }
+
+  .scroll-fab:focus-visible {
+    outline: none;
+    box-shadow: var(--focus-ring);
+  }
+
+  .scroll-fab:active {
+    transform: translateY(0) scale(0.97);
   }
 
   .scroll-fab .badge {

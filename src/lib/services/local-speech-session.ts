@@ -3,8 +3,10 @@ import { getTranslateFn } from "../i18n/store";
 import type { ActiveSpeechSession, SpeechSessionCallbacks } from "./speech-session";
 import { LocalSpeechUtteranceEndpoint } from "./local-speech-utterance";
 import {
+  synthesizeAndPlayLocalSpeech,
+} from "./local-speech-tts";
+import {
   speechSidecarPing,
-  speechSidecarSynthesize,
   speechSidecarTranscribe,
 } from "./speech-sidecar";
 import { SpeechAudioPlayback } from "./speech-audio-playback";
@@ -73,6 +75,12 @@ export class LocalSpeechSession implements ActiveSpeechSession {
     });
 
     this.callbacks.onStatus?.("listening");
+
+    try {
+      await this.playback.warmUp();
+    } catch (error) {
+      console.warn("Speech playback warm-up failed:", error);
+    }
   }
 
   disconnect(): void {
@@ -91,31 +99,11 @@ export class LocalSpeechSession implements ActiveSpeechSession {
       return;
     }
 
-    const backend =
-      this.speech.provider === "hybrid"
-        ? this.speech.hybridTtsBackend
-        : "piper";
-    const voice =
-      this.speech.provider === "hybrid"
-        ? this.speech.hybridTtsVoice
-        : this.speech.offlineTtsVoice;
-
     this.speaking = true;
     this.callbacks.onStatus?.("speaking");
 
     try {
-      const result = await speechSidecarSynthesize({
-        text: trimmed,
-        voice,
-        backend,
-      });
-      if (this.closed) {
-        return;
-      }
-      await this.playback.enqueueBase64Pcm(
-        result.pcm_base64,
-        result.mime_type ?? `audio/pcm;rate=${result.sample_rate}`,
-      );
+      await synthesizeAndPlayLocalSpeech(trimmed, this.speech, this.playback);
     } catch (error) {
       const message =
         error instanceof Error ? error.message : String(error);

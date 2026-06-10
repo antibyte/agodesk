@@ -1,4 +1,6 @@
-import { buildChatMessage, sendChatMessage } from "./chat-outbound";
+import { get } from "svelte/store";
+import { sendChatMessage } from "./chat-outbound";
+import { chatConversationState } from "../stores/chat-conversation";
 import type { WsMessage } from "../types/protocol";
 
 export interface SpeechDeliveryContext {
@@ -28,6 +30,7 @@ export async function deliverSpeechTranscript(
     if (context.canSendChat) {
       await sendChatMessage(context.sendMessage, context.sessionId, trimmed, {
         source: "speech",
+        conversationId: get(chatConversationState).activeConversationId,
       });
       context.onPending();
       return { mode: "sent" };
@@ -45,4 +48,4 @@ export async function deliverSpeechTranscript(
   return { mode: "composer" };
 }
 
-export { buildChatMessage };
+export { buildChatMessage } from "./chat-outbound";

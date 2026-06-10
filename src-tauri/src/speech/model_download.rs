@@ -36,13 +36,13 @@ struct ModelSpec {
 
 fn spec_for(model_id: &str) -> Result<ModelSpec, String> {
     match super::asr::normalize_model_id(Some(model_id)).as_str() {
-        "omnilingual_ctc_int8" => Ok(ModelSpec {
-            model_id: "omnilingual_ctc_int8",
-            archive_name: "sherpa-onnx-omnilingual-asr-300M-int8.tar.bz2",
-            url: "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-omnilingual-asr-1600-languages-300M-ctc-int8-2025-11-12.tar.bz2",
-            extracted_dir: "sherpa-onnx-omnilingual-asr-1600-languages-300M-ctc-int8-2025-11-12",
-            target_dir: "omnilingual-ctc-int8",
-            archive_bytes_hint: 150_000_000,
+        "sense_voice_int8" => Ok(ModelSpec {
+            model_id: "sense_voice_int8",
+            archive_name: "sherpa-onnx-sense-voice-int8.tar.bz2",
+            url: "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2025-09-09.tar.bz2",
+            extracted_dir: "sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2025-09-09",
+            target_dir: "sense-voice-int8",
+            archive_bytes_hint: 162_000_000,
         }),
         "whisper_small_de" => Ok(ModelSpec {
             model_id: "whisper_small_de",
@@ -109,7 +109,7 @@ fn download_root_candidates(app: &AppHandle) -> Result<Vec<PathBuf>, String> {
 
 fn ensure_models_root(app: &AppHandle) -> Result<PathBuf, String> {
     for root in models_search_roots() {
-        if root.join("whisper-small-de").exists() || root.join("omnilingual-ctc-int8").exists() {
+        if root.join("whisper-small-de").exists() || root.join("sense-voice-int8").exists() {
             return Ok(root);
         }
     }
@@ -426,9 +426,9 @@ mod tests {
 
     #[test]
     fn specs_cover_both_models() {
-        assert!(spec_for("omnilingual_ctc_int8").is_ok());
+        assert!(spec_for("sense_voice_int8").is_ok());
         assert!(spec_for("whisper_small_de").is_ok());
         assert!(parse_model_kind(Some("whisper_small_de")) == AsrModelKind::WhisperSmallDe);
-        assert!(parse_model_kind(Some("sense_voice_int8")) == AsrModelKind::OmnilingualCtcInt8);
+        assert!(parse_model_kind(Some("sense_voice_int8")) == AsrModelKind::SenseVoiceInt8);
     }
 }

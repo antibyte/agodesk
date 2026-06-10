@@ -32,7 +32,8 @@ export interface SpeechTranscribeResult {
 
 export interface SpeechSynthesizeResult {
 
-  pcm_base64: string;
+  /** Base64-encoded audio (PCM or compressed, see mime_type). */
+  audio_base64: string;
 
   sample_rate: number;
 
@@ -98,7 +99,12 @@ function normalizeSynthesizeResult(raw: unknown): SpeechSynthesizeResult {
 
   const nested = isRecord(raw.data) ? raw.data : raw;
 
-  const pcmBase64 = typeof nested.pcm_base64 === "string" ? nested.pcm_base64 : "";
+  const audioBase64 =
+    typeof nested.audio_base64 === "string"
+      ? nested.audio_base64
+      : typeof nested.pcm_base64 === "string"
+        ? nested.pcm_base64
+        : "";
 
   const sampleRate =
 
@@ -108,15 +114,15 @@ function normalizeSynthesizeResult(raw: unknown): SpeechSynthesizeResult {
 
       : 22_050;
 
-  if (!pcmBase64) {
+  if (!audioBase64) {
 
-    throw new Error("Speech synthesis response missing pcm_base64.");
+    throw new Error("Speech synthesis response missing audio data.");
 
   }
 
   return {
 
-    pcm_base64: pcmBase64,
+    audio_base64: audioBase64,
 
     sample_rate: sampleRate,
 

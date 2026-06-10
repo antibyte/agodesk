@@ -31,6 +31,8 @@ export async function initLocale(setting: UiLocaleSetting): Promise<void> {
   if (typeof document !== "undefined") {
     document.documentElement.lang = localeToBcp47(locale);
   }
+  const { syncTrayLabels } = await import("../services/tray");
+  await syncTrayLabels();
 }
 
 export async function applyLocaleSetting(setting: UiLocaleSetting): Promise<void> {

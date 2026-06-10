@@ -27,16 +27,26 @@ export async function buildSessionStartCommon(): Promise<SessionStartCommon> {
     // Host-Metadaten sind optional — AuraGo akzeptiert session.start trotzdem.
   }
 
-  const fileAccessPayload = buildFileAccessSessionPayload(get(settings).fileAccess);
+  const fileAccess = get(settings).fileAccess;
+  const fileAccessPayload = buildFileAccessSessionPayload(fileAccess);
+  const clientCapabilities = agodeskClientCapabilities(
+    get(settings).desktopControlEnabled,
+    fileAccess,
+    get(settings).browserControlEnabled,
+  );
 
-  return {
+  const common: SessionStartCommon = {
     client_version: AGODESK_CLIENT_VERSION,
-    client_capabilities: agodeskClientCapabilities(
-      get(settings).desktopControlEnabled,
-      get(settings).fileAccess,
-      get(settings).browserControlEnabled,
-    ),
+    client_capabilities: clientCapabilities,
     host,
     ...(fileAccessPayload ? { file_access: fileAccessPayload } : {}),
   };
+
+  console.info("[agodesk:session.start]", {
+    file_access_enabled: Boolean(fileAccessPayload),
+    file_roots: fileAccessPayload?.roots.map((root) => root.root_id) ?? [],
+    client_file_capabilities: clientCapabilities.filter((cap) => cap.startsWith("remote.files.")),
+  });
+
+  return common;
 }

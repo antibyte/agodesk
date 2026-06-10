@@ -43,6 +43,68 @@ pub fn is_loopback_host(host: &str) -> bool {
     matches!(host, "localhost" | "127.0.0.1" | "::1" | "[::1]")
 }
 
+/// Private LAN, link-local, loopback, typical homelab hostnames, and Tailscale DNS.
+pub fn is_homelab_host(host: &str) -> bool {
+    if is_local_network_host(host) {
+        return true;
+    }
+
+    let lower = host.trim().trim_end_matches('.').to_ascii_lowercase();
+    lower.ends_with(".ts.net") || lower.ends_with(".tailscale.net")
+}
+
+/// Private LAN, link-local, loopback, and typical homelab hostnames.
+pub fn is_local_network_host(host: &str) -> bool {
+    if is_loopback_host(host) {
+        return true;
+    }
+
+    let lower = host.trim().trim_end_matches('.').to_ascii_lowercase();
+    if lower.ends_with(".local") || lower.ends_with(".localhost") || lower == "localhost" {
+        return true;
+    }
+
+    if let Ok(ip) = host.parse::<std::net::IpAddr>() {
+        return is_local_network_ip(ip);
+    }
+
+    false
+}
+
+pub fn is_local_network_ip(ip: std::net::IpAddr) -> bool {
+    if ip.is_loopback() {
+        return true;
+    }
+    match ip {
+        std::net::IpAddr::V4(v4) => {
+            if v4.is_private() {
+                return true;
+            }
+            let octets = v4.octets();
+            octets[0] == 169 && octets[1] == 254
+        }
+        std::net::IpAddr::V6(v6) => {
+            if v6.is_loopback() {
+                return true;
+            }
+            (v6.segments()[0] & 0xffc0) == 0xfe80 || (v6.segments()[0] & 0xfe00) == 0xfc00
+        }
+    }
+}
+
+pub fn determine_asset_tls_mode(host: &str, pinned_fingerprint: Option<&str>) -> TlsMode {
+    if is_homelab_host(host) {
+        if pinned_fingerprint.is_some() {
+            return TlsMode::PinnedSelfSignedDev;
+        }
+        return TlsMode::InsecureLoopbackDev;
+    }
+    if pinned_fingerprint.is_some() {
+        return TlsMode::PinnedSelfSignedDev;
+    }
+    TlsMode::System
+}
+
 pub fn append_insecure_loopback_if_needed(raw: &str) -> Result<String, String> {
     let parsed = parse_ws_url(raw)?;
     if !parsed.is_loopback {
@@ -311,5 +373,38 @@ mod tests {
         let parsed = parse_ws_url(url).unwrap();
         let mode = determine_tls_mode(&parsed, None, None);
         assert_eq!(mode, TlsMode::System);
+    }
+
+    #[test]
+    fn is_local_network_host_detects_lan_and_homelab_names() {
+        assert!(is_local_network_host("192.168.1.10"));
+        assert!(is_local_network_host("10.0.0.5"));
+        assert!(is_local_network_host("172.16.0.2"));
+        assert!(is_local_network_host("grafana.local"));
+        assert!(is_local_network_host("127.0.0.1"));
+        assert!(!is_local_network_host("example.com"));
+    }
+
+    #[test]
+    fn determine_asset_tls_mode_allows_insecure_on_lan_without_pin() {
+        assert_eq!(
+            determine_asset_tls_mode("192.168.1.10", None),
+            TlsMode::InsecureLoopbackDev
+        );
+    }
+
+    #[test]
+    fn is_homelab_host_includes_tailscale_dns() {
+        assert!(is_homelab_host("aurago.taild1480.ts.net"));
+        assert!(is_homelab_host("machine.tailscale.net"));
+        assert!(!is_homelab_host("example.com"));
+    }
+
+    #[test]
+    fn determine_asset_tls_mode_allows_insecure_on_tailscale_without_pin() {
+        assert_eq!(
+            determine_asset_tls_mode("aurago-manifest.taild1480.ts.net", None),
+            TlsMode::InsecureLoopbackDev
+        );
     }
 }

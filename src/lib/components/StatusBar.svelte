@@ -14,9 +14,22 @@
     advertisedCapabilities?: string[];
     desktopControlEnabled?: boolean;
     minimizeToTray?: boolean;
+    voiceResponsesEnabled?: boolean;
+    historyEnabled?: boolean;
+    historyActive?: boolean;
+    integrationsEnabled?: boolean;
+    integrationsActive?: boolean;
+    integrationsCount?: number;
+    warningsEnabled?: boolean;
+    warningsActive?: boolean;
+    warningsUnacknowledged?: number;
     onOpenSettings?: () => void;
     onReconnect?: () => void;
     onToggleTheme?: () => void;
+    onToggleVoiceOutput?: () => void;
+    onToggleHistory?: () => void;
+    onToggleIntegrations?: () => void;
+    onToggleWarnings?: () => void;
   }
 
   let {
@@ -27,9 +40,22 @@
     advertisedCapabilities = [],
     desktopControlEnabled = true,
     minimizeToTray = false,
+    voiceResponsesEnabled = true,
+    historyEnabled = false,
+    historyActive = false,
+    integrationsEnabled = false,
+    integrationsActive = false,
+    integrationsCount = 0,
+    warningsEnabled = false,
+    warningsActive = false,
+    warningsUnacknowledged = 0,
     onOpenSettings,
     onReconnect,
     onToggleTheme,
+    onToggleVoiceOutput,
+    onToggleHistory,
+    onToggleIntegrations,
+    onToggleWarnings,
   }: Props = $props();
 
   const currentThemeLabel = $derived($i18n(`theme.${theme}` as MessageKey));
@@ -106,6 +132,96 @@
   <div class="titlebar-drag" data-tauri-drag-region aria-hidden="true"></div>
 
   <div class="actions">
+    {#if historyEnabled}
+      <button
+        class="ui-btn ui-btn-secondary ui-btn-icon"
+        class:is-active={historyActive}
+        type="button"
+        title={$i18n("chatView.history.title")}
+        aria-label={$i18n("chatView.history.toggle.ariaLabel")}
+        aria-pressed={historyActive}
+        onclick={() => onToggleHistory?.()}
+      >
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M3 12a9 9 0 1 0 3-6.7"></path>
+          <polyline points="3 3 3 9 9 9"></polyline>
+          <path d="M12 7v5l3 2"></path>
+        </svg>
+      </button>
+    {/if}
+
+    {#if integrationsEnabled}
+      <button
+        class="ui-btn ui-btn-secondary ui-btn-icon"
+        class:is-active={integrationsActive}
+        type="button"
+        title={$i18n("integrations.title")}
+        aria-label={$i18n("integrations.toggle.ariaLabel")}
+        aria-pressed={integrationsActive}
+        onclick={() => onToggleIntegrations?.()}
+      >
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <rect x="3" y="3" width="7" height="7" rx="1"></rect>
+          <rect x="14" y="3" width="7" height="7" rx="1"></rect>
+          <rect x="3" y="14" width="7" height="7" rx="1"></rect>
+          <path d="M14 17h7"></path>
+          <path d="M17.5 14v6"></path>
+        </svg>
+        {#if integrationsCount > 0}
+          <span class="action-badge">{integrationsCount > 9 ? "9+" : integrationsCount}</span>
+        {/if}
+      </button>
+    {/if}
+
+    {#if warningsEnabled}
+      <button
+        class="ui-btn ui-btn-secondary ui-btn-icon"
+        class:is-active={warningsActive}
+        type="button"
+        title={warningsUnacknowledged > 0
+          ? `${warningsUnacknowledged} ${$i18n("warnings.unacknowledgedLabel")}`
+          : $i18n("warnings.title")}
+        aria-label={$i18n("warnings.toggle.ariaLabel")}
+        aria-pressed={warningsActive}
+        onclick={() => onToggleWarnings?.()}
+      >
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"></path>
+          <line x1="12" y1="9" x2="12" y2="13"></line>
+          <line x1="12" y1="17" x2="12.01" y2="17"></line>
+        </svg>
+        {#if warningsUnacknowledged > 0}
+          <span class="action-badge warning">{warningsUnacknowledged > 9 ? "9+" : warningsUnacknowledged}</span>
+        {/if}
+      </button>
+    {/if}
+
+    <button
+      class="ui-btn ui-btn-secondary ui-btn-icon"
+      class:is-active={voiceResponsesEnabled}
+      type="button"
+      title={voiceResponsesEnabled
+        ? $i18n("statusBar.voiceOutput.on.title")
+        : $i18n("statusBar.voiceOutput.off.title")}
+      aria-label={$i18n("statusBar.voiceOutput.toggle.ariaLabel")}
+      aria-pressed={voiceResponsesEnabled}
+      onclick={() => onToggleVoiceOutput?.()}
+    >
+      {#if voiceResponsesEnabled}
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" class="icon-voice">
+          <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+          <path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+          <path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path>
+        </svg>
+      {:else}
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" class="icon-voice">
+          <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+          <line x1="22" x2="16" y1="9" y2="15"></line>
+          <line x1="16" x2="22" y1="9" y2="15"></line>
+        </svg>
+      {/if}
+    </button>
+
     <button
       class="ui-btn ui-btn-secondary ui-btn-icon"
       type="button"
@@ -193,12 +309,23 @@
     text-align: left;
     transition:
       border-color var(--transition-fast),
-      box-shadow var(--transition-fast);
+      box-shadow var(--transition-fast),
+      transform var(--transition-fast);
   }
 
   .status-pill:hover {
     border-color: color-mix(in srgb, var(--color-accent) 30%, var(--color-border));
     box-shadow: var(--accent-glow);
+    transform: translateY(-1px);
+  }
+
+  .status-pill:focus-visible {
+    outline: none;
+    box-shadow: var(--focus-ring);
+  }
+
+  .status-pill:active {
+    transform: translateY(0) scale(0.99);
   }
 
   .brand-mark {
@@ -299,5 +426,43 @@
 
   .ui-btn-icon:hover .icon-theme {
     transform: scale(1.08);
+  }
+
+  .ui-btn-icon.is-active {
+    color: var(--color-accent);
+    border-color: color-mix(in srgb, var(--color-accent) 35%, var(--color-border));
+    box-shadow: var(--accent-glow);
+  }
+
+  .icon-voice {
+    transition: transform var(--transition-fast);
+  }
+
+  .ui-btn-icon:hover .icon-voice {
+    transform: scale(1.08);
+  }
+
+  .ui-btn-icon {
+    position: relative;
+  }
+
+  .action-badge {
+    position: absolute;
+    top: -0.25rem;
+    right: -0.25rem;
+    min-width: 1rem;
+    height: 1rem;
+    padding: 0 0.2rem;
+    border-radius: var(--radius-full);
+    background: var(--color-accent);
+    color: white;
+    font-size: 0.5625rem;
+    font-weight: 700;
+    display: grid;
+    place-items: center;
+  }
+
+  .action-badge.warning {
+    background: var(--color-warning);
   }
 </style>

@@ -1,6 +1,7 @@
 import { Store } from "@tauri-apps/plugin-store";
 import type {
   AppSettings,
+  ChatTtsMode,
   FileAccessRoot,
   FileAccessSettings,
   SpeechSettings,
@@ -9,8 +10,6 @@ import type {
 } from "../types/protocol";
 import {
   DEFAULT_FILE_ACCESS_SETTINGS,
-  DEFAULT_HYBRID_TTS_VOICE,
-  DEFAULT_OFFLINE_TTS_VOICE,
   DEFAULT_SETTINGS,
   DEFAULT_SPEECH_SETTINGS,
   DEFAULT_UI_SOUND_SETTINGS,
@@ -20,9 +19,20 @@ import {
 import type { UiLocaleSetting } from "../i18n/locales";
 import { normalizeLocaleSetting } from "../i18n/locales";
 import { applyLocaleSetting } from "../i18n/store";
+import { syncFileSearchRoots } from "./file-search-sync";
 import { normalizeServerUrl } from "./server-url";
 import { updateSettings } from "../stores/settings";
 import { initThemeListener } from "./theme";
+import { normalizeShowWindowHotkey } from "./show-window-hotkey";
+import { defaultLocalAsrModelForAppLocale } from "./local-asr-model";
+import {
+  applySpeechLocaleDefaults,
+  defaultEdgeTtsVoiceForSpeechLanguage,
+  defaultPiperVoiceForSpeechLanguage,
+  normalizeEdgeTtsVoiceForLanguage,
+  normalizePiperVoiceForLanguage,
+  speechLanguageForAppLocale,
+} from "./speech-locale";
 import { buildPathDisplay } from "./file-access";
 
 const STORE_PATH = "settings.json";
@@ -65,21 +75,27 @@ export function normalizeUiSoundSettings(
 
 function normalizeSpeechSettings(
   saved: Partial<SpeechSettings> | null | undefined,
+  appLocale: UiLocaleSetting,
 ): SpeechSettings {
+  const defaultAsrModel = defaultLocalAsrModelForAppLocale(appLocale);
+
   if (!saved || typeof saved !== "object") {
-    return { ...DEFAULT_SPEECH_SETTINGS };
+    return applySpeechLocaleDefaults(
+      {
+        ...DEFAULT_SPEECH_SETTINGS,
+        localAsrModel: defaultAsrModel,
+      },
+      appLocale,
+    );
   }
 
-  const browserLanguage =
-    typeof navigator !== "undefined" && navigator.language
-      ? navigator.language
-      : "de-DE";
+  const defaultLanguage = speechLanguageForAppLocale(appLocale);
 
   const provider = normalizeSpeechProvider(saved.provider);
   const language =
     typeof saved.language === "string" && saved.language.trim().length > 0
       ? saved.language.trim()
-      : browserLanguage;
+      : defaultLanguage;
 
   const normalized: SpeechSettings = {
     enabled:
@@ -110,44 +126,38 @@ function normalizeSpeechSettings(
         : DEFAULT_SPEECH_SETTINGS.voiceName,
     localAsrModel: (() => {
       const model = saved.localAsrModel as string | undefined;
-      let resolved: SpeechSettings["localAsrModel"];
-      if (model === "whisper_small_de") {
-        resolved = model;
-      } else if (model === "sense_voice_int8" || model === "omnilingual_ctc_int8") {
-        resolved = "omnilingual_ctc_int8";
-      } else {
-        resolved = DEFAULT_SPEECH_SETTINGS.localAsrModel;
+      if (model === "whisper_small_de" || model === "sense_voice_int8") {
+        return model;
       }
-
-      if (resolved === "omnilingual_ctc_int8" && language.toLowerCase().startsWith("de")) {
-        return "whisper_small_de";
-      }
-
-      return resolved;
+      return defaultAsrModel;
     })(),
     hybridTtsBackend:
-      saved.hybridTtsBackend === "azure" || saved.hybridTtsBackend === "edge_tts"
+      saved.hybridTtsBackend === "azure"
+        || saved.hybridTtsBackend === "edge_tts"
+        || saved.hybridTtsBackend === "piper"
         ? saved.hybridTtsBackend
         : DEFAULT_SPEECH_SETTINGS.hybridTtsBackend,
     hybridTtsVoice:
       typeof saved.hybridTtsVoice === "string" && saved.hybridTtsVoice.trim().length > 0
-        ? saved.hybridTtsVoice.trim()
-        : DEFAULT_HYBRID_TTS_VOICE,
+        ? normalizeEdgeTtsVoiceForLanguage(saved.hybridTtsVoice.trim(), language)
+        : defaultEdgeTtsVoiceForSpeechLanguage(defaultLanguage),
     offlineTtsVoice:
       typeof saved.offlineTtsVoice === "string" && saved.offlineTtsVoice.trim().length > 0
-        ? saved.offlineTtsVoice.trim()
-        : DEFAULT_OFFLINE_TTS_VOICE,
+        ? normalizePiperVoiceForLanguage(saved.offlineTtsVoice.trim(), language)
+        : defaultPiperVoiceForSpeechLanguage(defaultLanguage),
     bargeInMode:
       saved.bargeInMode === "energy" || saved.bargeInMode === "silero" || saved.bargeInMode === "auto"
         ? saved.bargeInMode
         : DEFAULT_SPEECH_SETTINGS.bargeInMode,
   };
 
-  if (provider !== "gemini_live") {
-    normalized.voiceResponses = true;
+  const languageExplicit =
+    typeof saved.language === "string" && saved.language.trim().length > 0;
+  if (languageExplicit) {
+    return normalized;
   }
 
-  return normalized;
+  return applySpeechLocaleDefaults(normalized, appLocale);
 }
 
 function normalizeFileAccessRoot(raw: Partial<FileAccessRoot>): FileAccessRoot {
@@ -209,6 +219,10 @@ export function normalizeAppSettings(
   const theme = saved?.theme;
   const serverUrl = normalizeServerUrl(saved?.serverUrl ?? DEFAULT_SETTINGS.serverUrl);
 
+  const locale = normalizeLocaleSetting(
+    (saved?.locale as UiLocaleSetting | undefined) ?? DEFAULT_SETTINGS.locale,
+  );
+
   return {
     ...DEFAULT_SETTINGS,
     ...saved,
@@ -217,15 +231,14 @@ export function normalizeAppSettings(
       theme === "light" || theme === "dark" || theme === "system"
         ? theme
         : DEFAULT_SETTINGS.theme,
-    locale: normalizeLocaleSetting(
-      (saved?.locale as UiLocaleSetting | undefined) ?? DEFAULT_SETTINGS.locale,
-    ),
-    speech: normalizeSpeechSettings(saved?.speech),
+    locale,
+    speech: normalizeSpeechSettings(saved?.speech, locale),
     uiSounds: normalizeUiSoundSettings(saved?.uiSounds),
     minimizeToTray:
       typeof saved?.minimizeToTray === "boolean"
         ? saved.minimizeToTray
         : DEFAULT_SETTINGS.minimizeToTray,
+    showWindowHotkey: normalizeShowWindowHotkey(saved?.showWindowHotkey),
     desktopControlEnabled:
       typeof saved?.desktopControlEnabled === "boolean"
         ? saved.desktopControlEnabled
@@ -235,7 +248,24 @@ export function normalizeAppSettings(
         ? saved.browserControlEnabled
         : DEFAULT_SETTINGS.browserControlEnabled,
     fileAccess: normalizeFileAccessSettings(saved?.fileAccess),
+    chatTtsMode: normalizeChatTtsMode(saved?.chatTtsMode),
+    chatSpeakerMode:
+      typeof saved?.chatSpeakerMode === "boolean"
+        ? saved.chatSpeakerMode
+        : DEFAULT_SETTINGS.chatSpeakerMode,
   };
+}
+
+function normalizeChatTtsMode(value: unknown): ChatTtsMode {
+  if (
+    value === "auto" ||
+    value === "aurago" ||
+    value === "frontend" ||
+    value === "off"
+  ) {
+    return value;
+  }
+  return DEFAULT_SETTINGS.chatTtsMode;
 }
 
 async function applySettings(next: AppSettings): Promise<void> {
@@ -243,6 +273,9 @@ async function applySettings(next: AppSettings): Promise<void> {
   updateSettings(normalized);
   initThemeListener(normalized.theme);
   await applyLocaleSetting(normalized.locale);
+  void syncFileSearchRoots(normalized.fileAccess).catch((error) => {
+    console.warn("[agodesk:file-search] index sync failed", error);
+  });
 }
 
 export async function loadSettings(): Promise<AppSettings> {

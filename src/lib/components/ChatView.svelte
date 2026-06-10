@@ -8,7 +8,17 @@
   import PairingBanner from "./PairingBanner.svelte";
   import RemoteControlBanner from "./RemoteControlBanner.svelte";
   import ChatPlanFloatingPanel from "./ChatPlanFloatingPanel.svelte";
+  import ChatHistoryPanel from "./ChatHistoryPanel.svelte";
+  import IntegrationsPanel from "./IntegrationsPanel.svelte";
+  import SystemWarningsPanel from "./SystemWarningsPanel.svelte";
+  import IntegrationEmbedModal from "./IntegrationEmbedModal.svelte";
   import CertificateTrustModal from "./CertificateTrustModal.svelte";
+  import {
+    closeIntegrationEmbed,
+    isIntegrationEmbedAvailable,
+    isIntegrationPreviewOpen,
+    openIntegrationPreview,
+  } from "../services/integration-embed";
   import SpeechBackgroundVisualizer from "./SpeechBackgroundVisualizer.svelte";
   import SpeechBanner from "./SpeechBanner.svelte";
   import { chatMessages } from "../stores/chat";
@@ -23,52 +33,53 @@
   import { saveTrustedCertificate } from "../services/tls";
   import { openExternalUrl } from "../services/open-external-url";
   import { applyMinimizeToTraySetting } from "../services/tray";
-  import { sendChatMessage } from "../services/chat-outbound";
+  import { applyShowWindowHotkey } from "../services/show-window-hotkey";
+  import { sendChatMessageWithConversation, stopActiveChatRequest } from "../services/chat-outbound";
+  import {
+    createNewChatConversation,
+    loadChatConversation,
+  } from "../services/chat-conversation-flow";
+  import { chatConversationState } from "../stores/chat-conversation";
+  import { chatMediaState } from "../stores/chat-media-state";
+  import {
+    refreshIntegrationsWebhosts,
+    refreshSystemWarnings,
+  } from "../services/agodesk-features-bootstrap";
+  import { buildSystemWarningAcknowledgeMessage } from "../services/system-warnings-flow";
   import { deliverSpeechTranscript } from "../services/speech-delivery";
-  import { stopSpeechSession, toggleSpeechSession, speakLocalAssistantText } from "../services/speech-flow";
+  import { stopSpeechSession, toggleSpeechSession } from "../services/speech-flow";
+  import { interruptLocalSpeechPlayback } from "../services/local-speech-tts";
+  import { stopAllChatAssistantTts } from "../services/chat-audio";
+  import {
+    notifyAuraGoVoiceOutputStatus,
+    resolveChatSpeakerMode,
+  } from "../services/chat-voice-output-status";
   import { isDevAsrPlaceholder, parseDevAsrDurationMs } from "../services/speech-sidecar";
   import type { SpeechToolContext } from "../services/speech-tool-router";
   import {
-    applyPersonaAssets,
-    clearPersonaAssets,
-    requestPersonaAssets,
-  } from "../services/persona-flow";
-  import {
-    handleSessionAccepted,
-    handleSessionError,
-    handleSystemConnected,
     retryStoredPairing,
     sendPairingSessionStart,
     unpairDevice,
+    handleSessionError,
   } from "../services/session-flow";
   import {
     clearRemoteControlState,
     flushPendingInputCommands,
-    handleIncomingDesktopCommand,
     rejectPendingInputCommands,
-    resetDesktopCommandState,
   } from "../services/desktop-flow";
-  import { controlPermissionStatus, resetDesktopSession, setInputApproval } from "../services/desktop";
+  import { controlPermissionStatus, setInputApproval } from "../services/desktop";
   import { playUiSound } from "../services/ui-sounds";
-  import { notifyIncomingMessageIfHidden } from "../services/message-notifications";
-import { handleChatResponseChunk } from "../services/chat-inbound";
-import { applySessionClear } from "../services/session-clear";
-import { handleChatPlanUpdate, reconcilePlanFromResponse } from "../services/chat-plan-inbound";
-import { handleChatResponseMood, handleChatChunkMood } from "../services/agent-mood-inbound";
-import { chatPlanState, isChatPlanPanelVisible } from "../stores/chat-plan";
-import { agentMoodState } from "../stores/agent-mood";
-import {
-  WebSocketService,
-  isChatError,
-  isChatPlanUpdate,
-  isChatResponse,
-  isChatResponseChunk,
-  isDesktopCommand,
-  isPersonaAssets,
-  isSessionAccepted,
-  isSessionClear,
-  isSystemConnected,
-} from "../services/websocket";
+  import {
+    createChatWsInboundContext,
+    createSystemMessageAppender,
+    handleChatWsMessage,
+  } from "../services/chat-ws-inbound";
+  import {
+    connectChatWebSocket,
+    createWebSocketService,
+  } from "../services/chat-ws-connect";
+  import { chatPlanState, isChatPlanPanelVisible } from "../stores/chat-plan";
+  import { agentMoodState } from "../stores/agent-mood";
   import type {
     AppSettings,
     CertificateProbeResult,
@@ -77,13 +88,15 @@ import {
   } from "../types/protocol";
   import {
     canSendChat,
-    hasAdvertisedAgentMetadata,
+    hasAdvertisedChatSessions,
+    hasAdvertisedChatMediaEvents,
+    hasAdvertisedIntegrationsWebhosts,
     hasAdvertisedPlanUpdates,
     hasAdvertisedRemoteDesktopCapture,
+    hasAdvertisedSystemWarnings,
     isTlsFatalError,
-    normalizeChatResponsePayload,
     speechProviderRequiresGeminiApiKey,
-} from "../types/protocol";
+  } from "../types/protocol";
 
   let pending = $state(false);
   let settingsOpen = $state(false);
@@ -92,16 +105,56 @@ import {
   let certModalOpen = $state(false);
   let tlsErrorCode = $state<ClientErrorCode | null>(null);
   let composerDraft = $state("");
-  let wsService = new WebSocketService();
-  let prevConnection = $state<string | null>(null);
+  let embedModalOpen = $state(false);
+  let embedModalUrl = $state("");
+  let embedModalTitle = $state("");
+  const integrationPreviewNative = isIntegrationEmbedAvailable();
+  let wsService = createWebSocketService();
+  let prevConnection: typeof $connectionStatus | null = null;
+
+  const chatConversationReady = $derived(
+    !hasAdvertisedChatSessions($sessionState.advertisedCapabilities) ||
+      Boolean($chatConversationState.activeConversationId) ||
+      $chatConversationState.legacyChatMode,
+  );
+
+  const chatSpeakerEnabled = $derived(resolveChatSpeakerMode($settings));
 
   const chatAllowed = $derived(
     canSendChat(
       $sessionState.status,
       $connectionStatus,
       $sessionState.sessionId,
-    ) && !pending,
+    ) &&
+      !pending &&
+      chatConversationReady,
   );
+
+  const stopVisible = $derived($chatConversationState.requestInFlight);
+
+  const historyEnabled = $derived(
+    hasAdvertisedChatSessions($sessionState.advertisedCapabilities),
+  );
+
+  const mediaEnabled = $derived(
+    hasAdvertisedChatMediaEvents($sessionState.advertisedCapabilities),
+  );
+
+  const integrationsEnabled = $derived(
+    hasAdvertisedIntegrationsWebhosts($sessionState.advertisedCapabilities),
+  );
+
+  const warningsEnabled = $derived(
+    hasAdvertisedSystemWarnings($sessionState.advertisedCapabilities),
+  );
+
+  const activeMediaItems = $derived.by(() => {
+    const conversationId = $chatConversationState.activeConversationId;
+    if (!conversationId) {
+      return [];
+    }
+    return $chatMediaState.mediaByConversation.get(conversationId) ?? [];
+  });
 
   const streamingActive = $derived(
     $chatMessages.some((message) => message.streaming === true),
@@ -139,6 +192,12 @@ import {
     if (pending) {
       return t("chatView.hint.awaitingResponse");
     }
+    if (
+      hasAdvertisedChatSessions($sessionState.advertisedCapabilities) &&
+      !chatConversationReady
+    ) {
+      return t("chatView.hint.conversationLoading");
+    }
     return "";
   });
 
@@ -147,16 +206,7 @@ import {
     params?: Record<string, string | number>,
     tone: "info" | "success" | "error" = "info",
   ): void {
-    const t = getTranslateFn();
-    chatMessages.addMessage({
-      id: crypto.randomUUID(),
-      role: "system",
-      text: t(key, params),
-      timestamp: new Date().toISOString(),
-      messageKey: key,
-      messageParams: params,
-      tone,
-    });
+    createSystemMessageAppender()(key, params, tone);
   }
 
   function createDesktopResultSender() {
@@ -173,228 +223,63 @@ import {
     certModalOpen = true;
   }
 
-  function maybeRequestPersonaAssets(): void {
-    const session = get(sessionState);
-    if (
-      !session.sessionId ||
-      (session.status !== "loopback" && session.status !== "accepted")
-    ) {
-      return;
-    }
-    void requestPersonaAssets(wsService, session.sessionId);
-  }
-
   function resetPlanAndMoodState(): void {
     chatPlanState.reset();
     agentMoodState.reset();
   }
 
+  function createWsInboundContext() {
+    return createChatWsInboundContext(wsService, $settings.serverUrl, {
+      addSystemMessage,
+      setPending: (value) => {
+        pending = value;
+      },
+      setPairingBusy: (value) => {
+        pairingBusy = value;
+      },
+      setComposerDraft: (value) => {
+        composerDraft = value;
+      },
+      setRemoteOperation: (value) => {
+        remoteOperation = value;
+      },
+      resetPlanAndMoodState,
+      wsSend: (message) => wsService.send(message),
+    });
+  }
+
   async function handleIncomingMessage(message: WsMessage): Promise<void> {
-    if (isSessionAccepted(message)) {
-      pairingBusy = false;
-      await handleSessionAccepted(message.payload, $settings.serverUrl);
-      maybeRequestPersonaAssets();
-      return;
-    }
-
-    if (isSessionClear(message)) {
-      pending = false;
-      pairingBusy = false;
-      composerDraft = "";
-      const cleared = await applySessionClear(message.payload);
-      if (cleared) {
-        addSystemMessage(
-          cleared.reason
-            ? "chatView.sessionClear.withReason"
-            : "chatView.sessionClear.notice",
-          cleared.reason ? { reason: cleared.reason } : undefined,
-          "info",
-        );
-      }
-      return;
-    }
-
-    if (isSystemConnected(message)) {
-      pairingBusy = true;
-      sessionState.reset();
-      resetPlanAndMoodState();
-      clearPersonaAssets();
-      try {
-        await handleSystemConnected(
-          wsService,
-          message.payload,
-          $settings.serverUrl,
-        );
-        maybeRequestPersonaAssets();
-      } finally {
-        if ($sessionState.status === "awaiting_pairing") {
-          pairingBusy = false;
-        }
-      }
-      return;
-    }
-
-    if (isPersonaAssets(message)) {
-      await applyPersonaAssets(message.payload, $settings.serverUrl);
-      return;
-    }
-
-    const caps = get(sessionState).advertisedCapabilities;
-
-    if (isChatPlanUpdate(message) && hasAdvertisedPlanUpdates(caps)) {
-      handleChatPlanUpdate(message.payload);
-      return;
-    }
-
-    if (isChatResponseChunk(message)) {
-      if (hasAdvertisedAgentMetadata(caps)) {
-        handleChatChunkMood(
-          message.payload.session_id,
-          message.payload.request_id,
-          message.payload.metadata,
-        );
-      }
-      const result = handleChatResponseChunk(
-        message.payload,
-        message.timestamp,
-      );
-      if (!result) {
-        return;
-      }
-      if (result.completed) {
-        pending = false;
-        playUiSound("receive");
-        void notifyIncomingMessageIfHidden(result.text);
-        void speakLocalAssistantText(result.text, $settings.speech);
-      } else {
-        pending = true;
-      }
-      return;
-    }
-
-    if (isChatResponse(message)) {
-      pending = false;
-      const normalized = normalizeChatResponsePayload(message.payload);
-      if (hasAdvertisedAgentMetadata(caps) && normalized) {
-        handleChatResponseMood(normalized);
-      }
-      if (hasAdvertisedPlanUpdates(caps) && normalized) {
-        reconcilePlanFromResponse(normalized.metadata);
-      }
-
-      const responseText = normalized?.text ?? message.payload.text;
-      const responseRequestId = normalized?.request_id ?? message.payload.request_id;
-
-      const finalized = chatMessages.finalizeStreamingResponse(
-        responseRequestId,
-        responseText,
-        message.timestamp,
-        message.id,
-      );
-      if (!finalized) {
-        chatMessages.addMessage({
-          id: message.id,
-          role: "assistant",
-          text: responseText,
-          timestamp: message.timestamp,
-          requestId: responseRequestId,
-        });
-      }
-      playUiSound("receive");
-      void notifyIncomingMessageIfHidden(responseText);
-      void speakLocalAssistantText(responseText, $settings.speech);
-      return;
-    }
-
-    if (isChatError(message)) {
-      pending = false;
-      pairingBusy = false;
-
-      if (message.payload.code.startsWith("SESSION_")) {
-        await handleSessionError(message.payload.message);
-      }
-
-      chatMessages.addMessage({
-        id: message.id,
-        role: "system",
-        text: message.payload.message,
-        timestamp: message.timestamp,
-        requestId: message.payload.request_id,
-        tone: "error",
-      });
-      return;
-    }
-
-    if (isDesktopCommand(message)) {
-      remoteOperation = String(
-        (message.payload as { operation?: string })?.operation ?? "",
-      );
-      await handleIncomingDesktopCommand(message, {
-        sessionStatus: $sessionState.status,
-        remoteControlActive: $sessionState.remoteControlActive,
-        sessionId: $sessionState.sessionId,
-        deviceId: $sessionState.deviceId,
-        onRemoteControlPrompt: () => {
-          addSystemMessage("chatView.remoteControl.prompt", undefined, "info");
-        },
-        wsSend: async (resultMessage) => {
-          try {
-            await wsService.send(resultMessage);
-          } catch (error) {
-            addSystemMessage(
-              "chatView.error.desktopResultSendFailed",
-              undefined,
-              "error",
-            );
-            void error;
-          }
-        },
-      });
-    }
+    await handleChatWsMessage(message, createWsInboundContext());
   }
 
   async function connect(
     url: string,
     options?: { pinnedFingerprint?: string },
   ): Promise<void> {
-    await wsService.disconnect().catch(() => {});
-    await stopSpeechSession().catch(() => {});
-    await resetDesktopSession().catch(() => {});
-    resetDesktopCommandState();
-    clearRemoteControlState();
-    clearPersonaAssets();
-    sessionState.reset();
-    resetPlanAndMoodState();
     certModalOpen = false;
     tlsErrorCode = null;
     pending = false;
 
-    wsService = new WebSocketService();
-    wsService.onMessage((message) => {
-      void handleIncomingMessage(message);
-    });
-    wsService.onError((code, message) => {
-      if (isTlsFatalError(code)) {
-        handleTlsError(code);
-        return;
-      }
-      chatMessages.addMessage({
-        id: crypto.randomUUID(),
-        role: "system",
-        text: message,
-        timestamp: new Date().toISOString(),
-        tone: "error",
-      });
-    });
+    wsService = createWebSocketService();
 
     try {
-      await wsService.connect(url, options);
+      await connectChatWebSocket(wsService, {
+        url,
+        pinnedFingerprint: options?.pinnedFingerprint,
+        onMessage: handleIncomingMessage,
+        onTlsError: handleTlsError,
+        onConnectionError: (message) => {
+          chatMessages.addMessage({
+            id: crypto.randomUUID(),
+            role: "system",
+            text: message,
+            timestamp: new Date().toISOString(),
+            tone: "error",
+          });
+        },
+      });
     } catch (error) {
-      addSystemMessage(
-        "chatView.error.connectFailed",
-        undefined,
-        "error",
-      );
+      addSystemMessage("chatView.error.connectFailed", undefined, "error");
       void error;
     }
   }
@@ -402,12 +287,32 @@ import {
   async function init(): Promise<void> {
     const loaded = await loadSettings();
     await applyMinimizeToTraySetting(loaded.minimizeToTray);
+    await applyShowWindowHotkey(loaded.showWindowHotkey);
     await connect(loaded.serverUrl);
   }
 
   async function handleSaveSettings(next: AppSettings): Promise<void> {
+    const previous = get(settings);
+    const previousSpeakerMode = resolveChatSpeakerMode(previous);
+    const nextSpeakerMode = resolveChatSpeakerMode(next);
+
+    if (!nextSpeakerMode && previousSpeakerMode !== nextSpeakerMode) {
+      stopAllChatAssistantTts();
+      interruptLocalSpeechPlayback();
+    }
+
     await saveSettings(next);
     await applyMinimizeToTraySetting(next.minimizeToTray);
+    const hotkeyResult = await applyShowWindowHotkey(next.showWindowHotkey);
+    if (!hotkeyResult.ok) {
+      addSystemMessage("chatView.error.showWindowHotkey", undefined, "error");
+    }
+
+    if (previousSpeakerMode !== nextSpeakerMode) {
+      const reason = nextSpeakerMode ? "user_enabled" : "user_disabled";
+      await notifyAuraGoVoiceOutputStatus(wsService, reason, nextSpeakerMode);
+    }
+
     if (!next.speech.enabled) {
       await stopSpeechSession();
     }
@@ -425,6 +330,25 @@ import {
   async function handleToggleTheme(): Promise<void> {
     const nextTheme = cycleTheme($settings.theme);
     await saveSettings({ ...$settings, theme: nextTheme });
+  }
+
+  async function handleToggleVoiceOutput(): Promise<void> {
+    const current = get(settings);
+    const nextSpeakerMode = !current.chatSpeakerMode;
+    if (!nextSpeakerMode) {
+      stopAllChatAssistantTts();
+      interruptLocalSpeechPlayback();
+    }
+    playUiSound("notice");
+    await notifyAuraGoVoiceOutputStatus(
+      wsService,
+      nextSpeakerMode ? "user_enabled" : "user_disabled",
+      nextSpeakerMode,
+    );
+    await saveSettings({
+      ...current,
+      chatSpeakerMode: nextSpeakerMode,
+    });
   }
 
   async function handlePair(token: string): Promise<void> {
@@ -490,8 +414,8 @@ import {
       getDesktopPermissionStatus: async () =>
         (await controlPermissionStatus()) as unknown as Record<string, unknown>,
       sendToAuraGo: async (text) => {
-        await sendChatMessage(
-          (message) => wsService.send(message),
+        await sendChatMessageWithConversation(
+          wsService,
           $sessionState.sessionId,
           text,
         );
@@ -632,8 +556,8 @@ import {
       return;
     }
     try {
-      await sendChatMessage(
-        (message) => wsService.send(message),
+      await sendChatMessageWithConversation(
+        wsService,
         $sessionState.sessionId,
         text,
       );
@@ -654,6 +578,88 @@ import {
     }
   }
 
+  async function handleStopRequest(): Promise<void> {
+    pending = false;
+    await stopActiveChatRequest(wsService);
+  }
+
+  async function handleNewChat(): Promise<void> {
+    if (!historyEnabled || !$sessionState.sessionId) {
+      return;
+    }
+    chatConversationState.setHistoryOpen(false);
+    await createNewChatConversation(wsService, $sessionState.sessionId);
+  }
+
+  async function handleLoadConversation(conversationId: string): Promise<void> {
+    if (!$sessionState.sessionId) {
+      return;
+    }
+    chatConversationState.setHistoryOpen(false);
+    await loadChatConversation(wsService, $sessionState.sessionId, conversationId);
+  }
+
+  function handleToggleHistory(): void {
+    const next = !$chatConversationState.historyOpen;
+    chatConversationState.setHistoryOpen(next);
+    if (next) {
+      chatMediaState.setIntegrationsOpen(false);
+      chatMediaState.setWarningsOpen(false);
+    }
+  }
+
+  function handleToggleIntegrations(): void {
+    const next = !$chatMediaState.integrationsOpen;
+    chatMediaState.setIntegrationsOpen(next);
+    if (next) {
+      chatConversationState.setHistoryOpen(false);
+      chatMediaState.setWarningsOpen(false);
+      void refreshIntegrationsWebhosts(wsService);
+    }
+  }
+
+  function handleToggleWarnings(): void {
+    const next = !$chatMediaState.warningsOpen;
+    chatMediaState.setWarningsOpen(next);
+    if (next) {
+      chatConversationState.setHistoryOpen(false);
+      chatMediaState.setIntegrationsOpen(false);
+      void refreshSystemWarnings(wsService);
+    }
+  }
+
+  function handleOpenEmbedded(url: string, title?: string): void {
+    if (integrationPreviewNative) {
+      void openIntegrationPreview(url, title).then((opened) => {
+        if (!opened) {
+          void openExternalUrl(url);
+        }
+      });
+      return;
+    }
+    embedModalUrl = url;
+    embedModalTitle = title ?? "";
+    embedModalOpen = true;
+  }
+
+  async function handleAcknowledgeWarning(id: string): Promise<void> {
+    if (!$sessionState.sessionId) {
+      return;
+    }
+    await wsService.send(
+      buildSystemWarningAcknowledgeMessage($sessionState.sessionId, { id }),
+    );
+  }
+
+  async function handleAcknowledgeAllWarnings(): Promise<void> {
+    if (!$sessionState.sessionId) {
+      return;
+    }
+    await wsService.send(
+      buildSystemWarningAcknowledgeMessage($sessionState.sessionId, { all: true }),
+    );
+  }
+
   $effect(() => {
     const conn = $connectionStatus;
     const prev = prevConnection;
@@ -671,6 +677,12 @@ import {
       if (certModalOpen) {
         e.preventDefault();
         certModalOpen = false;
+      } else if (embedModalOpen) {
+        e.preventDefault();
+        embedModalOpen = false;
+      } else if (integrationPreviewNative && isIntegrationPreviewOpen()) {
+        e.preventDefault();
+        void closeIntegrationEmbed();
       } else if (settingsOpen) {
         e.preventDefault();
         settingsOpen = false;
@@ -702,12 +714,6 @@ import {
     onStop={() => void handleStopRemote()}
   />
 
-  <ChatPlanFloatingPanel
-    visible={chatPlanVisible}
-    plan={$chatPlanState.plan}
-    requestId={$chatPlanState.requestId}
-  />
-
   {#if settingsOpen}
     <SettingsView
       serverUrl={$settings.serverUrl}
@@ -716,13 +722,16 @@ import {
       speech={$settings.speech}
       uiSounds={$settings.uiSounds}
       minimizeToTray={$settings.minimizeToTray}
+      showWindowHotkey={$settings.showWindowHotkey}
       desktopControlEnabled={$settings.desktopControlEnabled}
       browserControlEnabled={$settings.browserControlEnabled}
       fileAccess={$settings.fileAccess}
+      chatTtsMode={$settings.chatTtsMode}
       connectionStatus={$connectionStatus}
       sessionStatus={$sessionState.status}
       sessionId={$sessionState.sessionId}
       sessionError={$sessionState.errorMessage}
+      advertisedCapabilities={$sessionState.advertisedCapabilities}
       remoteControlActive={$sessionState.remoteControlActive}
       appVersion="0.1.0"
       onBack={() => (settingsOpen = false)}
@@ -742,18 +751,65 @@ import {
         active={$speechState.isActive}
         status={$speechState.status}
       />
-      <StatusBar
-        serverUrl={$settings.serverUrl}
-        theme={$settings.theme}
-        sessionStatus={$sessionState.status}
-        connectionStatus={$connectionStatus}
-        advertisedCapabilities={$sessionState.advertisedCapabilities}
-        desktopControlEnabled={$settings.desktopControlEnabled}
-        minimizeToTray={$settings.minimizeToTray}
-        onOpenSettings={() => (settingsOpen = true)}
-        onReconnect={() => void connect($settings.serverUrl)}
-        onToggleTheme={() => void handleToggleTheme()}
-      />
+      <div class="chat-header-area">
+        <StatusBar
+          serverUrl={$settings.serverUrl}
+          theme={$settings.theme}
+          sessionStatus={$sessionState.status}
+          connectionStatus={$connectionStatus}
+          advertisedCapabilities={$sessionState.advertisedCapabilities}
+          desktopControlEnabled={$settings.desktopControlEnabled}
+          minimizeToTray={$settings.minimizeToTray}
+          voiceResponsesEnabled={chatSpeakerEnabled}
+          historyEnabled={historyEnabled}
+          historyActive={$chatConversationState.historyOpen}
+          integrationsEnabled={integrationsEnabled}
+          integrationsActive={$chatMediaState.integrationsOpen}
+          integrationsCount={$chatMediaState.integrationWebhosts.length}
+          warningsEnabled={warningsEnabled}
+          warningsActive={$chatMediaState.warningsOpen}
+          warningsUnacknowledged={$chatMediaState.warningUnacknowledged}
+          onOpenSettings={() => (settingsOpen = true)}
+          onReconnect={() => void connect($settings.serverUrl)}
+          onToggleTheme={() => void handleToggleTheme()}
+          onToggleVoiceOutput={() => void handleToggleVoiceOutput()}
+          onToggleHistory={handleToggleHistory}
+          onToggleIntegrations={handleToggleIntegrations}
+          onToggleWarnings={handleToggleWarnings}
+        />
+
+        <ChatHistoryPanel
+          visible={historyEnabled && $chatConversationState.historyOpen}
+          sessions={$chatConversationState.sessions}
+          activeConversationId={$chatConversationState.activeConversationId}
+          onSelect={(conversationId) => void handleLoadConversation(conversationId)}
+          onNewChat={() => void handleNewChat()}
+          onClose={() => chatConversationState.setHistoryOpen(false)}
+        />
+
+        <IntegrationsPanel
+          visible={integrationsEnabled && $chatMediaState.integrationsOpen}
+          webhosts={$chatMediaState.integrationWebhosts}
+          serverUrl={$settings.serverUrl}
+          onClose={() => chatMediaState.setIntegrationsOpen(false)}
+          onOpenEmbedded={handleOpenEmbedded}
+        />
+
+        <SystemWarningsPanel
+          visible={warningsEnabled && $chatMediaState.warningsOpen}
+          warnings={$chatMediaState.systemWarnings}
+          unacknowledged={$chatMediaState.warningUnacknowledged}
+          onClose={() => chatMediaState.setWarningsOpen(false)}
+          onAcknowledge={(id) => void handleAcknowledgeWarning(id)}
+          onAcknowledgeAll={() => void handleAcknowledgeAllWarnings()}
+        />
+
+        <ChatPlanFloatingPanel
+          visible={chatPlanVisible}
+          plan={$chatPlanState.plan}
+          requestId={$chatPlanState.requestId}
+        />
+      </div>
 
       <PairingBanner
         visible={$sessionState.status === "awaiting_pairing" ||
@@ -787,6 +843,10 @@ import {
         sessionStatus={$sessionState.status}
         connectionStatus={$connectionStatus}
         speechActive={$speechState.isActive}
+        mediaEnabled={mediaEnabled}
+        mediaItems={activeMediaItems}
+        serverUrl={$settings.serverUrl}
+        onOpenEmbedded={handleOpenEmbedded}
         onOpenSettings={() => (settingsOpen = true)}
       />
 
@@ -796,7 +856,9 @@ import {
         bind:draft={composerDraft}
         speechStatus={$speechState.status}
         speechEnabled={speechAllowed}
+        stopVisible={stopVisible}
         onSpeechToggle={() => void handleSpeechToggle()}
+        onStop={() => void handleStopRequest()}
         onSubmit={(text) => void handleSubmit(text)}
       />
     </div>
@@ -811,6 +873,15 @@ import {
   onTrust={(probe) => void handleTrustCertificate(probe)}
   onOpenBrowser={handleOpenBrowser}
 />
+
+{#if !integrationPreviewNative}
+  <IntegrationEmbedModal
+    open={embedModalOpen}
+    url={embedModalUrl}
+    title={embedModalTitle}
+    onClose={() => (embedModalOpen = false)}
+  />
+{/if}
 
 <style>
   .app-shell {
@@ -835,6 +906,11 @@ import {
   .chat-view > :not(.speech-bg) {
     position: relative;
     z-index: 1;
+  }
+
+  .chat-header-area {
+    position: relative;
+    flex-shrink: 0;
   }
 
   .info-banner {

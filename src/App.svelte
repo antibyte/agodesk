@@ -17,7 +17,8 @@
 
 <style>
   .app-window {
-    height: 100vh;
+    position: relative;
+    height: 100dvh;
     overflow: hidden;
     border-radius: var(--radius-window);
     clip-path: inset(0 round var(--radius-window));
@@ -25,22 +26,39 @@
     border: 1px solid var(--glass-border);
     background:
       radial-gradient(
-        circle 600px at 50% -150px,
-        color-mix(in srgb, var(--color-accent) 14%, transparent),
-        transparent 80%
+        ellipse 720px 420px at 50% -120px,
+        color-mix(in srgb, var(--color-accent) 16%, transparent),
+        transparent 72%
       ),
       radial-gradient(
-        circle 400px at 100% 100%,
-        color-mix(in srgb, var(--color-danger) 6%, transparent),
-        transparent 80%
+        ellipse 480px 360px at 105% 92%,
+        color-mix(in srgb, var(--color-accent) 7%, transparent),
+        transparent 68%
       ),
       radial-gradient(
-        circle 500px at -10% 50%,
-        color-mix(in srgb, var(--color-accent) 6%, transparent),
-        transparent 75%
+        ellipse 520px 380px at -8% 42%,
+        color-mix(in srgb, var(--color-accent) 5%, transparent),
+        transparent 70%
       ),
       var(--color-bg);
     color: var(--color-text);
     transition: background var(--transition-base);
+  }
+
+  .app-window::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    border-radius: inherit;
+    opacity: 0.045;
+    mix-blend-mode: overlay;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+
+  .app-window > :global(*) {
+    position: relative;
+    z-index: 1;
   }
 </style>

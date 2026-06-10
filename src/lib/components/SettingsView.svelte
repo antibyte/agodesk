@@ -1,6 +1,7 @@
 <script lang="ts">
   import type {
     AppSettings,
+    ChatTtsMode,
     ConnectionStatus,
     FileAccessRoot,
     FileAccessSettings,
@@ -20,6 +21,8 @@ import {
   type SpeechProvider,
   type LocalAsrModel,
   isGeminiSpeechProvider,
+  hasAdvertisedFileRead,
+  hasAdvertisedFileWrite,
 } from "../types/protocol";
   import {
     APP_LOCALES,
@@ -36,8 +39,21 @@ import {
     loadGeminiApiKey,
     saveGeminiApiKey,
   } from "../services/gemini-credentials";
-  import { testGeminiConnection } from "../services/speech-flow";
+  import { testGeminiConnection, testLocalSpeechTts } from "../services/speech-flow";
   import { speechAsrStatus, speechTtsStatus, downloadSpeechAsrModel, listenSpeechModelDownload, type SpeechAsrStatus, type SpeechTtsStatus } from "../services/speech-sidecar";
+  import {
+    defaultLocalAsrModelForAppLocale,
+    LOCAL_ASR_MODEL_OPTIONS,
+    prefersSenseVoiceForAppLocale,
+  } from "../services/local-asr-model";
+  import {
+    applySpeechLocaleDefaults,
+    edgeTtsVoicesForSpeechLanguage,
+    localTtsTestPhraseForAppLocale,
+    piperVoicesForSpeechLanguage,
+    speechLanguageForAppLocale,
+  } from "../services/speech-locale";
+  import { resolveReadyPiperVoice } from "../services/speech-piper-voice";
   import { collectHostInfo, probeBrowserConnection, type HostInfo } from "../services/desktop";
   import {
     buildPathDisplay,
@@ -56,6 +72,7 @@ import {
   import { normalizeServerUrl } from "../services/server-url";
   import { previewUiSoundTheme } from "../services/ui-sounds";
   import WindowControls from "./WindowControls.svelte";
+  import HotkeyField from "./HotkeyField.svelte";
   import { isDesktopShell } from "../services/window-controls";
   import { onMount } from "svelte";
 
@@ -67,9 +84,11 @@ import {
     | "speech"
     | "uiSounds"
     | "minimizeToTray"
+    | "showWindowHotkey"
     | "desktopControlEnabled"
     | "browserControlEnabled"
     | "fileAccess"
+    | "chatTtsMode"
   >;
 
   const GEMINI_VOICE_OPTIONS = [
@@ -81,25 +100,10 @@ import {
     "Aoede",
   ] as const;
 
-  const HYBRID_TTS_VOICE_OPTIONS = [
-    "de-DE-KatjaNeural",
-    "de-DE-ConradNeural",
-    "de-DE-AmalaNeural",
-    "de-DE-FlorianMultilingualNeural",
-  ] as const;
-
-  const OFFLINE_TTS_VOICE_OPTIONS = [
-    "de_DE-thorsten-high",
-    "de_DE-thorsten-low",
-    "de_DE-kerstin-low",
-  ] as const;
-
-  const LOCAL_ASR_MODEL_OPTIONS: LocalAsrModel[] = [
-    "whisper_small_de",
-    "omnilingual_ctc_int8",
-  ];
+  const LOCAL_ASR_MODEL_OPTIONS_LIST = LOCAL_ASR_MODEL_OPTIONS;
 
   const THEME_MODES: ThemeMode[] = ["system", "light", "dark"];
+  const CHAT_TTS_MODES: ChatTtsMode[] = ["auto", "aurago", "frontend", "off"];
 
   interface Props {
     serverUrl?: string;
@@ -108,13 +112,16 @@ import {
     speech?: SpeechSettings;
     uiSounds?: UiSoundSettings;
     minimizeToTray?: boolean;
+    showWindowHotkey?: string;
     desktopControlEnabled?: boolean;
     browserControlEnabled?: boolean;
     fileAccess?: FileAccessSettings;
+    chatTtsMode?: ChatTtsMode;
     connectionStatus?: ConnectionStatus;
     sessionStatus?: SessionStatus;
     sessionId?: string;
     sessionError?: string;
+    advertisedCapabilities?: string[];
     remoteControlActive?: boolean;
     appVersion?: string;
     onBack?: () => void;
@@ -132,13 +139,16 @@ import {
     speech = DEFAULT_SPEECH_SETTINGS,
     uiSounds = DEFAULT_UI_SOUND_SETTINGS,
     minimizeToTray = false,
+    showWindowHotkey = "Alt+Shift+G",
     desktopControlEnabled = true,
     browserControlEnabled = false,
     fileAccess = DEFAULT_FILE_ACCESS_SETTINGS,
+    chatTtsMode = "auto",
     connectionStatus = "disconnected",
     sessionStatus = "idle",
     sessionId = "",
     sessionError = "",
+    advertisedCapabilities = [],
     remoteControlActive = false,
     appVersion = "0.1.0",
     onBack,
@@ -164,9 +174,11 @@ import {
   let draftTheme = $state<ThemeMode>("system");
   let draftLocale = $state<UiLocaleSetting>("system");
   let draftMinimizeToTray = $state(false);
+  let draftShowWindowHotkey = $state("Alt+Shift+G");
   let draftDesktopControlEnabled = $state(true);
   let draftBrowserControlEnabled = $state(false);
   let draftFileAccess = $state<FileAccessSettings>(cloneFileAccessSettings(DEFAULT_FILE_ACCESS_SETTINGS));
+  let draftChatTtsMode = $state<ChatTtsMode>("auto");
   let draftSpeech = $state<SpeechSettings>({ ...DEFAULT_SPEECH_SETTINGS });
   let draftUiSoundEnabled = $state(true);
   let draftUiSoundTheme = $state<UiSoundTheme>("soft");
@@ -227,10 +239,16 @@ import {
   const isHybridSpeechSelected = $derived(draftSpeech.provider === "hybrid");
   const isOfflineSpeechSelected = $derived(draftSpeech.provider === "offline");
   const usesLocalAsr = $derived(isHybridSpeechSelected || isOfflineSpeechSelected);
-  const showOmnilingualGermanHint = $derived(
-    usesLocalAsr
-      && draftSpeech.localAsrModel === "omnilingual_ctc_int8"
-      && draftSpeech.language.toLowerCase().startsWith("de"),
+  const usesPiperTts = $derived(
+    isOfflineSpeechSelected
+      || (isHybridSpeechSelected && draftSpeech.hybridTtsBackend === "piper"),
+  );
+  const recommendedLocalAsrModel = $derived(defaultLocalAsrModelForAppLocale(draftLocale));
+  const draftSpeechLanguage = $derived(speechLanguageForAppLocale(draftLocale));
+  const hybridTtsVoiceOptions = $derived(edgeTtsVoicesForSpeechLanguage(draftSpeechLanguage));
+  const offlineTtsVoiceOptions = $derived(piperVoicesForSpeechLanguage(draftSpeechLanguage));
+  const showLocalAsrModelHint = $derived(
+    usesLocalAsr && draftSpeech.localAsrModel !== recommendedLocalAsrModel,
   );
 
   let asrStatus: SpeechAsrStatus | null = $state(null);
@@ -241,6 +259,10 @@ import {
   let asrDownloadError = $state<string | null>(null);
   let ttsStatus: SpeechTtsStatus | null = $state(null);
   let ttsStatusLoading = $state(false);
+  let ttsTestSampleText = $state(localTtsTestPhraseForAppLocale("system"));
+  let ttsTestBusy = $state(false);
+  let ttsTestMessage = $state("");
+  let ttsTestTone = $state<"success" | "error" | "">("");
 
   function connectionLabel(status: ConnectionStatus): string {
     return $i18n(`connection.status.${status}` as MessageKey);
@@ -249,6 +271,21 @@ import {
   function sessionLabel(status: SessionStatus): string {
     return $i18n(`session.status.${status}` as MessageKey);
   }
+
+  const fileReadRequested = $derived(
+    draftFileAccess.enabled &&
+      draftFileAccess.roots.some((root) => root.readEnabled),
+  );
+  const fileWriteRequested = $derived(
+    draftFileAccess.enabled &&
+      draftFileAccess.roots.some((root) => root.writeEnabled),
+  );
+  const fileReadNegotiated = $derived(hasAdvertisedFileRead(advertisedCapabilities));
+  const fileWriteNegotiated = $derived(hasAdvertisedFileWrite(advertisedCapabilities));
+  const fileNegotiationMismatch = $derived(
+    (fileReadRequested && !fileReadNegotiated) ||
+      (fileWriteRequested && !fileWriteNegotiated),
+  );
 
   function themeIcon(mode: ThemeMode): string {
     if (mode === "system") return "◐";
@@ -262,13 +299,16 @@ import {
       draftTheme = theme;
       draftLocale = locale;
       draftMinimizeToTray = minimizeToTray;
+      draftShowWindowHotkey = showWindowHotkey;
       draftDesktopControlEnabled = desktopControlEnabled;
       draftBrowserControlEnabled = browserControlEnabled;
       draftFileAccess = cloneFileAccessSettings(fileAccess);
+      draftChatTtsMode = chatTtsMode;
       draftSpeech = { ...DEFAULT_SPEECH_SETTINGS, ...speech };
       draftUiSoundEnabled = uiSounds.enabled;
       draftUiSoundTheme = uiSounds.theme;
       draftUiSoundVolume = uiSounds.volume;
+      ttsTestSampleText = localTtsTestPhraseForAppLocale(draftLocale);
     }
   });
 
@@ -298,11 +338,25 @@ import {
   });
 
   $effect(() => {
-    if (!isOfflineSpeechSelected || !draftSpeech.enabled) {
+    if (!usesPiperTts || !draftSpeech.enabled) {
       ttsStatus = null;
       return;
     }
     void refreshTtsStatus(draftSpeech.offlineTtsVoice);
+  });
+
+  $effect(() => {
+    if (!usesPiperTts || !draftSpeech.enabled) {
+      return;
+    }
+    const preferred = draftSpeech.offlineTtsVoice;
+    const language = draftSpeechLanguage;
+    void resolveReadyPiperVoice(language, preferred).then((ready) => {
+      if (ready && ready !== draftSpeech.offlineTtsVoice) {
+        draftSpeech = { ...draftSpeech, offlineTtsVoice: ready };
+        markDirty();
+      }
+    });
   });
 
   async function refreshAsrStatus(model: LocalAsrModel): Promise<void> {
@@ -384,6 +438,24 @@ import {
     }
   }
 
+  function handleAppLocaleChange(): void {
+    draftSpeech = applySpeechLocaleDefaults(
+      {
+        ...draftSpeech,
+        localAsrModel: defaultLocalAsrModelForAppLocale(draftLocale),
+      },
+      draftLocale,
+    );
+    ttsTestSampleText = localTtsTestPhraseForAppLocale(draftLocale);
+    markDirty();
+    if (usesLocalAsr) {
+      void refreshAsrStatus(draftSpeech.localAsrModel);
+    }
+    if (usesPiperTts) {
+      void refreshTtsStatus(draftSpeech.offlineTtsVoice);
+    }
+  }
+
   function markDirty(): void {
     dirty = true;
   }
@@ -405,9 +477,11 @@ import {
         volume: draftUiSoundVolume,
       },
       minimizeToTray: draftMinimizeToTray,
+      showWindowHotkey: draftShowWindowHotkey.trim(),
       desktopControlEnabled: draftDesktopControlEnabled,
       browserControlEnabled: draftBrowserControlEnabled,
       fileAccess: cloneFileAccessSettings(draftFileAccess),
+      chatTtsMode: draftChatTtsMode,
     };
   }
 
@@ -452,7 +526,6 @@ import {
     draftSpeech = {
       ...draftSpeech,
       provider,
-      voiceResponses: isGeminiSpeechProvider(provider) ? draftSpeech.voiceResponses : true,
     };
     markDirty();
   }
@@ -569,6 +642,34 @@ import {
       setApiKeyFeedback("settings.speech.apiKey.error.testFailed", "error");
     } finally {
       apiKeyBusy = false;
+    }
+  }
+
+  async function handleTestLocalTts(): Promise<void> {
+    ttsTestBusy = true;
+    ttsTestTone = "success";
+    ttsTestMessage = $i18n("settings.speech.ttsTest.testing");
+    try {
+      const result = await testLocalSpeechTts(draftSpeech, ttsTestSampleText);
+      if (result.ok) {
+        ttsTestTone = "success";
+        ttsTestMessage = $i18n("settings.speech.ttsTest.success", {
+          backend: result.backend ?? $i18n("common.emDash"),
+          voice: result.voice ?? $i18n("common.emDash"),
+        });
+        return;
+      }
+      ttsTestTone = "error";
+      ttsTestMessage = $i18n("settings.speech.ttsTest.failed", {
+        message: result.error ?? $i18n("settings.speech.ttsTest.unknownError"),
+      });
+    } catch (error) {
+      ttsTestTone = "error";
+      ttsTestMessage = $i18n("settings.speech.ttsTest.failed", {
+        message: error instanceof Error ? error.message : String(error),
+      });
+    } finally {
+      ttsTestBusy = false;
     }
   }
 
@@ -930,6 +1031,22 @@ import {
               </label>
               <p class="help">{$i18n("settings.appearance.minimizeToTray.help")}</p>
             </section>
+
+            {#if isDesktopShell()}
+              <section class="ui-card">
+                <div class="card-header">
+                  <h2>{$i18n("settings.appearance.showWindowHotkey.title")}</h2>
+                  <p>{$i18n("settings.appearance.showWindowHotkey.help")}</p>
+                </div>
+                <HotkeyField
+                  value={draftShowWindowHotkey}
+                  onchange={(next) => {
+                    draftShowWindowHotkey = next;
+                    markDirty();
+                  }}
+                />
+              </section>
+            {/if}
           {/if}
 
           {#if activeSection === "language"}
@@ -945,7 +1062,7 @@ import {
                     type="radio"
                     bind:group={draftLocale}
                     value="system"
-                    onchange={markDirty}
+                    onchange={handleAppLocaleChange}
                   />
                   <strong>{$i18n("locale.setting.system")}</strong>
                 </label>
@@ -955,7 +1072,7 @@ import {
                       type="radio"
                       bind:group={draftLocale}
                       value={appLocale}
-                      onchange={markDirty}
+                      onchange={handleAppLocaleChange}
                     />
                     <strong>{LOCALE_LABELS[appLocale]}</strong>
                   </label>
@@ -1088,6 +1205,51 @@ import {
               </label>
 
               <p class="help">{$i18n("settings.fileAccess.disabledHelp")}</p>
+              <p class="help">{$i18n("settings.fileAccess.shellUnsupported")}</p>
+
+              {#if fileReadRequested || fileWriteRequested}
+                <dl class="info-grid compact negotiation-grid">
+                  <div>
+                    <dt>{$i18n("settings.fileAccess.negotiated.title")}</dt>
+                    <dd class="negotiation-chips">
+                      {#if fileReadRequested}
+                        {#if fileReadNegotiated}
+                          <span class="ui-chip" data-tone="connected">
+                            remote.files.read — {$i18n("settings.fileAccess.negotiated.readOk")}
+                          </span>
+                        {:else}
+                          <span class="ui-chip" data-tone="error">
+                            remote.files.read — {$i18n("settings.fileAccess.negotiated.missing")}
+                          </span>
+                        {/if}
+                      {/if}
+                      {#if fileWriteRequested}
+                        {#if fileWriteNegotiated}
+                          <span class="ui-chip" data-tone="connected">
+                            remote.files.write — {$i18n("settings.fileAccess.negotiated.writeOk")}
+                          </span>
+                        {:else}
+                          <span class="ui-chip" data-tone="error">
+                            remote.files.write — {$i18n("settings.fileAccess.negotiated.missing")}
+                          </span>
+                        {/if}
+                      {/if}
+                    </dd>
+                  </div>
+                </dl>
+                {#if fileNegotiationMismatch && (sessionStatus === "accepted" || sessionStatus === "loopback")}
+                  <p class="help warn">{$i18n("settings.fileAccess.negotiated.reconnectHint")}</p>
+                  <div class="action-row">
+                    <button
+                      type="button"
+                      class="ui-btn ui-btn-secondary"
+                      onclick={() => onReconnect?.()}
+                    >
+                      {$i18n("settings.connection.reconnect")}
+                    </button>
+                  </div>
+                {/if}
+              {/if}
 
               <div class="limits-row">
                 <label class="field">
@@ -1138,6 +1300,14 @@ import {
                           </span>
                           <code class="path-display" title={root.canonicalPath}>
                             {buildPathDisplay(root.canonicalPath)}
+                          </code>
+                        </div>
+                        <div class="field compact">
+                          <span class="field-label">
+                            {$i18n("settings.fileAccess.roots.rootId")}
+                          </span>
+                          <code class="path-display" title={root.rootId}>
+                            {root.rootId}
                           </code>
                         </div>
                       </div>
@@ -1256,6 +1426,18 @@ import {
               <p class="help">{$i18n("settings.speech.localVoiceResponsesHelp")}</p>
               {/if}
 
+              <label class="field">
+                <span class="field-label">{$i18n("settings.chatTtsMode.title")}</span>
+                <select
+                  bind:value={draftChatTtsMode}
+                  onchange={() => markDirty()}
+                >
+                  {#each CHAT_TTS_MODES as mode (mode)}
+                    <option value={mode}>{$i18n(`settings.chatTtsMode.${mode}` as MessageKey)}</option>
+                  {/each}
+                </select>
+              </label>
+
               <label class="field checkbox-field">
                 <input
                   type="checkbox"
@@ -1304,7 +1486,7 @@ import {
                   type="text"
                   bind:value={draftSpeech.language}
                   oninput={markDirty}
-                  placeholder={$i18n("settings.speech.language.placeholder")}
+                  placeholder={draftSpeechLanguage}
                   disabled={!draftSpeech.enabled}
                 />
               </label>
@@ -1332,10 +1514,34 @@ import {
                   onchange={markDirty}
                   disabled={!draftSpeech.enabled}
                 >
+                  <option value="piper">{$i18n("settings.speech.hybridTtsBackend.piper")}</option>
                   <option value="edge_tts">{$i18n("settings.speech.hybridTtsBackend.edgeTts")}</option>
                   <option value="azure">{$i18n("settings.speech.hybridTtsBackend.azure")}</option>
                 </select>
               </label>
+              {#if draftSpeech.hybridTtsBackend === "piper"}
+              <label class="field">
+                <span class="field-label">{$i18n("settings.speech.offlineTtsVoice.label")}</span>
+                <select
+                  bind:value={draftSpeech.offlineTtsVoice}
+                  onchange={markDirty}
+                  disabled={!draftSpeech.enabled}
+                >
+                  {#each offlineTtsVoiceOptions as voice (voice)}
+                    <option value={voice}>{voice}</option>
+                  {/each}
+                </select>
+              </label>
+              <p class="help" class:warn={!ttsStatus?.ready}>
+                {#if ttsStatusLoading}
+                  {$i18n("settings.speech.ttsStatus.loading")}
+                {:else if ttsStatus?.ready}
+                  {$i18n("settings.speech.ttsStatus.ready")}
+                {:else}
+                  {$i18n("settings.speech.ttsStatus.missing")} {ttsStatus?.download_hint ?? $i18n("settings.speech.ttsStatus.downloadHint")}
+                {/if}
+              </p>
+              {:else}
               <label class="field">
                 <span class="field-label">{$i18n("settings.speech.hybridTtsVoice.label")}</span>
                 <select
@@ -1343,11 +1549,12 @@ import {
                   onchange={markDirty}
                   disabled={!draftSpeech.enabled}
                 >
-                  {#each HYBRID_TTS_VOICE_OPTIONS as voice (voice)}
+                  {#each hybridTtsVoiceOptions as voice (voice)}
                     <option value={voice}>{voice}</option>
                   {/each}
                 </select>
               </label>
+              {/if}
               {/if}
 
               {#if isOfflineSpeechSelected}
@@ -1358,7 +1565,7 @@ import {
                   onchange={markDirty}
                   disabled={!draftSpeech.enabled}
                 >
-                  {#each OFFLINE_TTS_VOICE_OPTIONS as voice (voice)}
+                  {#each offlineTtsVoiceOptions as voice (voice)}
                     <option value={voice}>{voice}</option>
                   {/each}
                 </select>
@@ -1375,6 +1582,41 @@ import {
               {/if}
 
               {#if isHybridSpeechSelected || isOfflineSpeechSelected}
+              <div class="tts-test">
+                <label class="field">
+                  <span class="field-label">{$i18n("settings.speech.ttsTest.label")}</span>
+                  <textarea
+                    class="tts-test-input"
+                    bind:value={ttsTestSampleText}
+                    rows="2"
+                    disabled={!draftSpeech.enabled || ttsTestBusy}
+                    placeholder={$i18n("settings.speech.ttsTest.placeholder")}
+                  ></textarea>
+                </label>
+                <button
+                  type="button"
+                  class="ui-btn ui-btn-secondary tts-test-btn"
+                  onclick={() => void handleTestLocalTts()}
+                  disabled={!draftSpeech.enabled || ttsTestBusy || !ttsTestSampleText.trim()}
+                >
+                  {ttsTestBusy
+                    ? $i18n("settings.speech.ttsTest.testing")
+                    : $i18n("settings.speech.ttsTest.button")}
+                </button>
+                {#if ttsTestMessage}
+                  <p class="help" class:warn={ttsTestTone === "error"}>{ttsTestMessage}</p>
+                {/if}
+                <p class="help">
+                  {#if isHybridSpeechSelected && draftSpeech.hybridTtsBackend === "edge_tts"}
+                    {$i18n("settings.speech.ttsTest.edgeHint")}
+                  {:else}
+                    {$i18n("settings.speech.ttsTest.piperHint")}
+                  {/if}
+                </p>
+              </div>
+              {/if}
+
+              {#if isHybridSpeechSelected || isOfflineSpeechSelected}
               <label class="field">
                 <span class="field-label">{$i18n("settings.speech.localAsrModel.label")}</span>
                 <select
@@ -1382,14 +1624,20 @@ import {
                   onchange={(event) => void handleLocalAsrModelChange(event.currentTarget.value as LocalAsrModel)}
                   disabled={!draftSpeech.enabled || asrDownloading}
                 >
-                  {#each LOCAL_ASR_MODEL_OPTIONS as model (model)}
+                  {#each LOCAL_ASR_MODEL_OPTIONS_LIST as model (model)}
                     <option value={model}>
                       {$i18n(`settings.speech.localAsrModel.${model}` as MessageKey)}
                     </option>
                   {/each}
                 </select>
-                {#if showOmnilingualGermanHint}
-                  <p class="help warn">{$i18n("settings.speech.localAsrModel.omnilingualGermanHint")}</p>
+                {#if showLocalAsrModelHint}
+                  <p class="help warn">
+                    {$i18n(
+                      prefersSenseVoiceForAppLocale(draftLocale)
+                        ? "settings.speech.localAsrModel.senseVoiceRecommendedHint"
+                        : "settings.speech.localAsrModel.whisperRecommendedHint",
+                    )}
+                  </p>
                 {/if}
               </label>
               {#if asrDownloading}
@@ -1629,7 +1877,10 @@ import {
 
   .header-copy h1 {
     margin: 0;
-    font-size: 1.25rem;
+    font-size: 1.375rem;
+    font-weight: 650;
+    letter-spacing: -0.025em;
+    text-wrap: balance;
   }
 
   .header-copy p {
@@ -1699,6 +1950,11 @@ import {
     border-color: color-mix(in srgb, var(--color-accent) 35%, var(--glass-border));
     background: color-mix(in srgb, var(--color-accent) 12%, transparent);
     box-shadow: var(--accent-glow);
+  }
+
+  .nav-item:focus-visible {
+    outline: none;
+    box-shadow: var(--focus-ring);
   }
 
   .nav-label {
@@ -1832,6 +2088,28 @@ import {
 
   .asr-download-btn {
     margin-top: 0.65rem;
+  }
+
+  .tts-test {
+    margin-top: 0.85rem;
+    display: grid;
+    gap: 0.55rem;
+  }
+
+  .tts-test-input {
+    width: 100%;
+    min-height: 3.25rem;
+    resize: vertical;
+    font: inherit;
+    padding: 0.55rem 0.65rem;
+    border-radius: 0.5rem;
+    border: 1px solid var(--color-border);
+    background: var(--color-input-bg);
+    color: var(--color-text);
+  }
+
+  .tts-test-btn {
+    justify-self: start;
   }
 
   .asr-missing-text {
@@ -2003,6 +2281,20 @@ import {
     margin-top: 0.75rem;
   }
 
+  .negotiation-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+  }
+
+  .negotiation-grid dd {
+    margin: 0;
+  }
+
+  .help.warn {
+    color: var(--color-warning);
+  }
+
   .info-grid dt {
     font-size: 0.75rem;
     text-transform: uppercase;
@@ -2076,7 +2368,7 @@ import {
   }
 
   code {
-    font-family: Consolas, "Courier New", monospace;
+    font-family: var(--font-mono);
     font-size: 0.8125rem;
   }
 

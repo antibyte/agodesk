@@ -8,6 +8,7 @@ pub mod sidecar_client;
 pub mod tts;
 #[cfg(feature = "speech-asr")]
 pub mod tts_sherpa;
+pub mod tts_edge;
 pub mod types;
 
 pub use handler::handle_speech_request;

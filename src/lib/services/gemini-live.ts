@@ -551,7 +551,7 @@ export class GeminiLiveSession {
   private handlingTools = false;
   private connectionId = 0;
   private inputTranscripts = new InputTranscriptAccumulator();
-  private turnFinalizeTimer: ReturnType<typeof window.setTimeout> | null = null;
+  private turnFinalizeTimer: number | null = null;
   private audioPlayback: SpeechAudioPlayback | null = null;
   private agentMood: AgentMoodMetadata | null = null;
 
@@ -958,7 +958,7 @@ export class GeminiLiveSession {
     this.turnFinalizeTimer = window.setTimeout(() => {
       this.turnFinalizeTimer = null;
       this.emitFinalTranscript();
-    }, TURN_FINALIZE_GRACE_MS) as any;
+    }, TURN_FINALIZE_GRACE_MS);
   }
 
   private processInputTranscription(message: GeminiLiveMessage): void {

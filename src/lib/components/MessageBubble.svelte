@@ -127,6 +127,13 @@
     margin-top: 0.45rem;
   }
 
+  .bubble :global(.message-body .md-heading + p),
+  .bubble :global(.message-body .md-heading + .md-list),
+  .bubble :global(.message-body p + .md-heading),
+  .bubble :global(.message-body .md-list + p) {
+    margin-top: 0.45rem;
+  }
+
   .bubble time {
     display: block;
     margin-top: var(--space-2);
@@ -137,8 +144,10 @@
   .user .bubble {
     background: var(--color-user-bg);
     color: var(--color-user-text);
-    box-shadow: 0 2px 8px rgba(79, 70, 229, 0.08), 0 8px 24px rgba(79, 70, 229, 0.04);
-    border: 1px solid rgba(255, 255, 255, 0.06);
+    box-shadow:
+      0 2px 8px color-mix(in srgb, var(--color-accent) 18%, transparent),
+      0 10px 28px color-mix(in srgb, var(--color-accent) 10%, transparent);
+    border: 1px solid rgba(255, 255, 255, 0.08);
   }
 
   .user .bubble.tail-user {

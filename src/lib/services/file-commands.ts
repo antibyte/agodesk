@@ -109,6 +109,7 @@ export async function readRemoteFile(
   rootId: string | undefined,
   path: string,
   maxBytes: number,
+  encoding?: "utf-8" | "base64" | "auto",
 ): Promise<FileReadResult> {
   try {
     const result = await invoke<{
@@ -123,6 +124,7 @@ export async function readRemoteFile(
       rootId,
       path,
       maxBytes,
+      encoding,
     });
     auditFileAccess({
       operation: "file_read",

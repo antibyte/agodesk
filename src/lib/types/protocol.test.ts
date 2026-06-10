@@ -9,6 +9,8 @@ import {
   DEFAULT_SETTINGS,
   isFileOperation,
   normalizeDesktopCommandPayload,
+  normalizeFileCommandParams,
+  resolveFileCommandPath,
   normalizePersonaAssetsPayload,
   normalizeSessionAcceptedPayload,
   normalizeSessionClearPayload,
@@ -18,9 +20,33 @@ import {
   normalizeAgentMoodMetadata,
   normalizeAgoDeskPlan,
   hasAdvertisedAgentMetadata,
+  hasAdvertisedFileRead,
+  hasAdvertisedFileWrite,
   hasAdvertisedPlanUpdates,
+  hasAdvertisedChatSessions,
+  hasAdvertisedChatCancel,
+  auragoServerTtsAvailable,
   AGODESK_AGENT_METADATA_CAPABILITY,
   AGODESK_PLAN_UPDATES_CAPABILITY,
+  AGODESK_CHAT_SESSIONS_CAPABILITY,
+  AGODESK_CHAT_VOICE_OUTPUT_STATUS_CAPABILITY,
+  AGODESK_CHAT_MEDIA_EVENTS_CAPABILITY,
+  AGODESK_INTEGRATIONS_WEBHOSTS_CAPABILITY,
+  AGODESK_SYSTEM_WARNINGS_CAPABILITY,
+  normalizeChatVoiceOutputStatusPayload,
+  normalizeChatMediaPayload,
+  normalizeIntegrationsWebhostsPayload,
+  normalizeSystemWarningsPayload,
+  hasAdvertisedChatMediaEvents,
+  hasAdvertisedIntegrationsWebhosts,
+  hasAdvertisedSystemWarnings,
+  AGODESK_CHAT_CANCEL_CAPABILITY,
+  normalizeChatSessionsPayload,
+  normalizeChatSessionPayload,
+  normalizeChatCancelledPayload,
+  normalizeChatAudioPayload,
+  filterVisibleChatSessions,
+  extractConversationIdFromPayload,
   requiresLocalDesktopApproval,
   requiresRemoteControlBanner,
   resolvePersonaAssetUrl,
@@ -108,6 +134,53 @@ test("normalizeDesktopCommandPayload akzeptiert camelCase", () => {
   );
 });
 
+test("normalizeFileCommandParams akzeptiert search_type Alias", () => {
+  assert.deepEqual(
+    normalizeFileCommandParams({
+      rootId: "ws",
+      path: ".",
+      search_type: "grep_recursive",
+      pattern: "Johannes",
+    }),
+    {
+      root_id: "ws",
+      path: ".",
+      recursive: false,
+      encoding: undefined,
+      content: undefined,
+      expected_hash: undefined,
+      create_only: false,
+      operation: "grep_recursive",
+      pattern: "Johannes",
+      glob: undefined,
+      output_mode: undefined,
+    },
+  );
+});
+
+test("normalizeFileCommandParams akzeptiert file_path Alias", () => {
+  assert.deepEqual(normalizeFileCommandParams({ filePath: "src/main.ts", rootId: "ws" }), {
+    root_id: "ws",
+    path: "src/main.ts",
+    recursive: false,
+    encoding: undefined,
+    content: undefined,
+    expected_hash: undefined,
+    create_only: false,
+    operation: undefined,
+    pattern: undefined,
+    glob: undefined,
+    output_mode: undefined,
+  });
+});
+
+test("resolveFileCommandPath defaultet auf Root", () => {
+  assert.equal(resolveFileCommandPath({ path: "" }), ".");
+  assert.equal(resolveFileCommandPath({ path: "  " }), ".");
+  assert.equal(resolveFileCommandPath({ path: "docs" }), "docs");
+  assert.equal(resolveFileCommandPath({ path: "" }, { required: true }), null);
+});
+
 test("normalizeDesktopCommandPayload normalisiert file_list", () => {
   assert.deepEqual(
     normalizeDesktopCommandPayload({
@@ -126,6 +199,10 @@ test("normalizeDesktopCommandPayload normalisiert file_list", () => {
         content: undefined,
         expected_hash: undefined,
         create_only: false,
+        operation: undefined,
+        pattern: undefined,
+        glob: undefined,
+        output_mode: undefined,
       },
     },
   );
@@ -177,11 +254,46 @@ test("agodeskClientCapabilities advertised Datei-Capabilities nur bei Freigabe",
   ]);
 });
 
-test("isFileOperation erkennt file_list/file_read/file_write", () => {
+test("isFileOperation erkennt file_list/file_read/file_write/file_search", () => {
   assert.equal(isFileOperation("file_list"), true);
   assert.equal(isFileOperation("file_read"), true);
   assert.equal(isFileOperation("file_write"), true);
+  assert.equal(isFileOperation("file_search"), true);
   assert.equal(isFileOperation("desktop_screenshot"), false);
+});
+
+test("normalizeDesktopCommandPayload normalisiert file_search", () => {
+  assert.deepEqual(
+    normalizeDesktopCommandPayload({
+      command_id: "cmd-search",
+      operation: "file_search",
+      params: {
+        rootId: "workspace",
+        path: "src",
+        operation: "grep_recursive",
+        pattern: "TODO",
+        glob: "*.ts",
+        outputMode: "content",
+      },
+    }),
+    {
+      command_id: "cmd-search",
+      operation: "file_search",
+      params: {
+        root_id: "workspace",
+        path: "src",
+        recursive: false,
+        encoding: undefined,
+        content: undefined,
+        expected_hash: undefined,
+        create_only: false,
+        operation: "grep_recursive",
+        pattern: "TODO",
+        glob: "*.ts",
+        output_mode: "content",
+      },
+    },
+  );
 });
 
 test("requiresLocalDesktopApproval gilt fuer Input- und UI-/Browser-Aktionen", () => {
@@ -406,6 +518,13 @@ test("agodeskClientCapabilities enthaelt Mood- und Plan-Capabilities", () => {
   assert.ok(AGODESK_BASE_CAPABILITIES.includes(AGODESK_AGENT_METADATA_CAPABILITY));
 });
 
+test("hasAdvertisedFileRead/Write prueft verhandelte Datei-Caps", () => {
+  const caps = ["remote.files.read", "remote.files.write"];
+  assert.equal(hasAdvertisedFileRead(caps), true);
+  assert.equal(hasAdvertisedFileWrite(caps), true);
+  assert.equal(hasAdvertisedFileRead(["remote.files.write"]), false);
+});
+
 test("hasAdvertisedCapability prueft verhandelte Server-Caps", () => {
   const caps = ["chat.full_response", AGODESK_PLAN_UPDATES_CAPABILITY];
   assert.equal(hasAdvertisedPlanUpdates(caps), true);
@@ -455,4 +574,253 @@ test("normalizeChatResponsePayload parst metadata.agent_mood und metadata.plan",
   assert.equal(payload?.metadata?.agent_mood?.mood, "focused");
   assert.equal(normalizeAgoDeskPlan(payload?.metadata?.plan)?.title, "Plan");
   assert.equal(payload?.metadata?.source, "aurago");
+});
+
+test("agodeskClientCapabilities enthaelt Chat-Session- und TTS-Capabilities", () => {
+  const caps = agodeskClientCapabilities(false);
+  assert.ok(caps.includes(AGODESK_CHAT_SESSIONS_CAPABILITY));
+  assert.ok(caps.includes(AGODESK_CHAT_CANCEL_CAPABILITY));
+  assert.ok(caps.includes("chat.audio_events"));
+  assert.ok(caps.includes("chat.voice_output"));
+  assert.ok(caps.includes(AGODESK_CHAT_VOICE_OUTPUT_STATUS_CAPABILITY));
+});
+
+test("normalizeChatSessionsPayload parst Session-Liste", () => {
+  const payload = normalizeChatSessionsPayload({
+    session_id: "agodesk:dev-1",
+    sessions: [
+      {
+        id: "sess-abc",
+        preview: "Hello",
+        created_at: "2026-06-07T10:00:00Z",
+        last_active_at: "2026-06-07T11:00:00Z",
+        message_count: 2,
+      },
+    ],
+  });
+  assert.equal(payload?.session_id, "agodesk:dev-1");
+  assert.equal(payload?.sessions.length, 1);
+  assert.equal(payload?.sessions[0]?.id, "sess-abc");
+});
+
+test("normalizeChatSessionPayload parst Nachrichten beim Laden", () => {
+  const payload = normalizeChatSessionPayload({
+    session_id: "agodesk:dev-1",
+    conversation_id: "sess-abc",
+    session: {
+      id: "sess-abc",
+      preview: "Hello",
+      created_at: "2026-06-07T10:00:00Z",
+      last_active_at: "2026-06-07T11:00:00Z",
+      message_count: 1,
+    },
+    messages: [{ role: "user", content: "Hi", timestamp: "2026-06-07T10:00:00Z" }],
+  });
+  assert.equal(payload?.conversation_id, "sess-abc");
+  assert.equal(payload?.messages?.[0]?.content, "Hi");
+});
+
+test("normalizeChatSessionPayload synthetisiert session ohne session-Objekt", () => {
+  const payload = normalizeChatSessionPayload({
+    session_id: "agodesk:dev-1",
+    conversation_id: "sess-new",
+  });
+  assert.equal(payload?.conversation_id, "sess-new");
+  assert.equal(payload?.session.id, "sess-new");
+});
+
+test("normalizeChatSessionPayload akzeptiert UUID als session_id", () => {
+  const payload = normalizeChatSessionPayload({
+    session_id: "adb36fd734e6c6aec96c54f446c78215",
+    ok: true,
+  });
+  assert.equal(payload?.conversation_id, "adb36fd734e6c6aec96c54f446c78215");
+});
+
+test("normalizeChatSessionPayload unwrappt data-Envelope", () => {
+  const payload = normalizeChatSessionPayload({
+    ok: true,
+    status: "ok",
+    data: {
+      conversation_id: "adb36fd734e6c6aec96c54f446c78215",
+    },
+  });
+  assert.equal(payload?.conversation_id, "adb36fd734e6c6aec96c54f446c78215");
+});
+
+test("normalizeChatSessionPayload akzeptiert sess-* als session_id", () => {
+  const payload = normalizeChatSessionPayload({
+    session_id: "sess-abc",
+    messages: [],
+  });
+  assert.equal(payload?.conversation_id, "sess-abc");
+  assert.equal(payload?.session.id, "sess-abc");
+});
+
+test("extractConversationIdFromPayload findet verschiedene Feldnamen", () => {
+  assert.equal(
+    extractConversationIdFromPayload({ session_id: "sess-xyz" }),
+    "sess-xyz",
+  );
+  assert.equal(
+    extractConversationIdFromPayload({ session: { id: "sess-nested" } }),
+    "sess-nested",
+  );
+});
+
+test("normalizeChatSessionsPayload toleriert fehlende transport session_id", () => {
+  const payload = normalizeChatSessionsPayload({
+    sessions: [
+      {
+        id: "sess-1",
+        preview: "Hi",
+        created_at: "2026-06-07T10:00:00Z",
+        last_active_at: "2026-06-07T11:00:00Z",
+        message_count: 1,
+      },
+    ],
+  });
+  assert.equal(payload?.sessions.length, 1);
+  assert.equal(payload?.session_id, "");
+});
+
+test("filterVisibleChatSessions entfernt leere Chats", () => {
+  assert.deepEqual(
+    filterVisibleChatSessions([
+      {
+        id: "sess-empty",
+        preview: "",
+        created_at: "2026-06-07T10:00:00Z",
+        last_active_at: "2026-06-07T10:00:00Z",
+        message_count: 0,
+      },
+      {
+        id: "sess-1",
+        preview: "Hi",
+        created_at: "2026-06-07T09:00:00Z",
+        last_active_at: "2026-06-07T11:00:00Z",
+        message_count: 2,
+      },
+    ]).map((session) => session.id),
+    ["sess-1"],
+  );
+});
+
+test("normalizeChatCancelledPayload und normalizeChatAudioPayload", () => {
+  assert.deepEqual(
+    normalizeChatCancelledPayload({
+      session_id: "agodesk:dev-1",
+      conversation_id: "sess-abc",
+      request_id: "req-1",
+      status: "cancelled",
+    }),
+    {
+      session_id: "agodesk:dev-1",
+      conversation_id: "sess-abc",
+      request_id: "req-1",
+      status: "cancelled",
+    },
+  );
+
+  assert.equal(
+    normalizeChatAudioPayload({
+      session_id: "agodesk:dev-1",
+      conversation_id: "sess-abc",
+      request_id: "req-1",
+      path: "/api/agodesk/tts/a.mp3",
+      mime_type: "audio/mpeg",
+    })?.path,
+    "/api/agodesk/tts/a.mp3",
+  );
+});
+
+test("normalizeChatVoiceOutputStatusPayload parst speaker_mode und ack", () => {
+  const payload = normalizeChatVoiceOutputStatusPayload({
+    session_id: "agodesk:dev-1",
+    conversation_id: "sess-abc",
+    speaker_mode: false,
+    mode: "off",
+    reason: "user_disabled",
+    status: "ok",
+  });
+  assert.equal(payload?.speaker_mode, false);
+  assert.equal(payload?.mode, "off");
+  assert.equal(payload?.status, "ok");
+});
+
+test("auragoServerTtsAvailable prueft verhandelte Voice-Caps", () => {
+  assert.equal(auragoServerTtsAvailable(["chat.voice_output", "chat.audio_events"]), true);
+  assert.equal(auragoServerTtsAvailable(["chat.voice_output"]), false);
+  assert.equal(hasAdvertisedChatSessions(["chat.sessions"]), true);
+  assert.equal(hasAdvertisedChatCancel(["chat.cancel"]), true);
+});
+
+test("agodeskClientCapabilities enthaelt Media-, Integrations- und Warning-Caps", () => {
+  const caps = agodeskClientCapabilities(false);
+  assert.ok(caps.includes(AGODESK_CHAT_MEDIA_EVENTS_CAPABILITY));
+  assert.ok(caps.includes(AGODESK_INTEGRATIONS_WEBHOSTS_CAPABILITY));
+  assert.ok(caps.includes(AGODESK_SYSTEM_WARNINGS_CAPABILITY));
+});
+
+test("normalizeChatMediaPayload parst flaches und verschachteltes Item", () => {
+  const nested = normalizeChatMediaPayload({
+    session_id: "agodesk:dev-1",
+    conversation_id: "sess-abc",
+    request_id: "req-1",
+    item: {
+      id: "media-1",
+      kind: "image",
+      path: "/api/agodesk/media/chart.png",
+      title: "Chart",
+    },
+  });
+  assert.equal(nested?.item.kind, "image");
+  assert.equal(nested?.item.path, "/api/agodesk/media/chart.png");
+
+  const flat = normalizeChatMediaPayload({
+    session_id: "agodesk:dev-1",
+    conversation_id: "sess-abc",
+    kind: "link",
+    url: "https://example.com",
+    title: "Example",
+  });
+  assert.equal(flat?.item.kind, "link");
+  assert.equal(flat?.item.url, "https://example.com");
+});
+
+test("normalizeIntegrationsWebhostsPayload parst Webhost-Liste", () => {
+  const payload = normalizeIntegrationsWebhostsPayload({
+    session_id: "agodesk:dev-1",
+    webhosts: [
+      {
+        id: "grafana",
+        name: "Grafana",
+        status: "running",
+        url: "http://127.0.0.1:3000",
+      },
+    ],
+  });
+  assert.equal(payload?.webhosts.length, 1);
+  assert.equal(payload?.webhosts[0]?.name, "Grafana");
+});
+
+test("normalizeSystemWarningsPayload parst Warnungen und Zaehler", () => {
+  const payload = normalizeSystemWarningsPayload({
+    session_id: "agodesk:dev-1",
+    warnings: [
+      {
+        id: "w1",
+        severity: "warning",
+        title: "Disk space",
+        acknowledged: false,
+      },
+    ],
+    total: 1,
+    unacknowledged: 1,
+  });
+  assert.equal(payload?.warnings[0]?.title, "Disk space");
+  assert.equal(payload?.unacknowledged, 1);
+  assert.equal(hasAdvertisedChatMediaEvents(["chat.media_events"]), true);
+  assert.equal(hasAdvertisedIntegrationsWebhosts(["integrations.webhosts"]), true);
+  assert.equal(hasAdvertisedSystemWarnings(["system.warnings"]), true);
 });

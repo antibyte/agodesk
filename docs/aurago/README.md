@@ -4,6 +4,7 @@ Dieses Verzeichnis enthält die **AuraGo-Server-Schnittstelle** für agodesk Com
 
 | Datei | Zweck |
 |--------|--------|
+| [../AURAGO_CHAT_CONTROLS.md](../AURAGO_CHAT_CONTROLS.md) | Chat Controls, History, Stop, TTS — Protokoll und Frontend-Map |
 | [../AURAGO_COMPUTER_USE_AGENT.md](../AURAGO_COMPUTER_USE_AGENT.md) | **Hauptdokumentation** für den AuraGo-Coding-Agenten: Protokoll, Frontend-Verhalten, Agent-Loop |
 | [protocol-examples.json](./protocol-examples.json) | Kopierbare JSON-Beispiele für alle Nachrichten |
 | [agodesk-remote-client.interface.ts](./agodesk-remote-client.interface.ts) | TypeScript-Typen für die AuraGo-Seite (Referenz, nicht Teil des Builds) |

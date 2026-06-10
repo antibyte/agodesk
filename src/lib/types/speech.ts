@@ -63,10 +63,24 @@ export function buildGeminiLiveWsUrl(
   apiKey: string,
   apiVersion: "v1beta" | "v1alpha" = "v1beta",
 ): string {
+  // Gemini requires the API key as a query param. Never log this URL verbatim.
   const params = new URLSearchParams({ key: apiKey.trim() });
   const path =
     apiVersion === "v1alpha" ? GEMINI_LIVE_WS_PATH_ALPHA : GEMINI_LIVE_WS_PATH;
   return `wss://${GEMINI_LIVE_HOST}${path}?${params.toString()}`;
+}
+
+/** Remove API keys from Gemini Live WS URLs before logging or error reports. */
+export function redactGeminiLiveWsUrl(url: string): string {
+  try {
+    const parsed = new URL(url);
+    if (parsed.searchParams.has("key")) {
+      parsed.searchParams.set("key", "[REDACTED]");
+    }
+    return parsed.toString();
+  } catch {
+    return "[invalid-gemini-ws-url]";
+  }
 }
 
 export function normalizeModelId(modelId: string): string {

@@ -23,6 +23,7 @@ import type {
   WsMessage,
 } from "../types/protocol";
 import type { DesktopStreamStartParams, DesktopStreamStopParams } from "../types/protocol";
+import { resolveFileCommandPath } from "../types/protocol";
 import { settings } from "../stores/settings";
 import {
   resetDesktopStreamState,
@@ -34,6 +35,7 @@ import {
   readRemoteFile,
   writeRemoteFile,
 } from "./file-commands";
+import { searchRemoteFiles, parseFileSearchContent, fileSearchErrorCode } from "./file-search-sync";
 import { fileAccessIsConfigured } from "./file-access";
 
 export type {
@@ -688,7 +690,8 @@ export async function executeDesktopCommand(
       }
       case "file_list":
       case "file_read":
-      case "file_write": {
+      case "file_write":
+      case "file_search": {
         const fileSettings = get(settings).fileAccess;
         const fileParams = params as unknown as FileCommandParams;
         if (!fileAccessIsConfigured(fileSettings)) {
@@ -700,33 +703,90 @@ export async function executeDesktopCommand(
           break;
         }
         try {
-          if (command.operation === "file_list") {
+          if (command.operation === "file_search") {
+            const searchOperation = fileParams.operation?.trim() || "grep";
+            const searchPath =
+              resolveFileCommandPath(fileParams, {
+                defaultPath: ".",
+                required: searchOperation === "grep",
+              }) ?? "";
+            if (!searchPath) {
+              desktopFailure(
+                result,
+                "FILE_PATH_DENIED",
+                "'path' is required for grep (single file). Use grep_recursive for directories.",
+              );
+              break;
+            }
+            const content = await searchRemoteFiles(
+              fileSettings,
+              command.command_id,
+              fileParams.root_id,
+              searchOperation,
+              fileParams.pattern ?? "",
+              searchPath,
+              fileParams.glob,
+              fileParams.output_mode,
+            );
+            const parsed = parseFileSearchContent(content);
+            result.data = { content };
+            if (parsed?.status === "error") {
+              const message = parsed.message?.trim() || "file_search failed";
+              desktopFailure(
+                result,
+                fileSearchErrorCode(message) as DesktopErrorCode,
+                message,
+              );
+              break;
+            }
+            result.success = true;
+          } else if (command.operation === "file_list") {
+            const listPath = resolveFileCommandPath(fileParams) ?? ".";
             const listed = await listRemoteFiles(
               fileSettings,
               command.command_id,
               fileParams.root_id,
-              fileParams.path,
+              listPath,
               fileParams.recursive === true,
             );
             result.success = true;
             result.data = listed as unknown as Record<string, unknown>;
           } else if (command.operation === "file_read") {
+            const readPath = resolveFileCommandPath(fileParams, { required: true });
+            if (!readPath) {
+              desktopFailure(
+                result,
+                "FILE_PATH_DENIED",
+                "'path' is required for file_read.",
+              );
+              break;
+            }
             const read = await readRemoteFile(
               fileSettings,
               command.command_id,
               fileParams.root_id,
-              fileParams.path,
+              readPath,
               fileSettings.maxReadBytes,
+              fileParams.encoding ?? "auto",
             );
             result.success = true;
             result.data = read as unknown as Record<string, unknown>;
           } else {
+            const writePath = resolveFileCommandPath(fileParams, { required: true });
+            if (!writePath) {
+              desktopFailure(
+                result,
+                "FILE_PATH_DENIED",
+                "'path' is required for file_write.",
+              );
+              break;
+            }
             const content = fileParams.content ?? "";
             const written = await writeRemoteFile(
               fileSettings,
               command.command_id,
               fileParams.root_id,
-              fileParams.path,
+              writePath,
               content,
               fileSettings.maxWriteBytes,
               fileParams.expected_hash,
@@ -741,9 +801,13 @@ export async function executeDesktopCommand(
           desktopFailure(
             result,
             [
+              "FILE_ACCESS_DISABLED",
+              "FILE_ACCESS_DENIED",
               "FILE_ROOT_UNKNOWN",
               "FILE_PATH_DENIED",
               "FILE_NOT_FOUND",
+              "FILE_NOT_TEXT",
+              "FILE_SEARCH_INDEX_TIMEOUT",
               "FILE_TOO_LARGE",
               "FILE_WRITE_DENIED",
               "FILE_HASH_MISMATCH",

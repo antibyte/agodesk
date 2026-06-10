@@ -207,6 +207,58 @@ export function isChatError(
   return message.type === "chat.error";
 }
 
+export function isChatSessions(
+  message: WsMessage,
+): message is WsMessage<import("../types/protocol").ChatSessionsPayload> {
+  return message.type === "chat.sessions" || message.type === "chat.sessions.list";
+}
+
+export function isChatSession(
+  message: WsMessage,
+): message is WsMessage<import("../types/protocol").ChatSessionPayload> {
+  return (
+    message.type === "chat.session" ||
+    message.type === "chat.session.create" ||
+    message.type === "chat.session.load"
+  );
+}
+
+export function isChatCancelled(
+  message: WsMessage,
+): message is WsMessage<import("../types/protocol").ChatCancelledPayload> {
+  return message.type === "chat.cancelled";
+}
+
+export function isChatAudio(
+  message: WsMessage,
+): message is WsMessage<import("../types/protocol").ChatAudioPayload> {
+  return message.type === "chat.audio";
+}
+
+export function isChatMedia(
+  message: WsMessage,
+): message is WsMessage<import("../types/protocol").ChatMediaPayload> {
+  return message.type === "chat.media";
+}
+
+export function isIntegrationsWebhosts(
+  message: WsMessage,
+): message is WsMessage<import("../types/protocol").IntegrationsWebhostsPayload> {
+  return message.type === "integrations.webhosts";
+}
+
+export function isSystemWarnings(
+  message: WsMessage,
+): message is WsMessage<import("../types/protocol").SystemWarningsPayload> {
+  return message.type === "system.warnings";
+}
+
+export function isChatVoiceOutputStatus(
+  message: WsMessage,
+): message is WsMessage<import("../types/protocol").ChatVoiceOutputStatusPayload> {
+  return message.type === "chat.voice_output.status";
+}
+
 export function isDesktopCommand(
   message: WsMessage,
 ): message is WsMessage<import("../types/protocol").DesktopCommandPayload> {

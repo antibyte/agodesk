@@ -6,16 +6,15 @@ import { pipeline } from "node:stream/promises";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const modelsRoot = join(root, "models", "speech");
-const targetDir = join(modelsRoot, "omnilingual-ctc-int8");
+const targetDir = join(modelsRoot, "sense-voice-int8");
 const modelFile = join(targetDir, "model.int8.onnx");
 const tokensFile = join(targetDir, "tokens.txt");
 
 const ARCHIVE_URL =
-  "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-omnilingual-asr-1600-languages-300M-ctc-int8-2025-11-12.tar.bz2";
-const ARCHIVE_NAME = "sherpa-onnx-omnilingual-asr-300M-int8.tar.bz2";
+  "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2025-09-09.tar.bz2";
+const ARCHIVE_NAME = "sherpa-onnx-sense-voice-int8.tar.bz2";
 const archivePath = join(modelsRoot, ARCHIVE_NAME);
-const extractedDirName =
-  "sherpa-onnx-omnilingual-asr-1600-languages-300M-ctc-int8-2025-11-12";
+const extractedDirName = "sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2025-09-09";
 
 async function download(url, destination) {
   if (process.platform === "win32") {
@@ -41,13 +40,13 @@ function extractArchive() {
 
 async function main() {
   if (existsSync(modelFile) && existsSync(tokensFile)) {
-    console.log(`ASR model already present at ${targetDir}`);
+    console.log(`SenseVoice ASR model already present at ${targetDir}`);
     return;
   }
 
   mkdirSync(modelsRoot, { recursive: true });
 
-  console.log(`Downloading Omnilingual ASR int8 from ${ARCHIVE_URL}`);
+  console.log(`Downloading SenseVoice int8 from ${ARCHIVE_URL}`);
   await download(ARCHIVE_URL, archivePath);
 
   console.log("Extracting archive…");
@@ -72,7 +71,7 @@ async function main() {
     throw new Error(`Model files missing after install: ${targetDir}`);
   }
 
-  console.log(`Omnilingual ASR ready at ${targetDir}`);
+  console.log(`SenseVoice ASR ready at ${targetDir}`);
 }
 
 main().catch((error) => {

@@ -17,6 +17,7 @@ import {
   DEFAULT_GEMINI_LIVE_MODEL,
   isNativeAudioLiveModel,
   normalizeModelId,
+  redactGeminiLiveWsUrl,
   resolveLiveApiVersions,
   resolveResponseModalities,
   toGeminiModelPath,
@@ -55,6 +56,13 @@ describe("speech types", () => {
 
     const alphaUrl = buildGeminiLiveWsUrl("test-key", "v1alpha");
     assert.match(alphaUrl, /v1alpha/);
+  });
+
+  it("redacts api key from gemini live websocket url", () => {
+    const url = buildGeminiLiveWsUrl("secret-key-123");
+    const redacted = redactGeminiLiveWsUrl(url);
+    assert.doesNotMatch(redacted, /secret-key-123/);
+    assert.match(redacted, /key=%5BREDACTED%5D|key=\[REDACTED\]/);
   });
 });
 

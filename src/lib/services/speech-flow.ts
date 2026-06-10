@@ -406,7 +406,13 @@ export function getSpeechPlaybackAnalyser(): AnalyserNode | null {
   return liveSession?.getPlaybackAnalyser() ?? null;
 }
 
-export { speakLocalAssistantText, shouldUseLocalSpeechTts } from "./local-speech-tts";
+export {
+  speakLocalAssistantText,
+  shouldUseLocalSpeechTts,
+  testLocalSpeechTts,
+  localTtsTestPhrase,
+  DEFAULT_LOCAL_TTS_TEST_PHRASE,
+} from "./local-speech-tts";
 
 export async function testGeminiConnection(
 

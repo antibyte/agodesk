@@ -36,6 +36,27 @@ export async function getPinnedFingerprint(serverUrl: string): Promise<string | 
   return store.trusted_certificates[getWsOrigin(serverUrl)]?.sha256_fingerprint ?? null;
 }
 
+export async function getPinnedFingerprintForHttpUrl(url: string): Promise<string | null> {
+  const trimmed = url.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  let origin = "";
+  try {
+    const parsed = new URL(trimmed);
+    origin = `${parsed.protocol}//${parsed.host}`;
+  } catch {
+    return null;
+  }
+
+  const { invoke } = await import("@tauri-apps/api/core");
+  const store = await invoke<{ trusted_certificates: Record<string, TrustedCertificateEntry> }>(
+    "get_trusted_certificates",
+  );
+  return store.trusted_certificates[origin]?.sha256_fingerprint ?? null;
+}
+
 export function browserOrigin(url: string): string {
   return getWsOrigin(url);
 }

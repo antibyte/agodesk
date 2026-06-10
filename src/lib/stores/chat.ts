@@ -1,6 +1,9 @@
 import { writable } from "svelte/store";
 import type { ChatMessage } from "../types/protocol";
 
+/** Maximum chat messages kept in memory (older entries are dropped). */
+export const MAX_CHAT_MESSAGES = 500;
+
 export interface AppendStreamingChunkOptions {
   requestId: string;
   delta: string;
@@ -15,6 +18,20 @@ export interface AppendStreamingChunkResult {
   text: string;
 }
 
+function trimMessageHistory(
+  messages: ChatMessage[],
+  seenIds: Set<string>,
+): ChatMessage[] {
+  if (messages.length <= MAX_CHAT_MESSAGES) {
+    return messages;
+  }
+  const overflow = messages.length - MAX_CHAT_MESSAGES;
+  for (const message of messages.slice(0, overflow)) {
+    seenIds.delete(message.id);
+  }
+  return messages.slice(overflow);
+}
+
 function createChatStore() {
   const { subscribe, update, set } = writable<ChatMessage[]>([]);
   const seenIds = new Set<string>();
@@ -27,7 +44,9 @@ function createChatStore() {
         return;
       }
       seenIds.add(message.id);
-      update((messages) => [...messages, message]);
+      update((messages) =>
+        trimMessageHistory([...messages, message], seenIds),
+      );
     },
     appendStreamingChunk(
       options: AppendStreamingChunkOptions,
@@ -45,17 +64,20 @@ function createChatStore() {
           streamingByRequestId.set(options.requestId, messageId);
           seenIds.add(messageId);
           finalText = options.delta;
-          return [
-            ...messages,
-            {
-              id: messageId,
-              role: "assistant",
-              text: options.delta,
-              timestamp: options.timestamp,
-              requestId: options.requestId,
-              streaming: !options.done,
-            },
-          ];
+          return trimMessageHistory(
+            [
+              ...messages,
+              {
+                id: messageId,
+                role: "assistant",
+                text: options.delta,
+                timestamp: options.timestamp,
+                requestId: options.requestId,
+                streaming: !options.done,
+              },
+            ],
+            seenIds,
+          );
         }
 
         finalText = existing.text + options.delta;

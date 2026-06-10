@@ -7,89 +7,24 @@ import {
   type SystemMessageTone,
 } from "../i18n/format";
 
-export type ChatTextSegment =
-  | { type: "text"; value: string }
-  | { type: "bold"; value: string }
-  | { type: "code"; value: string };
+export type {
+  ChatContentBlock,
+  ChatListItem,
+  ChatTextSegment,
+} from "./chat-format-types";
 
-export type ChatContentBlock =
-  | { type: "paragraph"; segments: ChatTextSegment[] }
-  | { type: "codeblock"; language: string; value: string };
+export {
+  parseChatContent,
+  parseInlineSegments,
+  plainTextFromMarkdown,
+  sanitizeChatLinkHref,
+} from "./chat-markdown";
 
-const INLINE_PATTERN =
-  /(`[^`\n]+`|\*\*[^*\n]+\*\*)/g;
+import { plainTextFromMarkdown } from "./chat-markdown";
 
-export function parseInlineSegments(text: string): ChatTextSegment[] {
-  if (!text) {
-    return [];
-  }
-
-  const segments: ChatTextSegment[] = [];
-  let lastIndex = 0;
-
-  for (const match of text.matchAll(INLINE_PATTERN)) {
-    const index = match.index ?? 0;
-    if (index > lastIndex) {
-      segments.push({ type: "text", value: text.slice(lastIndex, index) });
-    }
-
-    const token = match[0];
-    if (token.startsWith("`") && token.endsWith("`")) {
-      segments.push({ type: "code", value: token.slice(1, -1) });
-    } else if (token.startsWith("**") && token.endsWith("**")) {
-      segments.push({ type: "bold", value: token.slice(2, -2) });
-    }
-
-    lastIndex = index + token.length;
-  }
-
-  if (lastIndex < text.length) {
-    segments.push({ type: "text", value: text.slice(lastIndex) });
-  }
-
-  return segments.length > 0 ? segments : [{ type: "text", value: text }];
-}
-
-export function parseChatContent(text: string): ChatContentBlock[] {
-  const blocks: ChatContentBlock[] = [];
-  const parts = text.split(/(```[\s\S]*?```)/g);
-
-  for (const part of parts) {
-    if (!part) {
-      continue;
-    }
-
-    if (part.startsWith("```") && part.endsWith("```")) {
-      const inner = part.slice(3, -3);
-      const newline = inner.indexOf("\n");
-      if (newline === -1) {
-        blocks.push({ type: "codeblock", language: "", value: inner.trim() });
-      } else {
-        const language = inner.slice(0, newline).trim();
-        const value = inner.slice(newline + 1).replace(/\n$/, "");
-        blocks.push({ type: "codeblock", language, value });
-      }
-      continue;
-    }
-
-    const paragraphs = part.split(/\n{2,}/);
-    for (const paragraph of paragraphs) {
-      const trimmed = paragraph.replace(/\n$/, "");
-      if (!trimmed.trim()) {
-        continue;
-      }
-      blocks.push({
-        type: "paragraph",
-        segments: parseInlineSegments(trimmed),
-      });
-    }
-  }
-
-  if (blocks.length === 0) {
-    blocks.push({ type: "paragraph", segments: [{ type: "text", value: text }] });
-  }
-
-  return blocks;
+/** Strip markdown/formatting so TTS reads natural spoken text. */
+export function plainTextForSpeech(text: string): string {
+  return plainTextFromMarkdown(text);
 }
 
 export function formatDayLabel(timestamp: string, now = new Date()): string {

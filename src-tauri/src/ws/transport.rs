@@ -81,6 +81,9 @@ pub async fn fetch_server_asset(
     app: AppHandle,
     server_url: String,
     asset_url: String,
+    pinned_fingerprint: Option<String>,
+    device_id: Option<String>,
+    session_id: Option<String>,
 ) -> Result<crate::ws::asset_fetch::FetchedAsset, String> {
     if server_url.trim().is_empty() {
         return Err("serverUrl is required.".to_string());
@@ -89,7 +92,14 @@ pub async fn fetch_server_asset(
         return Err("assetUrl is required.".to_string());
     }
     tokio::task::spawn_blocking(move || {
-        crate::ws::asset_fetch::fetch_server_asset_impl(&app, &server_url, &asset_url)
+        crate::ws::asset_fetch::fetch_server_asset_impl(
+            &app,
+            &server_url,
+            &asset_url,
+            pinned_fingerprint.as_deref(),
+            device_id.as_deref(),
+            session_id.as_deref(),
+        )
     })
     .await
     .map_err(|error| format!("Asset fetch task failed: {error}"))?
@@ -195,6 +205,8 @@ pub async fn agodesk_connect(
                         emit_state(&app_handle, "disconnected");
                         break;
                     }
+                    // Session was established; reset backoff for the next drop.
+                    reconnect_attempt = 0;
                 }
                 Err((code, message)) => {
                     emit_error(

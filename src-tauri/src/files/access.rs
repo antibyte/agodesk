@@ -58,7 +58,10 @@ fn resolve_internal(
     let root_canonical = canonicalize_existing(Path::new(&root.canonical_path))?;
     let joined = root_canonical.join(normalize_relative(trimmed));
     let target = if target_must_exist {
-        canonicalize_path(&joined, true)?
+        match canonicalize_path(&joined, true) {
+            Ok(path) => path,
+            Err(_) => resolve_relative_by_walking(&root_canonical, trimmed)?,
+        }
     } else {
         resolve_write_target(&root_canonical, &joined)?
     };
@@ -71,7 +74,7 @@ fn resolve_internal(
     })
 }
 
-fn resolve_directory(
+pub fn resolve_directory(
     roots: &[FileAccessRootInput],
     root_id: Option<&str>,
     requested_path: &str,
@@ -183,18 +186,100 @@ fn normalize_relative(path: &str) -> PathBuf {
     output
 }
 
+fn split_relative_components(relative: &str) -> Vec<std::ffi::OsString> {
+    relative
+        .replace('\\', "/")
+        .split('/')
+        .filter(|part| !part.is_empty() && *part != ".")
+        .map(|part| std::ffi::OsString::from(part))
+        .collect()
+}
+
+/// Walks from `root` matching each path segment against directory entries.
+/// Fixes Windows/OneDrive cases where `join` + `canonicalize` fails despite the file
+/// being visible in `read_dir` (unicode form, reparse points, long paths).
+fn resolve_relative_by_walking(root: &Path, relative: &str) -> Result<PathBuf, String> {
+    let parts = split_relative_components(relative);
+    if parts.is_empty() {
+        return canonicalize_path(root, true);
+    }
+
+    let mut current = root.to_path_buf();
+    for part in parts {
+        current = find_child_in_directory(&current, &part)?;
+    }
+    canonicalize_path(&current, true)
+}
+
+fn find_child_in_directory(parent: &Path, name: &std::ffi::OsString) -> Result<PathBuf, String> {
+    let direct = parent.join(name);
+    if direct.exists() {
+        return Ok(direct);
+    }
+
+    let read_dir = std::fs::read_dir(parent).map_err(|_| "FILE_NOT_FOUND".to_string())?;
+    for entry in read_dir {
+        let entry = entry.map_err(|_| "FILE_NOT_FOUND".to_string())?;
+        if file_names_match(&entry.file_name(), name) {
+            return Ok(entry.path());
+        }
+    }
+
+    Err("FILE_NOT_FOUND".to_string())
+}
+
+fn file_names_match(left: &std::ffi::OsStr, right: &std::ffi::OsStr) -> bool {
+    if left == right {
+        return true;
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::ffi::OsStrExt;
+        let left: Vec<u16> = left.encode_wide().collect();
+        let right: Vec<u16> = right.encode_wide().collect();
+        if left.len() != right.len() {
+            return false;
+        }
+        return left
+            .iter()
+            .zip(right.iter())
+            .all(|(a, b)| wide_chars_match_case_insensitive(*a, *b));
+    }
+    #[cfg(not(windows))]
+    {
+        false
+    }
+}
+
+#[cfg(windows)]
+fn wide_chars_match_case_insensitive(a: u16, b: u16) -> bool {
+    if a == b {
+        return true;
+    }
+    if a <= 0x7F && b <= 0x7F {
+        return (a as u8).eq_ignore_ascii_case(&(b as u8));
+    }
+    false
+}
+
 fn canonicalize_existing(path: &Path) -> Result<PathBuf, String> {
-    canonicalize_path(path, true)
+    let input = normalize_path_input(path.to_string_lossy().as_ref());
+    canonicalize_path_buf(&input, true)
 }
 
 pub fn canonicalize_path(path: &Path, must_exist: bool) -> Result<PathBuf, String> {
+    let input = normalize_path_input(path.to_string_lossy().as_ref());
+    canonicalize_path_buf(&input, must_exist)
+}
+
+fn canonicalize_path_buf(path: &Path, must_exist: bool) -> Result<PathBuf, String> {
     if must_exist {
         std::fs::canonicalize(path).map_err(|_| "FILE_NOT_FOUND".to_string())
     } else {
         let parent = path
             .parent()
             .filter(|parent| !parent.as_os_str().is_empty())
-            .map(canonicalize_existing)
+            .map(|parent| canonicalize_path_buf(parent, true))
             .transpose()?;
 
         let file_name = path
@@ -208,6 +293,35 @@ pub fn canonicalize_path(path: &Path, must_exist: bool) -> Result<PathBuf, Strin
     }
 }
 
+/// Normalizes user/agent path strings before canonicalization.
+/// Handles Windows extended paths (`\\?\`, `//?/`) and forward slashes.
+pub fn normalize_path_input(raw: &str) -> PathBuf {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return PathBuf::new();
+    }
+
+    #[cfg(windows)]
+    {
+        if let Some(rest) = trimmed
+            .strip_prefix("//?/")
+            .or_else(|| trimmed.strip_prefix("//?\\"))
+        {
+            let body = rest.replace('/', "\\");
+            return PathBuf::from(format!(r"\\?\{}", body.trim_start_matches('\\')));
+        }
+        if trimmed.starts_with(r"\\?\") {
+            return PathBuf::from(trimmed.replace('/', "\\"));
+        }
+        return PathBuf::from(trimmed.replace('/', "\\"));
+    }
+
+    #[cfg(not(windows))]
+    {
+        PathBuf::from(trimmed)
+    }
+}
+
 fn ensure_within_root(root: &Path, target: &Path) -> Result<(), String> {
     if is_within_root(root, target) {
         Ok(())
@@ -216,7 +330,7 @@ fn ensure_within_root(root: &Path, target: &Path) -> Result<(), String> {
     }
 }
 
-fn is_within_root(root: &Path, target: &Path) -> bool {
+pub fn is_within_root(root: &Path, target: &Path) -> bool {
     let root = normalize_for_prefix(root);
     let target = normalize_for_prefix(target);
     target.starts_with(&root)
@@ -253,4 +367,66 @@ pub fn validate_parent_directory(path: &Path) -> Result<(), String> {
         return Err("FILE_NOT_FOUND".to_string());
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::files::types::FileAccessRootInput;
+
+    #[test]
+    fn normalize_path_input_converts_extended_forward_slashes_on_windows() {
+        let normalized = normalize_path_input("//?/C:/Users/andre/OneDrive/BAFÖG");
+        let text = normalized.to_string_lossy();
+        #[cfg(windows)]
+        {
+            assert!(text.starts_with(r"\\?\"));
+            assert!(text.contains("OneDrive"));
+        }
+        #[cfg(not(windows))]
+        {
+            assert_eq!(text, "//?/C:/Users/andre/OneDrive/BAFÖG");
+        }
+    }
+
+    #[test]
+    fn resolve_file_path_allows_empty_path_for_root_listing() {
+        let temp = std::env::temp_dir().join(format!(
+            "agodesk-access-{}",
+            uuid::Uuid::new_v4()
+        ));
+        std::fs::create_dir_all(&temp).unwrap();
+        let roots = vec![FileAccessRootInput {
+            root_id: "root".to_string(),
+            canonical_path: temp.to_string_lossy().into_owned(),
+            permissions: vec!["read".to_string()],
+        }];
+        let resolved = resolve_file_path(&roots, Some("root"), "").expect("empty path");
+        assert!(resolved.absolute_path.is_dir());
+        let _ = std::fs::remove_dir_all(temp);
+    }
+
+    #[test]
+    fn resolve_file_path_finds_nested_file_via_directory_walk() {
+        let temp = std::env::temp_dir().join(format!(
+            "agodesk-access-nested-{}",
+            uuid::Uuid::new_v4()
+        ));
+        let nested = temp.join("Bafög_Johannes_08.2019");
+        std::fs::create_dir_all(&nested).unwrap();
+        let file = nested.join("01_Bafög_Bewilligungsbescheid.pdf");
+        std::fs::write(&file, b"%PDF-1.4 test").unwrap();
+
+        let roots = vec![FileAccessRootInput {
+            root_id: "root".to_string(),
+            canonical_path: temp.to_string_lossy().into_owned(),
+            permissions: vec!["read".to_string()],
+        }];
+        let relative = "Bafög_Johannes_08.2019/01_Bafög_Bewilligungsbescheid.pdf";
+        let resolved =
+            resolve_file_path(&roots, Some("root"), relative).expect("nested unicode path");
+        assert!(resolved.absolute_path.is_file());
+
+        let _ = std::fs::remove_dir_all(temp);
+    }
 }

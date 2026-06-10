@@ -17,8 +17,22 @@ use crate::speech::sidecar_client::dispatch_speech_op;
 use keyring::Entry;
 use serde::Serialize;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use tauri::{AppHandle, Manager, State};
+
+/// Restrict fallback secret files to owner-read/write on Unix (0600).
+#[cfg(unix)]
+fn restrict_secret_file_permissions(path: &Path) {
+    use std::os::unix::fs::PermissionsExt;
+    if let Ok(metadata) = fs::metadata(path) {
+        let mut perms = metadata.permissions();
+        perms.set_mode(0o600);
+        let _ = fs::set_permissions(path, perms);
+    }
+}
+
+#[cfg(not(unix))]
+fn restrict_secret_file_permissions(_path: &Path) {}
 
 #[derive(Serialize)]
 pub struct HostInfo {
@@ -43,7 +57,9 @@ fn fallback_key_path(app: &AppHandle, device_id: &str) -> Result<PathBuf, String
 
 fn write_fallback_key(app: &AppHandle, device_id: &str, shared_key: &str) -> Result<(), String> {
     let path = fallback_key_path(app, device_id)?;
-    fs::write(path, shared_key).map_err(|error| error.to_string())
+    fs::write(&path, shared_key).map_err(|error| error.to_string())?;
+    restrict_secret_file_permissions(&path);
+    Ok(())
 }
 
 fn read_fallback_key(app: &AppHandle, device_id: &str) -> Option<String> {
@@ -83,7 +99,9 @@ fn write_gemini_fallback_key(app: &AppHandle, api_key: &str) -> Result<(), Strin
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(|error| error.to_string())?;
     }
-    fs::write(path, api_key).map_err(|error| error.to_string())
+    fs::write(&path, api_key).map_err(|error| error.to_string())?;
+    restrict_secret_file_permissions(&path);
+    Ok(())
 }
 
 fn read_gemini_fallback_key(app: &AppHandle) -> Option<String> {
@@ -298,45 +316,55 @@ pub async fn speech_download_asr_model(
 }
 
 #[tauri::command]
-pub fn speech_sidecar_ping() -> Result<serde_json::Value, String> {
-    dispatch_speech_op("ping", serde_json::json!({}))
+pub async fn speech_sidecar_ping() -> Result<serde_json::Value, String> {
+    tauri::async_runtime::spawn_blocking(|| dispatch_speech_op("ping", serde_json::json!({})))
+        .await
+        .map_err(|error| error.to_string())?
 }
 
 #[tauri::command]
-pub fn speech_sidecar_transcribe(
+pub async fn speech_sidecar_transcribe(
     pcm_base64: String,
     sample_rate: Option<u32>,
     language: Option<String>,
     model: Option<String>,
 ) -> Result<serde_json::Value, String> {
-    dispatch_speech_op(
-        "transcribe",
-        serde_json::json!({
-            "pcm_base64": pcm_base64,
-            "sample_rate": sample_rate.unwrap_or(16_000),
-            "language": language,
-            "model": model,
-        }),
-    )
+    tauri::async_runtime::spawn_blocking(move || {
+        dispatch_speech_op(
+            "transcribe",
+            serde_json::json!({
+                "pcm_base64": pcm_base64,
+                "sample_rate": sample_rate.unwrap_or(16_000),
+                "language": language,
+                "model": model,
+            }),
+        )
+    })
+    .await
+    .map_err(|error| error.to_string())?
 }
 
 #[tauri::command]
-pub fn speech_sidecar_synthesize(
+pub async fn speech_sidecar_synthesize(
     text: String,
     voice: String,
     backend: String,
     rate: Option<f32>,
     pitch: Option<f32>,
 ) -> Result<serde_json::Value, String> {
-    dispatch_speech_op(
-        "synthesize",
-        serde_json::json!({
-            "text": text,
-            "voice": voice,
-            "backend": backend,
-            "rate": rate,
-            "pitch": pitch,
-        }),
-    )
+    tauri::async_runtime::spawn_blocking(move || {
+        dispatch_speech_op(
+            "synthesize",
+            serde_json::json!({
+                "text": text,
+                "voice": voice,
+                "backend": backend,
+                "rate": rate,
+                "pitch": pitch,
+            }),
+        )
+    })
+    .await
+    .map_err(|error| error.to_string())?
 }
 

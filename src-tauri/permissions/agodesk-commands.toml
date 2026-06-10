@@ -41,8 +41,16 @@ commands.allow = [
   "file_list",
   "file_read",
   "file_write",
+  "file_search",
+  "file_search_sync_roots",
+  "file_search_rescan",
   "pick_folder_path",
   "canonicalize_folder_path",
   "set_minimize_to_tray",
-  "fetch_server_asset"
+  "update_tray_labels",
+  "show_main_window",
+  "fetch_server_asset",
+  "integration_embed_open",
+  "integration_embed_set_bounds",
+  "integration_embed_close"
 ]

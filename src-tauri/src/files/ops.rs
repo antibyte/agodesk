@@ -3,6 +3,7 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::time::UNIX_EPOCH;
 
+use base64::{Engine as _, engine::general_purpose::STANDARD};
 use chrono::{DateTime, Utc};
 use sha2::{Digest, Sha256};
 
@@ -103,6 +104,7 @@ pub fn file_read(
     root_id: Option<String>,
     path: String,
     max_bytes: u64,
+    encoding: Option<String>,
 ) -> Result<FileReadResult, String> {
     if max_bytes == 0 {
         return Err("FILE_TOO_LARGE".to_string());
@@ -123,16 +125,52 @@ pub fn file_read(
 
     let bytes = fs::read(&resolved.absolute_path).map_err(|_| "FILE_ACCESS_DENIED".to_string())?;
     let size = bytes.len() as u64;
-    let content = String::from_utf8(bytes).map_err(|_| "FILE_ACCESS_DENIED".to_string())?;
+    let mode = normalize_read_encoding(encoding.as_deref());
+    let (content, encoding_label) = encode_file_content(&bytes, mode)?;
 
     Ok(FileReadResult {
         root_id: resolved.root_id,
         path: resolved.relative_path,
-        encoding: "utf-8".to_string(),
+        encoding: encoding_label,
         content,
         size,
         truncated: false,
     })
+}
+
+fn normalize_read_encoding(raw: Option<&str>) -> &str {
+    match raw.unwrap_or("auto").trim().to_ascii_lowercase().as_str() {
+        "utf-8" | "utf8" => "utf-8",
+        "base64" => "base64",
+        _ => "auto",
+    }
+}
+
+fn encode_file_content(bytes: &[u8], mode: &str) -> Result<(String, String), String> {
+    match mode {
+        "base64" => Ok((STANDARD.encode(bytes), "base64".to_string())),
+        "utf-8" => decode_utf8_text(bytes).map(|text| (text, "utf-8".to_string())),
+        _ if looks_like_text(bytes) => {
+            decode_utf8_text(bytes).map(|text| (text, "utf-8".to_string()))
+        }
+        _ => Ok((STANDARD.encode(bytes), "base64".to_string())),
+    }
+}
+
+fn looks_like_text(bytes: &[u8]) -> bool {
+    String::from_utf8(bytes.to_vec()).is_ok_and(|text| {
+        text.chars()
+            .all(|ch| !ch.is_control() || matches!(ch, '\n' | '\r' | '\t'))
+    })
+}
+
+fn decode_utf8_text(bytes: &[u8]) -> Result<String, String> {
+    let text = String::from_utf8(bytes.to_vec()).map_err(|_| "FILE_NOT_TEXT".to_string())?;
+    if looks_like_text(bytes) {
+        Ok(text)
+    } else {
+        Err("FILE_NOT_TEXT".to_string())
+    }
 }
 
 #[tauri::command]
@@ -229,6 +267,34 @@ fn ensure_permission(
 fn format_system_time(time: std::time::SystemTime) -> Option<String> {
     let datetime: DateTime<Utc> = time.into();
     Some(datetime.to_rfc3339())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn encode_file_content_auto_uses_base64_for_binary_docx_like_bytes() {
+        let bytes = b"PK\x03\x04fake-docx";
+        let (content, encoding) = encode_file_content(bytes, "auto").expect("auto read");
+        assert_eq!(encoding, "base64");
+        assert_eq!(STANDARD.decode(content.as_bytes()).expect("valid base64"), bytes);
+    }
+
+    #[test]
+    fn encode_file_content_auto_keeps_plain_text_utf8() {
+        let bytes = b"Hello Johannes";
+        let (content, encoding) = encode_file_content(bytes, "auto").expect("auto read");
+        assert_eq!(encoding, "utf-8");
+        assert_eq!(content, "Hello Johannes");
+    }
+
+    #[test]
+    fn encode_file_content_utf8_rejects_binary() {
+        let bytes = b"PK\x03\x04";
+        let error = encode_file_content(bytes, "utf-8").expect_err("binary utf-8");
+        assert_eq!(error, "FILE_NOT_TEXT");
+    }
 }
 
 #[tauri::command]

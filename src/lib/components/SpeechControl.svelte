@@ -59,8 +59,9 @@
 
 <style>
   .speech-toggle {
-    width: 2.5rem;
-    height: 2.5rem;
+    width: 2.625rem;
+    height: 2.625rem;
+    min-width: 2.625rem;
     border-radius: var(--radius-full);
     flex-shrink: 0;
   }

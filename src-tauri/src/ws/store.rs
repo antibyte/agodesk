@@ -3,6 +3,7 @@ use crate::ws::types::TrustedCertificateStore;
 use std::fs;
 use std::path::PathBuf;
 use tauri::{AppHandle, Manager};
+use url::Url;
 
 pub fn store_path(app: &AppHandle) -> Result<PathBuf, String> {
     let dir = app
@@ -38,6 +39,58 @@ pub fn pinned_fingerprint_for_url(
         .trusted_certificates
         .get(&parsed.origin)
         .map(|entry| entry.sha256_fingerprint.clone()))
+}
+
+pub fn pinned_fingerprint_for_http_url(
+    app: &AppHandle,
+    asset_url: &str,
+) -> Result<Option<String>, String> {
+    let url = Url::parse(asset_url).map_err(|error| error.to_string())?;
+    let origin = http_origin_from_url(&url)?;
+    let store = load_store(app)?;
+    Ok(store
+        .trusted_certificates
+        .get(&origin)
+        .map(|entry| entry.sha256_fingerprint.clone()))
+}
+
+pub fn http_origin_from_url(url: &Url) -> Result<String, String> {
+    let scheme = url.scheme();
+    if scheme != "http" && scheme != "https" && scheme != "ws" && scheme != "wss" {
+        return Err(format!("Unsupported origin scheme: {scheme}"));
+    }
+    let host = url
+        .host_str()
+        .ok_or_else(|| "Missing host in asset URL.".to_string())?;
+    let http_scheme = if scheme == "wss" {
+        "https"
+    } else if scheme == "ws" {
+        "http"
+    } else {
+        scheme
+    };
+    let default_port = if http_scheme == "https" { 443 } else { 80 };
+    let port = url.port().unwrap_or(default_port);
+    if port == default_port {
+        Ok(format!("{http_scheme}://{host}"))
+    } else {
+        Ok(format!("{http_scheme}://{host}:{port}"))
+    }
+}
+
+pub fn server_http_origin(server_url: &str) -> Result<String, String> {
+    let parsed = parse_ws_url(server_url)?;
+    let http_scheme = if parsed.origin.starts_with("wss://") {
+        "https"
+    } else {
+        "http"
+    };
+    let default_port = if http_scheme == "https" { 443 } else { 80 };
+    if parsed.port == default_port {
+        Ok(format!("{http_scheme}://{}", parsed.host))
+    } else {
+        Ok(format!("{http_scheme}://{}:{}", parsed.host, parsed.port))
+    }
 }
 
 pub fn save_trusted_certificate(
