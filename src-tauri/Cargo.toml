@@ -65,6 +65,11 @@ sherpa-onnx = { version = "1.13.2", optional = true, default-features = false, f
 fff-search = "0.9"
 regex = "1"
 
+# RUSTSEC-2024-0429 / GHSA-wrw7-89jp-8q8g: backport VariantStrIter fix onto glib 0.18.5
+# until Tauri/wry migrate from gtk-rs 0.18 (see vendor/README.md).
+[patch.crates-io]
+glib = { path = "vendor/glib-0.18.5-patched" }
+
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.58", features = [
   "Win32_Foundation",
