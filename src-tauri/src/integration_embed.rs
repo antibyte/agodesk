@@ -72,7 +72,7 @@ fn build_preview_window(
     width: f64,
     height: f64,
 ) -> Result<WebviewWindow, String> {
-    let mut builder = WebviewWindowBuilder::new(
+    let builder = WebviewWindowBuilder::new(
         app,
         EMBED_LABEL,
         WebviewUrl::External(url.clone()),
@@ -87,9 +87,11 @@ fn build_preview_window(
     .position(pos_x, pos_y);
 
     #[cfg(windows)]
-    if let Some(args) = local_https_browser_args(url) {
-        builder = builder.additional_browser_args(args);
-    }
+    let builder = if let Some(args) = local_https_browser_args(url) {
+        builder.additional_browser_args(args)
+    } else {
+        builder
+    };
 
     let window = builder.build().map_err(|error| error.to_string())?;
     present_preview_window(&window, pos_x, pos_y, width, height)?;

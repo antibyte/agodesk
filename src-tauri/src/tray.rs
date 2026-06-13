@@ -165,10 +165,8 @@ pub fn handle_window_event(window: &Window, event: &WindowEvent, state: &TraySta
             api.prevent_close();
             hide_main_window_to_tray(window.app_handle());
         }
-        WindowEvent::Resized(_) => {
-            if window.is_minimized().unwrap_or(false) {
-                hide_main_window_to_tray(window.app_handle());
-            }
+        WindowEvent::Resized(_) if window.is_minimized().unwrap_or(false) => {
+            hide_main_window_to_tray(window.app_handle());
         }
         _ => {}
     }
