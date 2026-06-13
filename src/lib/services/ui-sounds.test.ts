@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { DEFAULT_UI_SOUND_SETTINGS, UI_SOUND_THEMES } from "../types/protocol.ts";
 import { normalizeUiSoundSettings } from "./settings.ts";
+import { speechLanguageForAppLocale } from "./speech-locale.ts";
 import { UI_SOUND_THEME_DEFINITIONS } from "./ui-sound-themes.ts";
 
 test("normalizeUiSoundSettings liefert Defaults bei leerer Eingabe", () => {
@@ -60,11 +61,10 @@ test("UI_SOUND_THEME_DEFINITIONS enthalten alle Events pro Theme", () => {
 test("normalizeAppSettings normalisiert voiceName und Sprache", async () => {
   const { normalizeAppSettings } = await import("./settings.ts");
 
-  // Ohne gespeicherte Einstellungen:
+  // Ohne gespeicherte Einstellungen folgt die Sprache dem App-Locale (system → resolveLocale).
   const emptyNormalized = normalizeAppSettings({});
   assert.equal(emptyNormalized.speech.voiceName, "Zephyr");
-  // In der Node-Testumgebung ist navigator undefined, also sollte es auf "de-DE" fallen:
-  assert.equal(emptyNormalized.speech.language, "de-DE");
+  assert.equal(emptyNormalized.speech.language, speechLanguageForAppLocale("system"));
 
   // Mit expliziten Einstellungen:
   const customNormalized = normalizeAppSettings({
