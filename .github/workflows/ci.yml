@@ -36,6 +36,9 @@ jobs:
       - name: Test
         run: npm test
 
+      - name: Mock attachment flow
+        run: npm run test:mock-attachments
+
       - name: Build
         run: npm run build
 

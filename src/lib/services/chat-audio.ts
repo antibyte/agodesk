@@ -37,8 +37,9 @@ export function stopChatAudioPlayback(): void {
 }
 
 export function stopAllChatAssistantTts(requestId?: string): void {
-  void import("./chat-assistant-tts").then(({ resetAssistantTtsTracking }) => {
-    resetAssistantTtsTracking(requestId);
-  });
-  stopChatAudioPlayback();
+  if (impl) {
+    impl.stopAllChatAssistantTts(requestId);
+    return;
+  }
+  void loadImpl().then((module) => module.stopAllChatAssistantTts(requestId));
 }

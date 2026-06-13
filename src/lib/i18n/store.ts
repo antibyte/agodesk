@@ -5,6 +5,7 @@ import { loadMessages } from "./loader";
 import type { Messages } from "./types";
 import type { MessageKey } from "./types";
 import { translate, type TranslateParams } from "./translate";
+import { syncTrayLabels } from "../services/tray";
 
 export const localeSetting = writable<UiLocaleSetting>("system");
 export const activeLocale = derived(localeSetting, ($setting) => resolveLocale($setting));
@@ -20,12 +21,16 @@ export async function initLocale(setting: UiLocaleSetting): Promise<void> {
   const normalized = normalizeLocaleSetting(setting);
   localeSetting.set(normalized);
   const locale = resolveLocale(normalized);
-  messages.set(loadMessages(locale));
+  const msgs = loadMessages(locale);
+  messages.set(msgs);
   if (typeof document !== "undefined") {
     document.documentElement.lang = localeToBcp47(locale);
   }
-  const { syncTrayLabels } = await import("../services/tray");
-  await syncTrayLabels();
+  await syncTrayLabels({
+    show: translate(msgs, "tray.show"),
+    quit: translate(msgs, "tray.quit"),
+    tooltip: translate(msgs, "tray.tooltip"),
+  });
 }
 
 export async function applyLocaleSetting(setting: UiLocaleSetting): Promise<void> {

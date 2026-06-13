@@ -1,6 +1,11 @@
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { getTranslateFn } from "../i18n/store";
+
+export interface TrayMenuLabels {
+  show: string;
+  quit: string;
+  tooltip: string;
+}
 
 export async function applyMinimizeToTraySetting(enabled: boolean): Promise<void> {
   try {
@@ -11,14 +16,9 @@ export async function applyMinimizeToTraySetting(enabled: boolean): Promise<void
 }
 
 /** Sync tray menu labels with the active UI locale. */
-export async function syncTrayLabels(): Promise<void> {
-  const t = getTranslateFn();
+export async function syncTrayLabels(labels: TrayMenuLabels): Promise<void> {
   try {
-    await invoke("update_tray_labels", {
-      show: t("tray.show"),
-      quit: t("tray.quit"),
-      tooltip: t("tray.tooltip"),
-    });
+    await invoke("update_tray_labels", { ...labels });
   } catch {
     // Im Browser-Dev ohne Tauri-Shell ignorieren.
   }

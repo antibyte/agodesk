@@ -1,10 +1,10 @@
-import { invoke } from "@tauri-apps/api/core";
 import {
   isRegistered,
   register,
   unregister,
   unregisterAll,
 } from "@tauri-apps/plugin-global-shortcut";
+import { showMainWindowFromTray } from "./tray";
 import { isDesktopShell } from "./window-controls";
 
 /** Unlikely to collide with browser/OS defaults; includes Alt+Shift modifier pair. */
@@ -237,12 +237,7 @@ function codeToHotkeyKey(code: string): string | null {
 }
 
 async function revealMainWindow(): Promise<void> {
-  try {
-    await invoke("show_main_window");
-  } catch {
-    const { showMainWindowFromTray } = await import("./tray");
-    await showMainWindowFromTray();
-  }
+  await showMainWindowFromTray();
 }
 
 export async function applyShowWindowHotkey(

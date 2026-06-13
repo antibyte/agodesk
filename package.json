@@ -31,7 +31,8 @@
     "build:win-installer": "npm run build:win",
     "build:linux": "npm run build && npm run build:sidecar && npm run tauri -- build --bundles \"deb,appimage,rpm\" --features computer-use-sidecar,speech-sidecar",
     "build:linux-installer": "npm run build:linux",
-    "test": "node --import tsx --test src/lib/**/*.test.ts"
+    "test": "node --import tsx --test src/lib/**/*.test.ts",
+    "test:mock-attachments": "node scripts/test-mock-attachment-flow.mjs"
   },
   "dependencies": {
     "@ricky0123/vad-web": "^0.0.7",
