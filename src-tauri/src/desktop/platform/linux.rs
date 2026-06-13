@@ -27,16 +27,23 @@ pub fn list_displays() -> Result<Vec<DisplayInfo>, String> {
     Ok(monitors
         .into_iter()
         .enumerate()
-        .map(|(index, monitor)| DisplayInfo {
-            id: format!("display-{index}"),
-            index: index as u32,
-            name: monitor.name().unwrap_or_else(|_| format!("Monitor {index}")),
-            width: monitor.width().unwrap_or(0),
-            height: monitor.height().unwrap_or(0),
-            x: monitor.x().unwrap_or(0),
-            y: monitor.y().unwrap_or(0),
-            primary: index == 0,
-            scale_factor: monitor.scale_factor().unwrap_or(1.0) as f64,
+        .map(|(index, monitor)| {
+            let name = monitor.name();
+            DisplayInfo {
+                id: format!("display-{index}"),
+                index: index as u32,
+                name: if name.is_empty() {
+                    format!("Monitor {index}")
+                } else {
+                    name.to_string()
+                },
+                width: monitor.width(),
+                height: monitor.height(),
+                x: monitor.x(),
+                y: monitor.y(),
+                primary: monitor.is_primary(),
+                scale_factor: monitor.scale_factor() as f64,
+            }
         })
         .collect())
 }
@@ -48,17 +55,17 @@ pub fn list_windows() -> Result<Vec<WindowInfo>, String> {
         .into_iter()
         .enumerate()
         .filter_map(|(index, window)| {
-            let title = window.title().ok()?;
+            let title = window.title();
             if title.trim().is_empty() {
                 return None;
             }
-            let width = window.width().ok()?;
-            let height = window.height().ok()?;
+            let width = window.width();
+            let height = window.height();
             if width == 0 || height == 0 {
                 return None;
             }
-            let x = window.x().ok()?;
-            let y = window.y().ok()?;
+            let x = window.x();
+            let y = window.y();
             let display_id = displays
                 .iter()
                 .find(|display| {
@@ -76,8 +83,8 @@ pub fn list_windows() -> Result<Vec<WindowInfo>, String> {
                 .unwrap_or_else(|| "Unknown".to_string());
             Some(WindowInfo {
                 id: format!("win-{index}"),
-                title,
-                class_name: window.app_name().unwrap_or_default(),
+                title: title.to_string(),
+                class_name: window.app_name().to_string(),
                 width,
                 height,
                 x,

@@ -177,7 +177,7 @@ fn resolve_window_title(window_id: Option<&str>) -> Result<String, String> {
             let windows = xcap::Window::all().map_err(|error| error.to_string())?;
             windows
                 .get(index)
-                .and_then(|window| window.title().ok())
+                .map(|window| window.title())
                 .filter(|title| !title.trim().is_empty())
                 .ok_or_else(|| format!("Unknown window_id: {id}"))
         }
