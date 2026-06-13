@@ -76,6 +76,7 @@ export default defineConfig({
   build: {
     // WebView2 / modern desktop runtimes; avoids esbuild 0.28 downlevel of destructuring in vad-web.
     target: "es2022",
+    chunkSizeWarningLimit: 900,
     rollupOptions: {
       output: {
         manualChunks(id) {

@@ -8,6 +8,7 @@ build/
 .svelte-kit/
 tsconfig.tsbuildinfo
 mcps/
+agent-tools/
 
 # Rust / Tauri
 src-tauri/target/
