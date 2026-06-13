@@ -1,6 +1,7 @@
 import { get } from "svelte/store";
 import { chatConversationState } from "../stores/chat-conversation";
 import { settings } from "../stores/settings";
+import { stopChatAudioPlayback } from "./chat-audio";
 import { interruptLocalSpeechPlayback, speakChatAssistantText } from "./local-speech-tts";
 
 interface PendingFallback {
@@ -89,10 +90,8 @@ export function scheduleAssistantFrontendTts(options: {
     }
 
     frontendTtsStarted.add(requestId);
-    void import("./chat-audio").then(({ stopChatAudioPlayback }) => {
-      stopChatAudioPlayback();
-      void speakChatAssistantText(text, get(settings).speech);
-    });
+    stopChatAudioPlayback();
+    void speakChatAssistantText(text, get(settings).speech);
   }, delayMs);
 
   pendingFallbacks.set(requestId, { requestId, timerId });

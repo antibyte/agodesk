@@ -84,6 +84,14 @@ export default defineConfig({
             return "onnx";
           }
 
+          if (id.includes("@ricky0123/vad-web")) {
+            return "vad-web";
+          }
+
+          if (id.includes("chat-audio-impl") || id.includes("speech-audio-playback")) {
+            return "chat-audio";
+          }
+
           if (id.includes("mdast-util") || id.includes("micromark") || id.includes("mdast")) {
             return "markdown";
           }
