@@ -119,7 +119,7 @@ async fn resolve_window_root<'a>(
             continue;
         }
         let app = app_ref
-            .as_accessible_proxy(conn.connection())
+            .into_accessible_proxy(conn.connection())
             .await
             .map_err(map_atspi_error)?;
         if let Some(window) = find_window_by_title(conn, &app, &title, 0).await? {
@@ -156,7 +156,7 @@ async fn find_window_by_title<'a>(
             continue;
         }
         let child = child_ref
-            .as_accessible_proxy(conn.connection())
+            .into_accessible_proxy(conn.connection())
             .await
             .map_err(map_atspi_error)?;
         if let Some(found) = Box::pin(find_window_by_title(conn, &child, title, depth + 1)).await? {
@@ -269,7 +269,7 @@ async fn build_node<'a>(
                 continue;
             }
             let child = child_ref
-                .as_accessible_proxy(conn.connection())
+                .into_accessible_proxy(conn.connection())
                 .await
                 .map_err(map_atspi_error)?;
             let child_path = format!("{path}.{index}");
@@ -367,7 +367,7 @@ async fn invoke_default_action<'a>(
 
 async fn accessible_from_handle<'a>(
     conn: &'a AccessibilityConnection,
-    handle: &AtspiHandle,
+    handle: &'a AtspiHandle,
 ) -> Result<AccessibleProxy<'a>, String> {
     let destination = UniqueName::try_from(handle.destination.as_str()).map_err(map_zbus_error)?;
     let path = ObjectPath::try_from(handle.path.as_str()).map_err(map_zbus_error)?;
@@ -407,7 +407,7 @@ async fn proxy_from_accessible<'a, P>(
     accessible: &'a AccessibleProxy<'a>,
 ) -> Result<P, String>
 where
-    P: ProxyImpl<'a>,
+    P: ProxyImpl<'a> + From<zbus::Proxy<'a>>,
 {
     let inner = accessible.inner();
     let destination = inner.destination().to_owned();
