@@ -194,7 +194,7 @@ pub fn delete_shared_key(app: AppHandle, device_id: String) -> Result<(), String
 #[tauri::command]
 pub fn collect_host_info() -> Result<HostInfo, String> {
     Ok(HostInfo {
-        hostname: whoami::fallible::hostname().unwrap_or_else(|_| "unknown".to_string()),
+        hostname: whoami::hostname().unwrap_or_else(|_| "unknown".to_string()),
         platform: std::env::consts::OS.to_string(),
         arch: std::env::consts::ARCH.to_string(),
     })

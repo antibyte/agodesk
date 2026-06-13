@@ -36,7 +36,7 @@ tauri-plugin-global-shortcut = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 keyring = "3"
-whoami = "1"
+whoami = "2"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time", "net"] }
 tokio-tungstenite = { version = "0.26", features = ["native-tls"] }
 tokio-native-tls = "0.3"
@@ -56,11 +56,11 @@ tar = "0.4"
 base64 = "0.22"
 edge-tts-rust = "0.1.3"
 open = "5"
-rfd = "0.15"
+rfd = "0.17"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
 active-win-pos-rs = "0.8"
 enigo = "0.6"
-chromiumoxide = { version = "0.7", optional = true, default-features = false, features = ["tokio-runtime"] }
+chromiumoxide = { version = "0.8", optional = true, default-features = false, features = ["tokio-runtime"] }
 sherpa-onnx = { version = "1.13.2", optional = true, default-features = false, features = ["shared"] }
 fff-search = "0.9"
 regex = "1"
@@ -83,11 +83,11 @@ windows = { version = "0.58", features = [
   "Win32_System_Ole",
   "Win32_System_Variant",
 ] }
-uiautomation = { version = "0.22", default-features = false, features = ["input", "control"] }
+uiautomation = { version = "0.25", default-features = false, features = ["input", "control"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 xcap = "0.0.14"
-atspi = { version = "0.29", default-features = true, features = ["tokio"] }
+atspi = { version = "0.30", default-features = true, features = ["tokio"] }
 zbus = { version = "5", default-features = false, features = ["tokio"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]

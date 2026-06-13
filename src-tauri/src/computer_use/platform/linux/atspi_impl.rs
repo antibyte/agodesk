@@ -354,7 +354,7 @@ async fn invoke_default_action<'a>(
     accessible: &AccessibleProxy<'a>,
 ) -> Result<(), String> {
     let action = action_proxy(conn, accessible).await?;
-    let count = action.nactions().await.map_err(map_atspi_error)?;
+    let count = action.n_actions().await.map_err(map_atspi_error)?;
     if count <= 0 {
         return Err("DESKTOP_ELEMENT_NOT_FOUND: Element exposes no actions.".to_string());
     }
