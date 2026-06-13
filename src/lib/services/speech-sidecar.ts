@@ -1,9 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 
-
-
 export interface SpeechSidecarPingData {
-
   version: string;
 
   dev_mode?: boolean;
@@ -11,13 +8,9 @@ export interface SpeechSidecarPingData {
   models_root?: string;
 
   capabilities?: string[];
-
 }
 
-
-
 export interface SpeechTranscribeResult {
-
   text: string;
 
   language?: string;
@@ -25,13 +18,9 @@ export interface SpeechTranscribeResult {
   dev_mode?: boolean;
 
   model_ready?: boolean;
-
 }
 
-
-
 export interface SpeechSynthesizeResult {
-
   /** Base64-encoded audio (PCM or compressed, see mime_type). */
   audio_base64: string;
 
@@ -40,33 +29,19 @@ export interface SpeechSynthesizeResult {
   mime_type?: string;
 
   dev_mode?: boolean;
-
 }
-
-
 
 function isTauriRuntime(): boolean {
-
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
-
 }
-
-
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-
   return typeof value === "object" && value !== null;
-
 }
 
-
-
 function normalizeTranscribeResult(raw: unknown): SpeechTranscribeResult {
-
   if (!isRecord(raw)) {
-
     throw new Error("Invalid transcribe response from speech sidecar.");
-
   }
 
   const nested = isRecord(raw.data) ? raw.data : raw;
@@ -74,7 +49,6 @@ function normalizeTranscribeResult(raw: unknown): SpeechTranscribeResult {
   const text = typeof nested.text === "string" ? nested.text : "";
 
   return {
-
     text,
 
     language: typeof nested.language === "string" ? nested.language : undefined,
@@ -82,19 +56,12 @@ function normalizeTranscribeResult(raw: unknown): SpeechTranscribeResult {
     dev_mode: nested.dev_mode === true,
 
     model_ready: nested.model_ready === true,
-
   };
-
 }
 
-
-
 function normalizeSynthesizeResult(raw: unknown): SpeechSynthesizeResult {
-
   if (!isRecord(raw)) {
-
     throw new Error("Invalid synthesize response from speech sidecar.");
-
   }
 
   const nested = isRecord(raw.data) ? raw.data : raw;
@@ -107,21 +74,15 @@ function normalizeSynthesizeResult(raw: unknown): SpeechSynthesizeResult {
         : "";
 
   const sampleRate =
-
     typeof nested.sample_rate === "number" && Number.isFinite(nested.sample_rate)
-
       ? nested.sample_rate
-
       : 22_050;
 
   if (!audioBase64) {
-
     throw new Error("Speech synthesis response missing audio data.");
-
   }
 
   return {
-
     audio_base64: audioBase64,
 
     sample_rate: sampleRate,
@@ -129,33 +90,21 @@ function normalizeSynthesizeResult(raw: unknown): SpeechSynthesizeResult {
     mime_type: typeof nested.mime_type === "string" ? nested.mime_type : undefined,
 
     dev_mode: nested.dev_mode === true,
-
   };
-
 }
 
-
-
 async function invokeSpeech<T>(command: string, args?: Record<string, unknown>): Promise<T> {
-
   if (!isTauriRuntime()) {
-
     throw new Error("Speech sidecar requires the Tauri desktop app.");
-
   }
 
   return invoke<T>(command, args ?? {});
-
 }
 
-
-
 export async function speechSidecarPing(): Promise<SpeechSidecarPingData> {
-
   const data = await invokeSpeech<SpeechSidecarPingData>("speech_sidecar_ping");
 
   return data;
-
 }
 
 export interface SpeechAsrStatus {
@@ -208,9 +157,8 @@ export async function listenSpeechModelDownload(
     return () => {};
   }
   const { listen } = await import("@tauri-apps/api/event");
-  const unlisten = await listen<SpeechModelDownloadProgress>(
-    SPEECH_MODEL_DOWNLOAD_EVENT,
-    (event) => handler(event.payload),
+  const unlisten = await listen<SpeechModelDownloadProgress>(SPEECH_MODEL_DOWNLOAD_EVENT, (event) =>
+    handler(event.payload),
   );
   return unlisten;
 }
@@ -221,15 +169,11 @@ export async function speechSidecarTranscribe(params: {
   language?: string;
   model?: string;
 }): Promise<SpeechTranscribeResult> {
-
   if (!params.pcmBase64.trim()) {
-
     return { text: "" };
-
   }
 
   const data = await invokeSpeech<unknown>("speech_sidecar_transcribe", {
-
     pcmBase64: params.pcmBase64,
 
     sampleRate: params.sampleRate ?? 16_000,
@@ -237,17 +181,12 @@ export async function speechSidecarTranscribe(params: {
     language: params.language ?? null,
 
     model: params.model ?? null,
-
   });
 
   return normalizeTranscribeResult(data);
-
 }
 
-
-
 export async function speechSidecarSynthesize(params: {
-
   text: string;
 
   voice: string;
@@ -257,11 +196,8 @@ export async function speechSidecarSynthesize(params: {
   rate?: number;
 
   pitch?: number;
-
 }): Promise<SpeechSynthesizeResult> {
-
   const data = await invokeSpeech<unknown>("speech_sidecar_synthesize", {
-
     text: params.text,
 
     voice: params.voice,
@@ -271,11 +207,9 @@ export async function speechSidecarSynthesize(params: {
     rate: params.rate ?? null,
 
     pitch: params.pitch ?? null,
-
   });
 
   return normalizeSynthesizeResult(data);
-
 }
 
 const DEV_ASR_PATTERN = /^\[Dev-ASR ~(\d+)ms/i;

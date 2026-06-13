@@ -83,10 +83,7 @@ function isExpectedIconFetchFailure(message: string): boolean {
   return EXPECTED_ICON_FAILURES.some((marker) => message.includes(marker));
 }
 
-async function fetchFirstIconDataUrl(
-  serverUrl: string,
-  candidates: string[],
-): Promise<string> {
+async function fetchFirstIconDataUrl(serverUrl: string, candidates: string[]): Promise<string> {
   for (const candidate of candidates) {
     if (candidate.startsWith("data:") || candidate.startsWith("blob:")) {
       return candidate;

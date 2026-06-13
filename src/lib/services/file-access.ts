@@ -53,9 +53,7 @@ export function createFileAccessRootId(label: string): string {
   return slug ? `${slug}-${suffix}` : `root-${suffix}`;
 }
 
-export function cloneFileAccessSettings(
-  source: FileAccessSettings,
-): FileAccessSettings {
+export function cloneFileAccessSettings(source: FileAccessSettings): FileAccessSettings {
   return {
     enabled: source.enabled,
     maxReadBytes: source.maxReadBytes,

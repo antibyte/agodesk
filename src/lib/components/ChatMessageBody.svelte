@@ -65,23 +65,47 @@
     {#if block.type === "codeblock"}
       <div class="codeblock">
         <div class="codeblock-header">
-          <span class="codeblock-lang">{block.language || $i18n("chatMessageBody.codeLanguageFallback")}</span>
+          <span class="codeblock-lang"
+            >{block.language || $i18n("chatMessageBody.codeLanguageFallback")}</span
+          >
           <button
             type="button"
             class="codeblock-copy"
-            aria-label={copiedIndex === codeIndex ? $i18n("chatMessageBody.copyCode.ariaLabelDone") : $i18n("chatMessageBody.copyCode.ariaLabel")}
-            title={copiedIndex === codeIndex ? $i18n("chatMessageBody.copyCode.titleDone") : $i18n("chatMessageBody.copyCode.title")}
+            aria-label={copiedIndex === codeIndex
+              ? $i18n("chatMessageBody.copyCode.ariaLabelDone")
+              : $i18n("chatMessageBody.copyCode.ariaLabel")}
+            title={copiedIndex === codeIndex
+              ? $i18n("chatMessageBody.copyCode.titleDone")
+              : $i18n("chatMessageBody.copyCode.title")}
             onclick={() => void copyCode(block.value, codeIndex)}
           >
             {#if copiedIndex === codeIndex}
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <path d="M5 13l4 4L19 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                <path
+                  d="M5 13l4 4L19 7"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
               </svg>
               {$i18n("chatMessageBody.copyCode.buttonDone")}
             {:else}
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <rect x="9" y="9" width="13" height="13" rx="2" stroke="currentColor" stroke-width="1.75" />
-                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" stroke="currentColor" stroke-width="1.75" />
+                <rect
+                  x="9"
+                  y="9"
+                  width="13"
+                  height="13"
+                  rx="2"
+                  stroke="currentColor"
+                  stroke-width="1.75"
+                />
+                <path
+                  d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"
+                  stroke="currentColor"
+                  stroke-width="1.75"
+                />
               </svg>
               {$i18n("chatMessageBody.copyCode.button")}
             {/if}
@@ -113,7 +137,9 @@
               {/if}
               {@render inlineSegments(item.segments)}
               {#if item.nested?.length}
-                <div class="md-nested">{@render renderBlocks(item.nested, codeIndexOffset + 1000)}</div>
+                <div class="md-nested">
+                  {@render renderBlocks(item.nested, codeIndexOffset + 1000)}
+                </div>
               {/if}
             </li>
           {/each}
@@ -127,7 +153,9 @@
               {/if}
               {@render inlineSegments(item.segments)}
               {#if item.nested?.length}
-                <div class="md-nested">{@render renderBlocks(item.nested, codeIndexOffset + 1000)}</div>
+                <div class="md-nested">
+                  {@render renderBlocks(item.nested, codeIndexOffset + 1000)}
+                </div>
               {/if}
             </li>
           {/each}

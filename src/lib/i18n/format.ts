@@ -4,11 +4,7 @@ import { getActiveMessages } from "./store";
 import { tStatic } from "./translate";
 import type { MessageKey } from "./types";
 
-export function formatDayLabel(
-  timestamp: string,
-  locale: AppLocale,
-  now = new Date(),
-): string {
+export function formatDayLabel(timestamp: string, locale: AppLocale, now = new Date()): string {
   const date = new Date(timestamp);
   if (Number.isNaN(date.getTime())) {
     return "";
@@ -18,9 +14,7 @@ export function formatDayLabel(
     new Date(value.getFullYear(), value.getMonth(), value.getDate());
 
   const dayMs = 86_400_000;
-  const diffDays = Math.round(
-    (startOfDay(now).getTime() - startOfDay(date).getTime()) / dayMs,
-  );
+  const diffDays = Math.round((startOfDay(now).getTime() - startOfDay(date).getTime()) / dayMs);
 
   const msgs = getActiveMessages();
 
@@ -89,11 +83,7 @@ export function toneFromMessageKey(key: MessageKey): SystemMessageTone {
   if (keyStr.includes(".error.") || keyStr.endsWith(".error")) {
     return "error";
   }
-  if (
-    keyStr.includes("approved") ||
-    keyStr.includes("success") ||
-    keyStr.includes("connected")
-  ) {
+  if (keyStr.includes("approved") || keyStr.includes("success") || keyStr.includes("connected")) {
     return "success";
   }
   return "info";

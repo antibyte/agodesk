@@ -1,13 +1,7 @@
 import { personaState } from "../stores/persona";
 import type { NativeWebSocketService } from "./websocket";
-import type {
-  PersonaAssetsRequestPayload,
-  WsMessage,
-} from "../types/protocol";
-import {
-  normalizePersonaAssetsPayload,
-  resolvePersonaAssetUrl,
-} from "../types/protocol";
+import type { PersonaAssetsRequestPayload, WsMessage } from "../types/protocol";
+import { normalizePersonaAssetsPayload, resolvePersonaAssetUrl } from "../types/protocol";
 import { fetchPersonaAssetDisplayUrl } from "./persona-asset-fetch";
 
 let personaLoadingTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -30,10 +24,7 @@ export function buildPersonaAssetsRequest(
   };
 }
 
-export async function applyPersonaAssets(
-  payload: unknown,
-  serverUrl: string,
-): Promise<boolean> {
+export async function applyPersonaAssets(payload: unknown, serverUrl: string): Promise<boolean> {
   const normalized = normalizePersonaAssetsPayload(payload);
   if (!normalized) {
     clearPersonaLoadingTimeout();
@@ -41,10 +32,7 @@ export async function applyPersonaAssets(
     return false;
   }
 
-  const avatarRemoteUrl = resolvePersonaAssetUrl(
-    serverUrl,
-    normalized.avatar_image_url,
-  );
+  const avatarRemoteUrl = resolvePersonaAssetUrl(serverUrl, normalized.avatar_image_url);
   const iconRemoteUrl = resolvePersonaAssetUrl(serverUrl, normalized.icon_url);
 
   const [avatarUrl, iconUrl] = await Promise.all([

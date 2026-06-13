@@ -30,8 +30,7 @@ async function listenNativeThemeChanges(theme: ThemeMode): Promise<void> {
 
 export function applyTheme(theme: ThemeMode): void {
   document.documentElement.setAttribute("data-theme", theme);
-  document.documentElement.style.colorScheme =
-    theme === "system" ? "light dark" : theme;
+  document.documentElement.style.colorScheme = theme === "system" ? "light dark" : theme;
   void syncNativeTheme(theme);
 }
 

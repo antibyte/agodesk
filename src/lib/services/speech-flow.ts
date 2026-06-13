@@ -7,13 +7,7 @@ import { loadGeminiApiKey } from "./gemini-credentials";
 
 import { isMicrophoneSupported, SpeechAudioCapture } from "./speech-audio";
 
-import {
-
-  executeSpeechToolCalls,
-
-  type SpeechToolContext,
-
-} from "./speech-tool-router";
+import { executeSpeechToolCalls, type SpeechToolContext } from "./speech-tool-router";
 
 import { speechState } from "../stores/speech";
 import { agentMoodState } from "../stores/agent-mood";
@@ -35,7 +29,6 @@ let bargeDetector: BargeInDetector | null = null;
 const MAX_PENDING_AUDIO_CHUNKS = 120;
 
 export interface SpeechSessionOptions {
-
   onFinalTranscript: (text: string) => void | Promise<void>;
 
   getToolContext?: () => SpeechToolContext;
@@ -57,9 +50,7 @@ export function applyAgentMoodToSpeechSession(mood: AgentMoodMetadata): void {
 export const applyAgentMoodToLiveSession = applyAgentMoodToSpeechSession;
 
 export function isSpeechSessionActive(): boolean {
-
   return liveSession !== null || activeConnectingSession !== null;
-
 }
 
 export function isAiSpeaking(): boolean {
@@ -75,35 +66,26 @@ export function requestBargeInInterrupt(): void {
 }
 
 export async function toggleSpeechSession(
-
   speech: SpeechSettings,
 
   options: SpeechSessionOptions,
-
 ): Promise<void> {
-
   if (liveSession || activeConnectingSession) {
-
     await stopSpeechSession();
 
     return;
-
   }
 
   if (!speech.enabled) {
-
     speechState.setError(getTranslateFn()("speechFlow.error.disabled"));
 
     return;
-
   }
 
   if (!isMicrophoneSupported()) {
-
     speechState.setError(getTranslateFn()("speechFlow.error.noMicrophone"));
 
     return;
-
   }
 
   speechState.setProvider(speech.provider);
@@ -121,81 +103,55 @@ export async function toggleSpeechSession(
   }
 
   const agentContext =
-
-    speech.agentMode && options.getAgentContext
-
-      ? options.getAgentContext()
-
-      : undefined;
+    speech.agentMode && options.getAgentContext ? options.getAgentContext() : undefined;
 
   const initialMood = get(agentMoodState).mood;
 
   const session = createActiveSpeechSession(
-
     speech,
 
     {
-
       onStatus: (status) => {
-
         speechState.setStatus(status);
-
       },
 
       onPartialTranscript: (text) => {
-
         speechState.setPartialTranscript(text);
-
       },
 
       onFinalTranscript: (text) => {
-
         if (text.trim()) {
-
           speechState.setPartialTranscript("");
 
           void Promise.resolve(options.onFinalTranscript(text.trim()));
-
         }
-
       },
 
       onAssistantText: (text) => {
-
         options.onAssistantText?.(text);
-
       },
 
       onToolCalls: async (calls) => {
-
         const context = options.getToolContext?.();
 
         if (!context) {
-
           return calls.map((call) => ({
-
             id: call.id,
 
             name: call.name,
 
             response: {
-
               success: false,
 
               error: getTranslateFn()("speechFlow.error.toolContextUnavailable"),
-
             },
-
           }));
-
         }
 
         return executeSpeechToolCalls(calls, context);
-
       },
 
       onError: (message) => {
-
         if (session instanceof LocalSpeechSession) {
           speechState.setStatus("listening");
           speechState.setPartialTranscript(message);
@@ -208,15 +164,12 @@ export async function toggleSpeechSession(
         speechState.setError(message);
 
         void stopSpeechSession();
-
       },
-
     },
 
     agentContext,
 
     initialMood ?? null,
-
   );
 
   activeConnectingSession = session;
@@ -224,25 +177,18 @@ export async function toggleSpeechSession(
   const pendingChunks: string[] = [];
 
   try {
-
     await capture.start((chunk) => {
-
       if (liveSession?.sendAudio) {
-
         liveSession.sendAudio(chunk);
 
         return;
-
       }
 
       if (pendingChunks.length >= MAX_PENDING_AUDIO_CHUNKS) {
-
         pendingChunks.shift();
-
       }
 
       pendingChunks.push(chunk);
-
     });
 
     audioCapture = capture;
@@ -250,20 +196,15 @@ export async function toggleSpeechSession(
     await session.connect(apiKey ? { apiKey } : undefined);
 
     if (activeConnectingSession === session) {
-
       liveSession = session;
 
       activeConnectingSession = null;
 
-      registerActiveLocalSpeechSession(
-        session instanceof LocalSpeechSession ? session : null,
-      );
+      registerActiveLocalSpeechSession(session instanceof LocalSpeechSession ? session : null);
 
       if (session.sendAudio) {
         for (const chunk of pendingChunks) {
-
           session.sendAudio(chunk);
-
         }
 
         pendingChunks.length = 0;
@@ -292,7 +233,10 @@ export async function toggleSpeechSession(
           }
         } catch (e) {
           const msg = e instanceof Error ? e.message : String(e);
-          console.warn("Silero VAD initialization failed, falling back to energy-based detection.", e);
+          console.warn(
+            "Silero VAD initialization failed, falling back to energy-based detection.",
+            e,
+          );
           speechState.setVadError(t("speechFlow.error.vadSileroFallback", { message: msg }));
           activeVAD = undefined;
         } finally {
@@ -349,11 +293,8 @@ export async function toggleSpeechSession(
 
       bargeDetector.start();
     }
-
   } catch (error) {
-
     if (activeConnectingSession === session) {
-
       capture.stop();
       audioCapture = null;
 
@@ -367,15 +308,11 @@ export async function toggleSpeechSession(
           ? error.message
           : getTranslateFn()("speechFlow.error.sessionStartFailed"),
       );
-
     }
-
   }
-
 }
 
 export async function stopSpeechSession(): Promise<void> {
-
   audioCapture?.stop();
 
   audioCapture = null;
@@ -394,7 +331,6 @@ export async function stopSpeechSession(): Promise<void> {
   registerActiveLocalSpeechSession(null);
 
   speechState.reset();
-
 }
 
 export function getSpeechAudioAnalyser(): AnalyserNode | null {
@@ -415,13 +351,10 @@ export {
 } from "./local-speech-tts";
 
 export async function testGeminiConnection(
-
   speech: SpeechSettings,
 
   apiKey: string,
-
 ): Promise<void> {
-
   if (!speechProviderRequiresGeminiApiKey(speech.provider)) {
     throw new Error(getTranslateFn()("settings.speech.apiKey.error.testGeminiOnly"));
   }
@@ -450,5 +383,3 @@ export async function testGeminiConnection(
     session.disconnect();
   }
 }
-
-

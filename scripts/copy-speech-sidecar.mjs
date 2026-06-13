@@ -12,7 +12,8 @@ const source = join(tauriDir, "target", profile, sourceName);
 
 let triple = process.env.CARGO_BUILD_TARGET;
 if (!triple) {
-  const arch = process.arch === "x64" ? "x86_64" : process.arch === "arm64" ? "aarch64" : process.arch;
+  const arch =
+    process.arch === "x64" ? "x86_64" : process.arch === "arm64" ? "aarch64" : process.arch;
   if (isWindows) {
     triple = `${arch}-pc-windows-msvc`;
   } else {
@@ -35,7 +36,9 @@ if (process.argv.includes("--ensure-dummy")) {
 
 if (!existsSync(source)) {
   console.error(`Speech sidecar binary missing: ${source}`);
-  console.error("Run: cd src-tauri && cargo build --release --bin agodesk-speech --features speech-sidecar");
+  console.error(
+    "Run: cd src-tauri && cargo build --release --bin agodesk-speech --features speech-sidecar",
+  );
   process.exit(1);
 }
 

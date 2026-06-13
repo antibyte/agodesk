@@ -8,21 +8,15 @@ import {
   savePairingToken,
   saveSharedKey,
 } from "./credentials";
-import {
-  buildPairingSessionStart,
-  buildReconnectSessionStart,
-} from "./pairing";
+import { buildPairingSessionStart, buildReconnectSessionStart } from "./pairing";
 import type { NativeWebSocketService } from "./websocket";
-import type {
-  SystemConnectedPayload,
-  WsMessage,
-  DesktopCommandPayload,
-} from "../types/protocol";
-import { requiresRemoteControlBanner } from "../types/protocol";
+import type { SystemConnectedPayload, WsMessage, DesktopCommandPayload } from "../types/protocol";
 import {
+  DEFAULT_CHAT_ATTACHMENT_LIMITS,
   getWsOrigin,
   isInsecureLoopbackUrl,
   isPairingRequired,
+  requiresRemoteControlBanner,
   normalizeSessionAcceptedPayload,
 } from "../types/protocol";
 import { sessionState } from "../stores/session";
@@ -33,8 +27,7 @@ export async function handleSystemConnected(
   serverUrl: string,
 ): Promise<void> {
   const loopbackFromUrl = isInsecureLoopbackUrl(serverUrl);
-  const loopbackAllowed =
-    loopbackFromUrl && payload.allows_insecure_loopback !== false;
+  const loopbackAllowed = loopbackFromUrl && payload.allows_insecure_loopback !== false;
 
   if (loopbackAllowed) {
     if (payload.session_id) {
@@ -97,16 +90,10 @@ export async function sendReconnectSessionStart(
   await ws.send(message);
 }
 
-export async function handleSessionAccepted(
-  payload: unknown,
-  serverUrl: string,
-): Promise<void> {
+export async function handleSessionAccepted(payload: unknown, serverUrl: string): Promise<void> {
   const normalized = normalizeSessionAcceptedPayload(payload);
   if (!normalized) {
-    sessionState.setStatus(
-      "error",
-      "Ungueltige session.accepted-Antwort vom Server.",
-    );
+    sessionState.setStatus("error", "Ungueltige session.accepted-Antwort vom Server.");
     return;
   }
 
@@ -129,9 +116,7 @@ export async function handleSessionAccepted(
     } catch (error) {
       sessionState.setStatus(
         "error",
-        error instanceof Error
-          ? error.message
-          : "Shared Key konnte nicht gespeichert werden.",
+        error instanceof Error ? error.message : "Shared Key konnte nicht gespeichert werden.",
       );
       return;
     }
@@ -145,10 +130,7 @@ export async function handleSessionAccepted(
   }
 
   if (!normalized.session_id.trim()) {
-    sessionState.setStatus(
-      "error",
-      "session.accepted ohne session_id.",
-    );
+    sessionState.setStatus("error", "session.accepted ohne session_id.");
     return;
   }
 
@@ -157,6 +139,20 @@ export async function handleSessionAccepted(
     ? normalized.advertised_capabilities
     : (normalized.capabilities ?? []);
   sessionState.setAdvertisedCapabilities(advertised);
+  if (import.meta.env.DEV) {
+    console.info("[agodesk:session.accepted]", {
+      chat_media_upload: advertised.includes("chat.media_upload"),
+      chat_attachments: advertised.includes("chat.attachments"),
+      attachments_ready:
+        advertised.includes("chat.media_upload") && advertised.includes("chat.attachments"),
+    });
+  }
+  sessionState.setAttachmentLimits(
+    normalized.attachment_limits ??
+      (advertised.includes("chat.media_upload") && advertised.includes("chat.attachments")
+        ? DEFAULT_CHAT_ATTACHMENT_LIMITS
+        : null),
+  );
   sessionState.setStatus("accepted");
 }
 

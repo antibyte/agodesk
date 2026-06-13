@@ -85,7 +85,9 @@ function voiceLanguagePrefix(voiceId: string): string {
 
 export function edgeTtsVoicesForSpeechLanguage(language: string): readonly string[] {
   const prefix = languagePrefix(language);
-  return EDGE_TTS_VOICES_BY_PREFIX[prefix] ?? EDGE_TTS_VOICES_BY_PREFIX[FALLBACK_VOICE_PREFIX] ?? [];
+  return (
+    EDGE_TTS_VOICES_BY_PREFIX[prefix] ?? EDGE_TTS_VOICES_BY_PREFIX[FALLBACK_VOICE_PREFIX] ?? []
+  );
 }
 
 export function defaultEdgeTtsVoiceForSpeechLanguage(language: string): string {

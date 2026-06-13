@@ -56,8 +56,7 @@ const LIVE_MODEL_ALIASES: Record<string, string> = {
   "gemini-3.1-flash-live": "gemini-3.1-flash-live-preview",
 };
 
-export const DEFAULT_GEMINI_LIVE_MODEL =
-  "gemini-2.5-flash-native-audio-preview-12-2025";
+export const DEFAULT_GEMINI_LIVE_MODEL = "gemini-2.5-flash-native-audio-preview-12-2025";
 
 export function buildGeminiLiveWsUrl(
   apiKey: string,
@@ -65,8 +64,7 @@ export function buildGeminiLiveWsUrl(
 ): string {
   // Gemini requires the API key as a query param. Never log this URL verbatim.
   const params = new URLSearchParams({ key: apiKey.trim() });
-  const path =
-    apiVersion === "v1alpha" ? GEMINI_LIVE_WS_PATH_ALPHA : GEMINI_LIVE_WS_PATH;
+  const path = apiVersion === "v1alpha" ? GEMINI_LIVE_WS_PATH_ALPHA : GEMINI_LIVE_WS_PATH;
   return `wss://${GEMINI_LIVE_HOST}${path}?${params.toString()}`;
 }
 
@@ -88,9 +86,7 @@ export function normalizeModelId(modelId: string): string {
   if (!trimmed) {
     return DEFAULT_GEMINI_LIVE_MODEL;
   }
-  const withoutPrefix = trimmed.startsWith("models/")
-    ? trimmed.slice("models/".length)
-    : trimmed;
+  const withoutPrefix = trimmed.startsWith("models/") ? trimmed.slice("models/".length) : trimmed;
   return LIVE_MODEL_ALIASES[withoutPrefix] ?? withoutPrefix;
 }
 
@@ -103,16 +99,10 @@ export type GeminiResponseModality = "TEXT" | "AUDIO";
 
 export function isNativeAudioLiveModel(modelId: string): boolean {
   const id = normalizeModelId(modelId).toLowerCase();
-  return (
-    id.includes("native-audio") ||
-    id.includes("flash-live") ||
-    id.endsWith("-live-preview")
-  );
+  return id.includes("native-audio") || id.includes("flash-live") || id.endsWith("-live-preview");
 }
 
-export function resolveResponseModalities(
-  modelId: string,
-): GeminiResponseModality[] {
+export function resolveResponseModalities(modelId: string): GeminiResponseModality[] {
   // Native-Audio-Modelle: nur AUDIO; Text über input/outputAudioTranscription
   if (isNativeAudioLiveModel(modelId)) {
     return ["AUDIO"];
@@ -120,10 +110,6 @@ export function resolveResponseModalities(
   return ["TEXT"];
 }
 
-export function resolveLiveApiVersions(
-  modelId: string,
-): Array<"v1beta" | "v1alpha"> {
-  return isNativeAudioLiveModel(modelId)
-    ? ["v1alpha", "v1beta"]
-    : ["v1beta", "v1alpha"];
+export function resolveLiveApiVersions(modelId: string): Array<"v1beta" | "v1alpha"> {
+  return isNativeAudioLiveModel(modelId) ? ["v1alpha", "v1beta"] : ["v1beta", "v1alpha"];
 }

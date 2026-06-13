@@ -1,10 +1,7 @@
 import { get } from "svelte/store";
 import { chatConversationState } from "../stores/chat-conversation";
 import { settings } from "../stores/settings";
-import {
-  interruptLocalSpeechPlayback,
-  speakChatAssistantText,
-} from "./local-speech-tts";
+import { interruptLocalSpeechPlayback, speakChatAssistantText } from "./local-speech-tts";
 
 interface PendingFallback {
   requestId: string;

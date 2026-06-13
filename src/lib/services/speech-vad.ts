@@ -153,9 +153,8 @@ export class SileroVoiceActivityDetector implements VoiceActivityDetector {
         return response.arrayBuffer();
       };
 
-      const { PlatformAgnosticNonRealTimeVAD } = await import(
-        "@ricky0123/vad-web/dist/_common/non-real-time-vad.js"
-      );
+      const { PlatformAgnosticNonRealTimeVAD } =
+        await import("@ricky0123/vad-web/dist/_common/non-real-time-vad.js");
 
       const vad = await PlatformAgnosticNonRealTimeVAD._new(modelFetcher, ort, {
         frameSamples: 512,

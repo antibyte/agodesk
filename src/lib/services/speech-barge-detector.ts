@@ -1,4 +1,8 @@
-import { createSpeechAudioSampler, createIdleSpeechMetrics, type SpeechAudioMetrics } from "./speech-visualizer-audio";
+import {
+  createSpeechAudioSampler,
+  createIdleSpeechMetrics,
+  type SpeechAudioMetrics,
+} from "./speech-visualizer-audio";
 import { getSpeechAudioAnalyser } from "./speech-flow";
 import { createDefaultVAD, type VoiceActivityDetector } from "./speech-vad";
 
@@ -197,6 +201,6 @@ export function createBargeInDetector(options: BargeInDetectorOptions): BargeInD
     start,
     stop,
     checkOnce,
-    processRawAudio,   // exposed for direct wiring
+    processRawAudio, // exposed for direct wiring
   };
 }

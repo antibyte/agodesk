@@ -8,12 +8,7 @@
     label?: string;
   }
 
-  let {
-    icon = "",
-    webhostUrl = "",
-    serverUrl = "",
-    label = "",
-  }: Props = $props();
+  let { icon = "", webhostUrl = "", serverUrl = "", label = "" }: Props = $props();
 
   let displayUrl = $state("");
   let failed = $state(false);
@@ -46,7 +41,8 @@
 {#if displayUrl && !failed}
   <img class="icon" src={displayUrl} alt="" />
 {:else}
-  <span class="icon-fallback" aria-hidden="true">{label.trim().charAt(0).toUpperCase() || "⎔"}</span>
+  <span class="icon-fallback" aria-hidden="true">{label.trim().charAt(0).toUpperCase() || "⎔"}</span
+  >
 {/if}
 
 <style>

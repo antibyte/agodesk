@@ -7,11 +7,7 @@ import {
   type SystemMessageTone,
 } from "../i18n/format";
 
-export type {
-  ChatContentBlock,
-  ChatListItem,
-  ChatTextSegment,
-} from "./chat-format-types";
+export type { ChatContentBlock, ChatListItem, ChatTextSegment } from "./chat-format-types";
 
 export {
   parseChatContent,
@@ -62,8 +58,7 @@ export function messageGroupMeta(
       return false;
     }
     return (
-      Math.abs(new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()) <=
-      GROUP_WINDOW_MS
+      Math.abs(new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()) <= GROUP_WINDOW_MS
     );
   };
 

@@ -1,9 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {
-  getWsOrigin,
-  isInsecureLoopbackUrl,
-} from "../types/protocol.ts";
+import { getWsOrigin, isInsecureLoopbackUrl } from "../types/protocol.ts";
 import {
   appendInsecureLoopbackIfNeeded,
   isLoopbackHost,
@@ -33,8 +30,5 @@ test("normalisiert /api/agodesk/ auf /api/agodesk/ws", () => {
 });
 
 test("origin wird ohne Pfad extrahiert", () => {
-  assert.equal(
-    getWsOrigin("wss://192.168.6.238:8443/api/agodesk/ws"),
-    "wss://192.168.6.238:8443",
-  );
+  assert.equal(getWsOrigin("wss://192.168.6.238:8443/api/agodesk/ws"), "wss://192.168.6.238:8443");
 });

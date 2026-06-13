@@ -94,7 +94,7 @@
     <button
       type="button"
       class="ui-btn ui-btn-secondary"
-      disabled={disabled}
+      {disabled}
       onclick={recording ? stopRecording : startRecording}
     >
       {recording
@@ -109,12 +109,7 @@
     >
       {$i18n("settings.appearance.showWindowHotkey.disable")}
     </button>
-    <button
-      type="button"
-      class="ui-btn ui-btn-secondary"
-      disabled={disabled}
-      onclick={handleResetDefault}
-    >
+    <button type="button" class="ui-btn ui-btn-secondary" {disabled} onclick={handleResetDefault}>
       {$i18n("settings.appearance.showWindowHotkey.reset")}
     </button>
   </div>

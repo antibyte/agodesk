@@ -28,9 +28,6 @@ test("createActiveSpeechSession wählt Gemini oder Local", () => {
   );
   assert.ok(gemini instanceof GeminiLiveSession);
 
-  const hybrid = createActiveSpeechSession(
-    { ...DEFAULT_SPEECH_SETTINGS, provider: "hybrid" },
-    {},
-  );
+  const hybrid = createActiveSpeechSession({ ...DEFAULT_SPEECH_SETTINGS, provider: "hybrid" }, {});
   assert.ok(hybrid instanceof LocalSpeechSession);
 });

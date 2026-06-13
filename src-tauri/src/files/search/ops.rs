@@ -40,6 +40,7 @@ pub fn file_search_rescan(
 }
 
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 pub fn file_search(
     state: State<'_, FileSearchState>,
     roots: Vec<FileAccessRootInput>,

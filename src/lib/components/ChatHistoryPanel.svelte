@@ -43,7 +43,11 @@
     <header class="panel-header">
       <h2>{$i18n("chatView.history.title")}</h2>
       <div class="header-actions">
-        <button type="button" class="ui-btn ui-btn-secondary ui-btn-sm" onclick={() => onNewChat?.()}>
+        <button
+          type="button"
+          class="ui-btn ui-btn-secondary ui-btn-sm"
+          onclick={() => onNewChat?.()}
+        >
           {$i18n("chatView.newChat")}
         </button>
         <button

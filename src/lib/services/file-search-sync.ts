@@ -53,9 +53,7 @@ export function fileSearchErrorCode(message: string): string {
   return "DESKTOP_OPERATION_UNSUPPORTED";
 }
 
-export async function syncFileSearchRoots(
-  settings: FileAccessSettings,
-): Promise<void> {
+export async function syncFileSearchRoots(settings: FileAccessSettings): Promise<void> {
   if (!fileAccessIsConfigured(settings)) {
     await invoke("file_search_sync_roots", { roots: [] });
     return;

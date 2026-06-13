@@ -6,9 +6,10 @@
     visible?: boolean;
     plan?: AgoDeskPlan | null;
     requestId?: string;
+    onDismiss?: () => void;
   }
 
-  let { visible = false, plan = null, requestId = undefined }: Props = $props();
+  let { visible = false, plan = null, requestId = undefined, onDismiss }: Props = $props();
 
   let collapsed = $state(false);
 
@@ -32,10 +33,8 @@
     return {
       total: typeof record.total === "number" ? record.total : undefined,
       pending: typeof record.pending === "number" ? record.pending : undefined,
-      inProgress:
-        typeof record.in_progress === "number" ? record.in_progress : undefined,
-      completed:
-        typeof record.completed === "number" ? record.completed : undefined,
+      inProgress: typeof record.in_progress === "number" ? record.in_progress : undefined,
+      completed: typeof record.completed === "number" ? record.completed : undefined,
     };
   });
 
@@ -99,18 +98,35 @@
           </span>
         {/if}
       </div>
-      <button
-        type="button"
-        class="ui-btn ui-btn-ghost plan-toggle"
-        onclick={() => (collapsed = !collapsed)}
-        aria-expanded={!collapsed}
-      >
-        {collapsed ? $i18n("chatPlan.expand") : $i18n("chatPlan.collapse")}
-      </button>
+      <div class="plan-header-actions">
+        <button
+          type="button"
+          class="ui-btn ui-btn-ghost plan-toggle"
+          onclick={() => (collapsed = !collapsed)}
+          aria-expanded={!collapsed}
+        >
+          {collapsed ? $i18n("chatPlan.expand") : $i18n("chatPlan.collapse")}
+        </button>
+        <button
+          type="button"
+          class="ui-btn ui-btn-ghost plan-dismiss"
+          aria-label={$i18n("chatPlan.dismiss.ariaLabel")}
+          title={$i18n("chatPlan.dismiss")}
+          onclick={() => onDismiss?.()}
+        >
+          ×
+        </button>
+      </div>
     </header>
 
     {#if progressPct > 0}
-      <div class="plan-progress" role="progressbar" aria-valuenow={progressPct} aria-valuemin="0" aria-valuemax="100">
+      <div
+        class="plan-progress"
+        role="progressbar"
+        aria-valuenow={progressPct}
+        aria-valuemin="0"
+        aria-valuemax="100"
+      >
         <div class="plan-progress-fill" style:width="{progressPct}%"></div>
       </div>
     {/if}
@@ -143,7 +159,9 @@
       {#if tasks.length > 0}
         <ul class="plan-tasks">
           {#each tasks as task (task.id ?? task.title)}
-            <li data-status={typeof task.status === "string" ? task.status.toLowerCase() : "pending"}>
+            <li
+              data-status={typeof task.status === "string" ? task.status.toLowerCase() : "pending"}
+            >
               <span class="task-status" data-tone={taskStatusTone(task.status)}>
                 {taskStatusLabel(task.status)}
               </span>
@@ -182,6 +200,20 @@
     align-items: flex-start;
     justify-content: space-between;
     gap: var(--space-2);
+  }
+
+  .plan-header-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+    flex-shrink: 0;
+  }
+
+  .plan-dismiss {
+    min-width: 1.75rem;
+    padding: 0.15rem 0.35rem;
+    font-size: 1.1rem;
+    line-height: 1;
   }
 
   .plan-title-block {

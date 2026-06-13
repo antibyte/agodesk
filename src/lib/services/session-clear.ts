@@ -3,13 +3,8 @@ import { chatMessages } from "../stores/chat";
 import { sessionState } from "../stores/session";
 import { chatPlanState } from "../stores/chat-plan";
 import { agentMoodState } from "../stores/agent-mood";
-import {
-  normalizeSessionClearPayload,
-} from "../types/protocol";
-import {
-  clearRemoteControlState,
-  resetDesktopCommandState,
-} from "./desktop-flow";
+import { normalizeSessionClearPayload } from "../types/protocol";
+import { clearRemoteControlState, resetDesktopCommandState } from "./desktop-flow";
 import { resetDesktopSession } from "./desktop";
 import { stopSpeechSession } from "./speech-flow";
 
@@ -18,9 +13,7 @@ export interface SessionClearApplyResult {
   reason?: string;
 }
 
-export async function applySessionClear(
-  payload: unknown,
-): Promise<SessionClearApplyResult | null> {
+export async function applySessionClear(payload: unknown): Promise<SessionClearApplyResult | null> {
   const normalized = normalizeSessionClearPayload(payload);
   if (normalized === null) {
     return null;

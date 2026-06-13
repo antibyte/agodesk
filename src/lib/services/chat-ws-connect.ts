@@ -1,18 +1,12 @@
 import { sessionState } from "../stores/session";
 import { clearPersonaAssets } from "./persona-flow";
-import {
-  clearRemoteControlState,
-  resetDesktopCommandState,
-} from "./desktop-flow";
+import { clearRemoteControlState, resetDesktopCommandState } from "./desktop-flow";
 import { resetDesktopSession } from "./desktop";
 import { stopSpeechSession } from "./speech-flow";
 import { chatPlanState } from "../stores/chat-plan";
 import { agentMoodState } from "../stores/agent-mood";
 import { resetChatConversationRuntimeState } from "./chat-conversation-flow";
-import {
-  WebSocketService,
-  type ErrorHandler,
-} from "./websocket";
+import { WebSocketService, type ErrorHandler } from "./websocket";
 import type { ClientErrorCode, WsMessage } from "../types/protocol";
 import { isTlsFatalError } from "../types/protocol";
 

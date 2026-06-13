@@ -1,9 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {
-  extractAgentMoodFromMetadata,
-  handleChatResponseMood,
-} from "./agent-mood-inbound.ts";
+import { extractAgentMoodFromMetadata, handleChatResponseMood } from "./agent-mood-inbound.ts";
 import { agentMoodState } from "../stores/agent-mood.ts";
 
 test("extractAgentMoodFromMetadata parst agent_mood sicher", () => {
@@ -40,7 +37,11 @@ test("handleChatResponseMood aktualisiert agentMoodState", () => {
     },
   });
 
-  let state = { mood: null as { mood?: string } | null, sessionId: "", requestId: undefined as string | undefined };
+  let state = {
+    mood: null as { mood?: string } | null,
+    sessionId: "",
+    requestId: undefined as string | undefined,
+  };
   agentMoodState.subscribe((value) => {
     state = value;
   })();

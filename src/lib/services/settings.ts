@@ -58,10 +58,7 @@ export function normalizeUiSoundSettings(
   const volumeRaw = saved.volume;
 
   return {
-    enabled:
-      typeof saved.enabled === "boolean"
-        ? saved.enabled
-        : DEFAULT_UI_SOUND_SETTINGS.enabled,
+    enabled: typeof saved.enabled === "boolean" ? saved.enabled : DEFAULT_UI_SOUND_SETTINGS.enabled,
     theme:
       typeof theme === "string" && UI_SOUND_THEMES.includes(theme as UiSoundTheme)
         ? (theme as UiSoundTheme)
@@ -98,10 +95,7 @@ function normalizeSpeechSettings(
       : defaultLanguage;
 
   const normalized: SpeechSettings = {
-    enabled:
-      typeof saved.enabled === "boolean"
-        ? saved.enabled
-        : DEFAULT_SPEECH_SETTINGS.enabled,
+    enabled: typeof saved.enabled === "boolean" ? saved.enabled : DEFAULT_SPEECH_SETTINGS.enabled,
     provider,
     modelId:
       typeof saved.modelId === "string" && saved.modelId.trim().length > 0
@@ -113,9 +107,7 @@ function normalizeSpeechSettings(
         ? saved.autoSendToAuraGo
         : DEFAULT_SPEECH_SETTINGS.autoSendToAuraGo,
     agentMode:
-      typeof saved.agentMode === "boolean"
-        ? saved.agentMode
-        : DEFAULT_SPEECH_SETTINGS.agentMode,
+      typeof saved.agentMode === "boolean" ? saved.agentMode : DEFAULT_SPEECH_SETTINGS.agentMode,
     voiceResponses:
       typeof saved.voiceResponses === "boolean"
         ? saved.voiceResponses
@@ -132,9 +124,9 @@ function normalizeSpeechSettings(
       return defaultAsrModel;
     })(),
     hybridTtsBackend:
-      saved.hybridTtsBackend === "azure"
-        || saved.hybridTtsBackend === "edge_tts"
-        || saved.hybridTtsBackend === "piper"
+      saved.hybridTtsBackend === "azure" ||
+      saved.hybridTtsBackend === "edge_tts" ||
+      saved.hybridTtsBackend === "piper"
         ? saved.hybridTtsBackend
         : DEFAULT_SPEECH_SETTINGS.hybridTtsBackend,
     hybridTtsVoice:
@@ -146,13 +138,14 @@ function normalizeSpeechSettings(
         ? normalizePiperVoiceForLanguage(saved.offlineTtsVoice.trim(), language)
         : defaultPiperVoiceForSpeechLanguage(defaultLanguage),
     bargeInMode:
-      saved.bargeInMode === "energy" || saved.bargeInMode === "silero" || saved.bargeInMode === "auto"
+      saved.bargeInMode === "energy" ||
+      saved.bargeInMode === "silero" ||
+      saved.bargeInMode === "auto"
         ? saved.bargeInMode
         : DEFAULT_SPEECH_SETTINGS.bargeInMode,
   };
 
-  const languageExplicit =
-    typeof saved.language === "string" && saved.language.trim().length > 0;
+  const languageExplicit = typeof saved.language === "string" && saved.language.trim().length > 0;
   if (languageExplicit) {
     return normalized;
   }
@@ -161,8 +154,7 @@ function normalizeSpeechSettings(
 }
 
 function normalizeFileAccessRoot(raw: Partial<FileAccessRoot>): FileAccessRoot {
-  const canonicalPath =
-    typeof raw.canonicalPath === "string" ? raw.canonicalPath.trim() : "";
+  const canonicalPath = typeof raw.canonicalPath === "string" ? raw.canonicalPath.trim() : "";
   const label = typeof raw.label === "string" ? raw.label.trim() : "";
   return {
     rootId:
@@ -204,18 +196,14 @@ function normalizeFileAccessSettings(
 
   return {
     enabled:
-      typeof saved.enabled === "boolean"
-        ? saved.enabled
-        : DEFAULT_FILE_ACCESS_SETTINGS.enabled,
+      typeof saved.enabled === "boolean" ? saved.enabled : DEFAULT_FILE_ACCESS_SETTINGS.enabled,
     maxReadBytes: maxRead,
     maxWriteBytes: maxWrite,
     roots,
   };
 }
 
-export function normalizeAppSettings(
-  saved: Partial<AppSettings> | null | undefined,
-): AppSettings {
+export function normalizeAppSettings(saved: Partial<AppSettings> | null | undefined): AppSettings {
   const theme = saved?.theme;
   const serverUrl = normalizeServerUrl(saved?.serverUrl ?? DEFAULT_SETTINGS.serverUrl);
 
@@ -228,9 +216,7 @@ export function normalizeAppSettings(
     ...saved,
     serverUrl,
     theme:
-      theme === "light" || theme === "dark" || theme === "system"
-        ? theme
-        : DEFAULT_SETTINGS.theme,
+      theme === "light" || theme === "dark" || theme === "system" ? theme : DEFAULT_SETTINGS.theme,
     locale,
     speech: normalizeSpeechSettings(saved?.speech, locale),
     uiSounds: normalizeUiSoundSettings(saved?.uiSounds),
@@ -257,12 +243,7 @@ export function normalizeAppSettings(
 }
 
 function normalizeChatTtsMode(value: unknown): ChatTtsMode {
-  if (
-    value === "auto" ||
-    value === "aurago" ||
-    value === "frontend" ||
-    value === "off"
-  ) {
+  if (value === "auto" || value === "aurago" || value === "frontend" || value === "off") {
     return value;
   }
   return DEFAULT_SETTINGS.chatTtsMode;

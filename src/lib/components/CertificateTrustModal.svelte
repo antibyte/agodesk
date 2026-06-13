@@ -56,10 +56,7 @@
         probe = result;
       })
       .catch((error) => {
-        probeError =
-          error instanceof Error
-            ? error.message
-            : $i18n("certModal.error.readFailed");
+        probeError = error instanceof Error ? error.message : $i18n("certModal.error.readFailed");
       })
       .finally(() => {
         loading = false;
@@ -84,9 +81,7 @@
   }
 
   function openBrowser(): void {
-    const httpsUrl = serverUrl
-      .replace(/^wss:/, "https:")
-      .replace(/\/api\/agodesk\/ws.*$/, "/");
+    const httpsUrl = serverUrl.replace(/^wss:/, "https:").replace(/\/api\/agodesk\/ws.*$/, "/");
     onOpenBrowser?.(httpsUrl);
   }
 </script>
@@ -133,7 +128,12 @@
     </dl>
 
     <div class="actions">
-      <button bind:this={firstActionBtn} type="button" class="ui-btn ui-btn-secondary" onclick={() => onClose?.()}>
+      <button
+        bind:this={firstActionBtn}
+        type="button"
+        class="ui-btn ui-btn-secondary"
+        onclick={() => onClose?.()}
+      >
         {$i18n("certModal.cancel")}
       </button>
       {#if serverUrl.startsWith("wss://")}
@@ -155,7 +155,7 @@
 
 <style>
   .backdrop {
-    position: absolute;
+    position: fixed;
     inset: 0;
     background: var(--color-backdrop);
     backdrop-filter: blur(6px);
@@ -164,7 +164,7 @@
   }
 
   .modal {
-    position: absolute;
+    position: fixed;
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);

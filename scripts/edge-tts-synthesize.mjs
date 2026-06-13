@@ -23,8 +23,7 @@ try {
 } catch {
   respond({
     ok: false,
-    error:
-      "edge-tts-universal is not installed. Run: npm install edge-tts-universal",
+    error: "edge-tts-universal is not installed. Run: npm install edge-tts-universal",
   });
   process.exit(1);
 }

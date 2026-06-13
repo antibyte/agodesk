@@ -1,8 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {
-  normalizeChatResponseChunkPayload,
-} from "../types/protocol.ts";
+import { normalizeChatResponseChunkPayload } from "../types/protocol.ts";
 import { applyChatResponseChunk } from "../services/chat-inbound.ts";
 import { chatMessages } from "../stores/chat.ts";
 

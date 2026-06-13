@@ -6,9 +6,7 @@ import {
   type SpeechToolContext,
 } from "./speech-tool-router.ts";
 
-function createContext(
-  overrides: Partial<SpeechToolContext> = {},
-): SpeechToolContext {
+function createContext(overrides: Partial<SpeechToolContext> = {}): SpeechToolContext {
   return {
     sessionId: "sess-1",
     connectionStatus: "connected",

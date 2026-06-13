@@ -58,10 +58,7 @@ function signMockAgodeskMediaPath(pathValue, now = Date.now()) {
   params.set("agodesk_exp", String(Math.floor(now / 1000) + MOCK_MEDIA_TTL_SECONDS));
   params.delete("agodesk_sig");
   const material = `${encodeURI(pathOnly)}\n${params.toString()}`;
-  params.set(
-    "agodesk_sig",
-    createHmac("sha256", MOCK_MEDIA_SECRET).update(material).digest("hex"),
-  );
+  params.set("agodesk_sig", createHmac("sha256", MOCK_MEDIA_SECRET).update(material).digest("hex"));
   return `${pathOnly}?${params.toString()}`;
 }
 
@@ -85,6 +82,60 @@ function verifyMockAgodeskMediaRequest(requestUrl) {
   return expected.toLowerCase() === sig.toLowerCase();
 }
 
+/** @type {Map<string, { body: Buffer; mimeType: string; filename: string }>} */
+const uploadedMediaBodies = new Map();
+
+/** @type {Map<string, { attachmentId: string; filename: string; mimeType: string; sizeBytes: number; status: string; path?: string }>} */
+const pendingAttachmentUploads = new Map();
+
+const DEFAULT_ATTACHMENT_LIMITS = {
+  max_file_bytes: 8 * 1024 * 1024,
+  max_files_per_message: 5,
+  max_total_bytes_per_message: 24 * 1024 * 1024,
+  allowed_mime_prefixes: ["image/", "text/", "application/pdf"],
+};
+
+function resolveAdvertisedCapabilities(clientCaps) {
+  const advertised = clientCaps.length > 0 ? [...clientCaps] : [...DEFAULT_ADVERTISED_CAPABILITIES];
+  if (clientCaps.includes("chat.media_upload")) {
+    for (const cap of ["chat.media_upload", "chat.attachments"]) {
+      if (!advertised.includes(cap)) {
+        advertised.push(cap);
+      }
+    }
+  }
+  return advertised;
+}
+
+function inferAttachmentKind(mimeType) {
+  const mime = String(mimeType ?? "").toLowerCase();
+  if (mime.startsWith("image/")) {
+    return "image";
+  }
+  if (mime.startsWith("audio/")) {
+    return "audio";
+  }
+  return "document";
+}
+
+function extractMultipartFileBody(rawBody, fieldName = "file") {
+  const marker = Buffer.from(`name="${fieldName}"`);
+  const start = rawBody.indexOf(marker);
+  if (start < 0) {
+    return rawBody;
+  }
+  const headerEnd = rawBody.indexOf(Buffer.from("\r\n\r\n"), start);
+  if (headerEnd < 0) {
+    return rawBody;
+  }
+  const bodyStart = headerEnd + 4;
+  const boundaryStart = rawBody.indexOf(Buffer.from("\r\n--"), bodyStart);
+  if (boundaryStart < 0) {
+    return rawBody.subarray(bodyStart);
+  }
+  return rawBody.subarray(bodyStart, boundaryStart);
+}
+
 const server = http.createServer((req, res) => {
   const requestUrl = new URL(req.url ?? "/", `http://127.0.0.1:${PORT}`);
   if (requestUrl.pathname.startsWith("/api/agodesk/media/")) {
@@ -93,6 +144,53 @@ const server = http.createServer((req, res) => {
       res.end("unauthorized");
       return;
     }
+
+    const uploadMatch = requestUrl.pathname.match(/^\/api\/agodesk\/media\/upload\/([^/]+)$/);
+    if (req.method === "POST" && uploadMatch) {
+      const attachmentId = uploadMatch[1];
+      const pending = pendingAttachmentUploads.get(attachmentId);
+      if (!pending || pending.status !== "pending") {
+        res.writeHead(404, { "Content-Type": "text/plain" });
+        res.end("unknown attachment");
+        return;
+      }
+      const chunks = [];
+      req.on("data", (chunk) => chunks.push(chunk));
+      req.on("end", () => {
+        const rawBody = Buffer.concat(chunks);
+        const fileBody = extractMultipartFileBody(rawBody, "file");
+        if (fileBody.length > DEFAULT_ATTACHMENT_LIMITS.max_file_bytes) {
+          res.writeHead(413, { "Content-Type": "text/plain" });
+          res.end("too large");
+          return;
+        }
+        const mediaPath = signMockAgodeskMediaPath(
+          `/api/agodesk/media/${attachmentId}/${pending.filename}`,
+        );
+        uploadedMediaBodies.set(mediaPath.split("?")[0], {
+          body: fileBody,
+          mimeType: pending.mimeType,
+          filename: pending.filename,
+        });
+        pendingAttachmentUploads.set(attachmentId, {
+          ...pending,
+          status: "ready",
+          path: mediaPath,
+        });
+        res.writeHead(201, { "Content-Type": "application/json" });
+        res.end(
+          JSON.stringify({
+            attachment_id: attachmentId,
+            status: "ready",
+            path: mediaPath,
+            mime_type: pending.mimeType,
+            size_bytes: fileBody.length,
+          }),
+        );
+      });
+      return;
+    }
+
     if (requestUrl.pathname === "/api/agodesk/media/mock-chart.png") {
       res.writeHead(200, {
         "Content-Type": "image/png",
@@ -101,6 +199,17 @@ const server = http.createServer((req, res) => {
       res.end(MOCK_CHART_PNG);
       return;
     }
+
+    const stored = uploadedMediaBodies.get(requestUrl.pathname);
+    if (stored) {
+      res.writeHead(200, {
+        "Content-Type": stored.mimeType || "application/octet-stream",
+        "Content-Length": stored.body.length,
+      });
+      res.end(stored.body);
+      return;
+    }
+
     res.writeHead(404, { "Content-Type": "text/plain" });
     res.end("Not found");
     return;
@@ -244,6 +353,10 @@ wss.on("connection", (socket, request) => {
         handleChatMessage(message, session, send);
         break;
 
+      case "chat.attachment.prepare":
+        handleChatAttachmentPrepare(message, session, send);
+        break;
+
       case "chat.sessions.list":
         handleChatSessionsList(message, session, send);
         break;
@@ -306,10 +419,7 @@ wss.on("connection", (socket, request) => {
           session.activeStreamId = message.payload.data.stream_id;
           session.streamFramesSeen = 0;
         }
-        if (
-          message.payload?.success &&
-          message.payload?.data?.active === false
-        ) {
+        if (message.payload?.success && message.payload?.data?.active === false) {
           session.activeStreamId = null;
         }
         break;
@@ -351,10 +461,7 @@ function issueAcceptedSession(session, send, payload) {
   const acceptedSessionId = `sess-acc-${randomUUID().slice(0, 8)}`;
   session.sessionId = acceptedSessionId;
   session.chatAccepted = true;
-  const advertised =
-    session.clientCapabilities.length > 0
-      ? session.clientCapabilities
-      : DEFAULT_ADVERTISED_CAPABILITIES;
+  const advertised = resolveAdvertisedCapabilities(session.clientCapabilities);
   send({
     id: randomUUID(),
     type: "session.accepted",
@@ -362,6 +469,9 @@ function issueAcceptedSession(session, send, payload) {
     payload: {
       session_id: acceptedSessionId,
       advertised_capabilities: advertised,
+      ...(advertised.includes("chat.media_upload")
+        ? { attachment_limits: DEFAULT_ATTACHMENT_LIMITS }
+        : {}),
       ...payload,
     },
   });
@@ -458,13 +568,7 @@ function handleSessionStart(message, session, send) {
     proofPayload.hmac ?? proofPayload.proof ?? payload.shared_key_proof ?? "",
   );
 
-  const expectedProof = computeSharedKeyProof(
-    sharedKey,
-    message.id,
-    deviceId,
-    nonce,
-    timestamp,
-  );
+  const expectedProof = computeSharedKeyProof(sharedKey, message.id, deviceId, nonce, timestamp);
 
   if (submittedProof !== expectedProof) {
     sendSessionError(send, message.id, "SESSION_PROOF_INVALID", "Shared-Key-Proof ungueltig.");
@@ -554,6 +658,7 @@ function sendChatSession(session, send, conversationId, includeMessages = false)
               role: message.role,
               content: message.content,
               timestamp: message.timestamp,
+              ...(message.attachments ? { attachments: message.attachments } : {}),
             })),
           }
         : {}),
@@ -713,6 +818,63 @@ function sendDesktopCommand(send, operation, params) {
   });
 }
 
+function handleChatAttachmentPrepare(message, session, send) {
+  const payload = message.payload ?? {};
+  const clientSessionId = String(payload.session_id ?? "");
+  const conversationId = String(payload.conversation_id ?? "");
+  const filename = String(payload.filename ?? "").slice(0, 255);
+  const mimeType = String(payload.mime_type ?? "application/octet-stream");
+  const sizeBytes = Number(payload.size_bytes ?? 0);
+
+  if (clientSessionId !== session.sessionId) {
+    sendSessionError(send, message.id, "SESSION_NOT_FOUND", "Session nicht gefunden.");
+    return;
+  }
+  if (!conversationId || !filename || !Number.isFinite(sizeBytes) || sizeBytes <= 0) {
+    sendSessionError(send, message.id, "ATTACHMENT_REJECTED", "Ungültige Prepare-Anfrage.");
+    return;
+  }
+  if (sizeBytes > DEFAULT_ATTACHMENT_LIMITS.max_file_bytes) {
+    sendSessionError(send, message.id, "ATTACHMENT_TOO_LARGE", "Datei ist zu groß.");
+    return;
+  }
+  const allowed = DEFAULT_ATTACHMENT_LIMITS.allowed_mime_prefixes.some((prefix) =>
+    mimeType.toLowerCase().startsWith(prefix),
+  );
+  if (!allowed && mimeType !== "application/octet-stream") {
+    sendSessionError(send, message.id, "ATTACHMENT_MIME_NOT_ALLOWED", "MIME-Typ nicht erlaubt.");
+    return;
+  }
+
+  const attachmentId = `att-${randomUUID().slice(0, 8)}`;
+  const uploadPath = signMockAgodeskMediaPath(`/api/agodesk/media/upload/${attachmentId}`);
+  const uploadUrl = `http://127.0.0.1:${PORT}${uploadPath}`;
+  pendingAttachmentUploads.set(attachmentId, {
+    attachmentId,
+    filename,
+    mimeType,
+    sizeBytes,
+    status: "pending",
+  });
+
+  send({
+    id: randomUUID(),
+    type: "chat.attachment.prepared",
+    timestamp: new Date().toISOString(),
+    payload: {
+      session_id: session.sessionId,
+      conversation_id: conversationId,
+      prepare_id: message.id,
+      attachment_id: attachmentId,
+      upload_url: uploadUrl,
+      upload_method: "POST",
+      upload_field: "file",
+      expires_at: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
+      max_bytes: DEFAULT_ATTACHMENT_LIMITS.max_file_bytes,
+    },
+  });
+}
+
 /**
  * @param {WsMessage} message
  * @param {{ sessionId: string }} session
@@ -720,6 +882,9 @@ function sendDesktopCommand(send, operation, params) {
  */
 function handleChatMessage(message, session, send) {
   const text = String(message.payload?.text ?? "");
+  const attachments = Array.isArray(message.payload?.attachments)
+    ? message.payload.attachments
+    : [];
   const requestId = message.id;
   const clientSessionId = String(message.payload?.session_id ?? "");
   const conversationId = String(message.payload?.conversation_id ?? "");
@@ -733,8 +898,7 @@ function handleChatMessage(message, session, send) {
       payload: {
         request_id: requestId,
         code: "SESSION_ID_MISMATCH",
-        message:
-          "chat.message muss die session_id aus session.accepted verwenden.",
+        message: "chat.message muss die session_id aus session.accepted verwenden.",
       },
     });
     return;
@@ -751,14 +915,53 @@ function handleChatMessage(message, session, send) {
     if (!conversation) {
       conversation = createMockConversation(session);
     }
-    conversation.messages.push({ role: "user", content: text, timestamp: now });
+    conversation.messages.push({
+      role: "user",
+      content: text,
+      timestamp: now,
+      ...(attachments.length ? { attachments } : {}),
+    });
     conversation.last_active_at = now;
     if (!conversation.preview) {
       conversation.preview = text.trim().slice(0, 80);
     }
+  } else if (attachments.length > 0) {
+    const now = new Date().toISOString();
+    if (!conversation) {
+      conversation = createMockConversation(session);
+    }
+    conversation.messages.push({
+      role: "user",
+      content: "",
+      timestamp: now,
+      attachments,
+    });
+    conversation.last_active_at = now;
+    if (!conversation.preview) {
+      conversation.preview = `[${attachments.length} Anhang/Anhänge]`;
+    }
   }
 
-  const activeConversationId = conversation?.id ?? conversationId || null;
+  const activeConversationId = conversation?.id ?? (conversationId || null);
+
+  if (attachments.length > 0) {
+    send({
+      id: randomUUID(),
+      type: "chat.attachment.accepted",
+      timestamp: new Date().toISOString(),
+      payload: {
+        session_id: session.sessionId,
+        conversation_id: activeConversationId ?? conversationId,
+        request_id: requestId,
+        attachments: attachments.map((entry) => ({
+          attachment_id: String(entry.attachment_id ?? ""),
+          status: "accepted",
+          kind: entry.kind ?? inferAttachmentKind(entry.mime_type),
+          path: entry.path,
+        })),
+      },
+    });
+  }
 
   if (text.trim().toLowerCase() === "/error") {
     send({
@@ -775,11 +978,7 @@ function handleChatMessage(message, session, send) {
   }
 
   if (text.trim().toLowerCase() === "/newsession") {
-    sendSessionClear(
-      session,
-      send,
-      "Mock: neue Session gestartet (Chat-Verlauf gelöscht).",
-    );
+    sendSessionClear(session, send, "Mock: neue Session gestartet (Chat-Verlauf gelöscht).");
     return;
   }
 
@@ -1064,7 +1263,10 @@ function handleChatMessage(message, session, send) {
     return;
   }
 
-  const replyText = mockReply(text);
+  const replyText =
+    attachments.length > 0
+      ? `${mockReply(text)}\n\n(Mock: ${attachments.length} Anhang/Anhänge empfangen.)`
+      : mockReply(text);
   const timeout = setTimeout(() => {
     session.activeRequests.delete(requestId);
     if (voiceOutput && session.speakerMode) {
@@ -1242,19 +1444,22 @@ function sendStreamingReply(send, session, requestId, fullText) {
   }
 
   words.forEach((word, index) => {
-    setTimeout(() => {
-      send({
-        id: randomUUID(),
-        type: "chat.response.chunk",
-        timestamp: new Date().toISOString(),
-        payload: {
-          session_id: session.sessionId,
-          request_id: requestId,
-          delta: word,
-          done: index === words.length - 1,
-        },
-      });
-    }, 120 * (index + 1));
+    setTimeout(
+      () => {
+        send({
+          id: randomUUID(),
+          type: "chat.response.chunk",
+          timestamp: new Date().toISOString(),
+          payload: {
+            session_id: session.sessionId,
+            request_id: requestId,
+            delta: word,
+            done: index === words.length - 1,
+          },
+        });
+      },
+      120 * (index + 1),
+    );
   });
 }
 
@@ -1266,13 +1471,7 @@ function sharedKeyBytes(sharedKey) {
   return Buffer.from(trimmed, "utf8");
 }
 
-function computeSharedKeyProof(
-  sharedKey,
-  envelopeId,
-  deviceId,
-  nonce,
-  timestamp,
-) {
+function computeSharedKeyProof(sharedKey, envelopeId, deviceId, nonce, timestamp) {
   const material = `agodesk.v1\nsession.start\n${envelopeId}\n${deviceId}\n${nonce}\n${timestamp}`;
   return createHmac("sha256", sharedKeyBytes(sharedKey)).update(material).digest("hex");
 }

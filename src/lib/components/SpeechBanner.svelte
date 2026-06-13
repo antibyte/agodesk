@@ -12,6 +12,7 @@
     vadLoading?: boolean;
     vadError?: string;
     speechProvider?: SpeechProvider;
+    compact?: boolean;
   }
 
   let {
@@ -23,6 +24,7 @@
     vadLoading = false,
     vadError = "",
     speechProvider = "gemini_live",
+    compact = false,
   }: Props = $props();
 
   const bannerTransition = { y: 8, duration: 220 };
@@ -31,6 +33,7 @@
 {#if vadLoading}
   <section
     class="speech-banner banner-glass"
+    class:compact
     data-tone="info"
     role="status"
     in:fly={bannerTransition}
@@ -42,6 +45,7 @@
 {:else if vadError}
   <section
     class="speech-banner banner-glass"
+    class:compact
     data-tone="warn"
     role="alert"
     in:fly={bannerTransition}
@@ -53,6 +57,7 @@
 {:else if errorMessage}
   <section
     class="speech-banner banner-glass"
+    class:compact
     data-tone="danger"
     role="alert"
     in:fly={bannerTransition}
@@ -64,6 +69,7 @@
 {:else if partialTranscript}
   <section
     class="speech-banner banner-glass listening"
+    class:compact
     data-tone="accent"
     role="status"
     aria-live="polite"
@@ -74,19 +80,26 @@
       <span class="pulse-dot" aria-hidden="true"></span>
       <span class="label">{$i18n("speechBanner.recognizing.label")}</span>
       <span class="transcript">{partialTranscript}</span>
-      {#if agentMode}
-        <span class="mode-chip ui-chip" data-tone="connected">{$i18n("speechBanner.mode.agent")}</span>
-      {:else if autoSendToAuraGo}
-        <span class="mode-chip ui-chip" data-tone="connected">{$i18n("speechBanner.mode.autoSend")}</span>
+      {#if !compact}
+        {#if agentMode}
+          <span class="mode-chip ui-chip" data-tone="connected"
+            >{$i18n("speechBanner.mode.agent")}</span
+          >
+        {:else if autoSendToAuraGo}
+          <span class="mode-chip ui-chip" data-tone="connected"
+            >{$i18n("speechBanner.mode.autoSend")}</span
+          >
+        {/if}
+        <span class="mode-chip ui-chip provider-chip" data-tone="info">
+          {$i18n(`speechBanner.provider.${speechProvider}`)}
+        </span>
       {/if}
-      <span class="mode-chip ui-chip provider-chip" data-tone="info">
-        {$i18n(`speechBanner.provider.${speechProvider}`)}
-      </span>
     </div>
   </section>
 {:else if speechActive}
   <section
     class="speech-banner banner-glass mode"
+    class:compact
     data-tone="accent"
     role="status"
     in:fly={bannerTransition}
@@ -101,9 +114,11 @@
       {:else}
         <span>{$i18n("speechBanner.active.default")}</span>
       {/if}
-      <span class="mode-chip ui-chip provider-chip" data-tone="info">
-        {$i18n(`speechBanner.provider.${speechProvider}`)}
-      </span>
+      {#if !compact}
+        <span class="mode-chip ui-chip provider-chip" data-tone="info">
+          {$i18n(`speechBanner.provider.${speechProvider}`)}
+        </span>
+      {/if}
     </div>
   </section>
 {/if}

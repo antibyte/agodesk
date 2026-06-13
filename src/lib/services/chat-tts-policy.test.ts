@@ -54,12 +54,6 @@ test("shouldSendVoiceOutputFlag sendet nicht bei stummgeschaltetem Speaker", () 
 });
 
 test("shouldUseFrontendTtsForResponse bleibt bei stumm aus", () => {
-  assert.equal(
-    shouldUseFrontendTtsForResponse("auto", caps, false, false),
-    false,
-  );
-  assert.equal(
-    shouldUseFrontendTtsForResponse("frontend", caps, false, true),
-    true,
-  );
+  assert.equal(shouldUseFrontendTtsForResponse("auto", caps, false, false), false);
+  assert.equal(shouldUseFrontendTtsForResponse("frontend", caps, false, true), true);
 });

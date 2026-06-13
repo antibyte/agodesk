@@ -1,9 +1,5 @@
 import { writable } from "svelte/store";
-import type {
-  ChatMediaItem,
-  SystemWarning,
-  WebhostIntegration,
-} from "../types/protocol";
+import type { ChatMediaItem, SystemWarning, WebhostIntegration } from "../types/protocol";
 
 export interface ChatMediaState {
   mediaByConversation: Map<string, ChatMediaItem[]>;
@@ -25,9 +21,7 @@ const initialState: ChatMediaState = {
   warningsOpen: false,
 };
 
-function cloneMediaMap(
-  source: Map<string, ChatMediaItem[]>,
-): Map<string, ChatMediaItem[]> {
+function cloneMediaMap(source: Map<string, ChatMediaItem[]>): Map<string, ChatMediaItem[]> {
   const next = new Map<string, ChatMediaItem[]>();
   for (const [key, items] of source) {
     next.set(key, [...items]);
@@ -70,11 +64,7 @@ function createChatMediaStore() {
     setIntegrationWebhosts(webhosts: WebhostIntegration[]): void {
       update((state) => ({ ...state, integrationWebhosts: [...webhosts] }));
     },
-    setSystemWarnings(
-      warnings: SystemWarning[],
-      total: number,
-      unacknowledged: number,
-    ): void {
+    setSystemWarnings(warnings: SystemWarning[], total: number, unacknowledged: number): void {
       update((state) => ({
         ...state,
         systemWarnings: [...warnings],

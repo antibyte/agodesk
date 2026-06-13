@@ -16,7 +16,9 @@
   });
 
   const closeLabel = $derived(
-    minimizeToTray ? $i18n("windowControls.close.minimizeToTray") : $i18n("windowControls.close.default"),
+    minimizeToTray
+      ? $i18n("windowControls.close.minimizeToTray")
+      : $i18n("windowControls.close.default"),
   );
 </script>
 
@@ -41,7 +43,12 @@
       onclick={() => void closeMainWindow()}
     >
       <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">
-        <path d="M2 2 8 8M8 2 2 8" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" />
+        <path
+          d="M2 2 8 8M8 2 2 8"
+          stroke="currentColor"
+          stroke-width="1.25"
+          stroke-linecap="round"
+        />
       </svg>
     </button>
   </div>

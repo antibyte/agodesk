@@ -4,19 +4,20 @@ import {
   type TrustedCertificateEntry,
 } from "../types/protocol";
 
-export { appendInsecureLoopbackIfNeeded, isLoopbackHost, normalizeServerUrl, prepareServerUrl } from "./server-url";
+export {
+  appendInsecureLoopbackIfNeeded,
+  isLoopbackHost,
+  normalizeServerUrl,
+  prepareServerUrl,
+} from "./server-url";
 import { formatInvokeError } from "./errors";
 
-export async function probeServerCertificate(
-  serverUrl: string,
-): Promise<CertificateProbeResult> {
+export async function probeServerCertificate(serverUrl: string): Promise<CertificateProbeResult> {
   const { invoke } = await import("@tauri-apps/api/core");
   try {
     return await invoke<CertificateProbeResult>("probe_server_certificate", { serverUrl });
   } catch (error) {
-    throw new Error(
-      formatInvokeError(error, "Zertifikat konnte nicht gelesen werden."),
-    );
+    throw new Error(formatInvokeError(error, "Zertifikat konnte nicht gelesen werden."));
   }
 }
 

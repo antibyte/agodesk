@@ -9,13 +9,7 @@
     loading?: boolean;
   }
 
-  let {
-    imageUrl = "",
-    label,
-    size = "sm",
-    tone = "assistant",
-    loading = false,
-  }: Props = $props();
+  let { imageUrl = "", label, size = "sm", tone = "assistant", loading = false }: Props = $props();
 
   let imageFailed = $state(false);
 
@@ -28,26 +22,22 @@
   });
 </script>
 
-<span
-  class="persona-avatar"
-  class:loading
-  data-size={size}
-  data-tone={tone}
-  aria-hidden="true"
->
+<span class="persona-avatar" class:loading data-size={size} data-tone={tone} aria-hidden="true">
   {#if loading}
     <span class="skeleton-fill ui-skeleton"></span>
   {:else if tone === "user"}
     <svg class="user-icon" viewBox="0 0 24 24" aria-hidden="true">
       <circle cx="12" cy="8" r="4" fill="currentColor" stroke="none" />
-      <path
-        d="M4 20c0-4 3.6-6 8-6s8 2 8 6"
-        fill="currentColor"
-        stroke="none"
-      />
+      <path d="M4 20c0-4 3.6-6 8-6s8 2 8 6" fill="currentColor" stroke="none" />
     </svg>
   {:else if showImage}
-    <img src={imageUrl} alt="" loading="eager" decoding="async" onerror={() => (imageFailed = true)} />
+    <img
+      src={imageUrl}
+      alt=""
+      loading="eager"
+      decoding="async"
+      onerror={() => (imageFailed = true)}
+    />
   {:else}
     {displayLabel}
   {/if}

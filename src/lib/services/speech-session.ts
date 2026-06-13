@@ -1,9 +1,6 @@
 import type { AgentMoodMetadata } from "../types/protocol";
 import type { SpeechAgentContext } from "../types/speech";
-import type {
-  GeminiFunctionCall,
-  GeminiFunctionResponse,
-} from "./speech-tools";
+import type { GeminiFunctionCall, GeminiFunctionResponse } from "./speech-tools";
 import type { SpeechStatus } from "../types/speech";
 
 export interface SpeechSessionCallbacks {

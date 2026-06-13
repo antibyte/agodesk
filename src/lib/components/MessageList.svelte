@@ -19,7 +19,7 @@
     mediaEnabled?: boolean;
     serverUrl?: string;
     onOpenEmbedded?: (url: string, title?: string) => void;
-    onOpenSettings?: () => void;
+    onPairDevice?: () => void;
   }
 
   let {
@@ -31,16 +31,14 @@
     mediaEnabled = false,
     serverUrl = "",
     onOpenEmbedded,
-    onOpenSettings,
+    onPairDevice,
   }: Props = $props();
 
   let container: HTMLDivElement | undefined = $state();
   let shouldStickToBottom = $state(true);
   let lastSeenCount = $state(0);
 
-  const newMessageCount = $derived(
-    Math.max(0, $chatMessages.length - lastSeenCount),
-  );
+  const newMessageCount = $derived(Math.max(0, $chatMessages.length - lastSeenCount));
 
   const showScrollFab = $derived(!shouldStickToBottom && $chatMessages.length > 0);
 
@@ -113,8 +111,8 @@
         </div>
         <h2>{$i18n("messageList.empty.title")}</h2>
         <p>{$i18n("messageList.empty.description")}</p>
-        {#if sessionStatus === "awaiting_pairing"}
-          <button type="button" class="ui-btn ui-btn-primary cta" onclick={() => onOpenSettings?.()}>
+        {#if sessionStatus === "awaiting_pairing" || sessionStatus === "error"}
+          <button type="button" class="ui-btn ui-btn-primary cta" onclick={() => onPairDevice?.()}>
             {$i18n("messageList.empty.pairDevice")}
           </button>
         {:else if connectionStatus !== "connected"}
@@ -141,7 +139,7 @@
             <span>{dayLabel}</span>
           </div>
         {/if}
-        <MessageBubble {message} {index} />
+        <MessageBubble {message} {index} {serverUrl} />
       {/each}
       {#if mediaEnabled && mediaItems.length > 0}
         <div class="media-strip">
@@ -172,9 +170,7 @@
       </svg>
       {#if newMessageCount > 0}
         <span class="badge">
-          {newMessageCount > 99
-            ? $i18n("messageList.scrollBadge.overflow")
-            : newMessageCount}
+          {newMessageCount > 99 ? $i18n("messageList.scrollBadge.overflow") : newMessageCount}
         </span>
       {/if}
     </button>

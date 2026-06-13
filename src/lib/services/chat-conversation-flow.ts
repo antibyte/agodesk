@@ -2,11 +2,7 @@ import { get } from "svelte/store";
 import { chatMessages } from "../stores/chat";
 import { chatConversationState } from "../stores/chat-conversation";
 import { sessionState } from "../stores/session";
-import type {
-  ChatSessionSummary,
-  LoadedConversationMessage,
-  WsMessage,
-} from "../types/protocol";
+import type { ChatSessionSummary, LoadedConversationMessage, WsMessage } from "../types/protocol";
 import {
   extractConversationIdFromPayload,
   filterVisibleChatSessions,
@@ -165,10 +161,7 @@ export function buildChatSessionCreateMessage(sessionId: string): WsMessage {
   };
 }
 
-export function buildChatSessionLoadMessage(
-  sessionId: string,
-  conversationId: string,
-): WsMessage {
+export function buildChatSessionLoadMessage(sessionId: string, conversationId: string): WsMessage {
   return {
     id: crypto.randomUUID(),
     type: "chat.session.load",
@@ -197,9 +190,7 @@ export function buildChatCancelMessage(
   };
 }
 
-export function applyLoadedConversationMessages(
-  messages: LoadedConversationMessage[],
-): void {
+export function applyLoadedConversationMessages(messages: LoadedConversationMessage[]): void {
   chatMessages.clearMessages();
   for (const message of messages) {
     chatMessages.addMessage({
@@ -207,6 +198,7 @@ export function applyLoadedConversationMessages(
       role: message.role,
       text: message.content,
       timestamp: message.timestamp ?? new Date().toISOString(),
+      ...(message.attachments?.length ? { attachments: message.attachments } : {}),
     });
   }
 }
@@ -254,11 +246,7 @@ function activateConversation(
 export function applyChatSessionPayload(payload: unknown): boolean {
   const normalized = normalizeChatSessionPayload(payload);
   if (normalized) {
-    activateConversation(
-      normalized.conversation_id,
-      normalized.session,
-      normalized.messages,
-    );
+    activateConversation(normalized.conversation_id, normalized.session, normalized.messages);
     return true;
   }
 
@@ -343,9 +331,7 @@ export async function bootstrapChatConversation(
   });
 }
 
-export async function recoverConversationBootstrap(
-  ws: NativeWebSocketService,
-): Promise<boolean> {
+export async function recoverConversationBootstrap(ws: NativeWebSocketService): Promise<boolean> {
   if (!bootstrapPending || bootstrapRecoveryUsed) {
     return false;
   }
@@ -364,9 +350,7 @@ export async function recoverConversationBootstrap(
   return true;
 }
 
-export async function tryResolveBootstrapFromMessage(
-  message: WsMessage,
-): Promise<boolean> {
+export async function tryResolveBootstrapFromMessage(message: WsMessage): Promise<boolean> {
   if (!isConversationBootstrapPending()) {
     return false;
   }

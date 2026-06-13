@@ -60,9 +60,7 @@
   >
     <div>
       <strong id="remote-title">
-        {active
-          ? $i18n("remoteControl.title.active")
-          : $i18n("remoteControl.title.pending")}
+        {active ? $i18n("remoteControl.title.active") : $i18n("remoteControl.title.pending")}
       </strong>
       <p>
         {active

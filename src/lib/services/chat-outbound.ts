@@ -4,10 +4,11 @@ import { chatConversationState } from "../stores/chat-conversation";
 import { sessionState } from "../stores/session";
 import { settings } from "../stores/settings";
 import { getTranslateFn } from "../i18n/store";
-import type { ChatMessagePayload, WsMessage } from "../types/protocol";
+import type { ChatAttachmentItem, ChatMessagePayload, WsMessage } from "../types/protocol";
 import {
   hasAdvertisedChatCancel,
   hasAdvertisedChatSessions,
+  canUseChatAttachments,
 } from "../types/protocol";
 import { shouldSendVoiceOutputForSettings } from "./chat-tts-policy";
 import {
@@ -19,6 +20,8 @@ import { stopAllChatAssistantTts } from "./chat-audio";
 import { stopChatMediaPlayback } from "./chat-media-playback";
 import { interruptLocalSpeechPlayback } from "./local-speech-tts";
 import type { NativeWebSocketService } from "./websocket";
+import { prepareChatAttachment, toChatAttachmentItem } from "./chat-attachment-flow";
+import { uploadChatAttachmentFile } from "./chat-attachment-upload";
 
 export interface BuildChatMessageOptions {
   source?: ChatMessagePayload["source"];
@@ -26,6 +29,7 @@ export interface BuildChatMessageOptions {
   timestamp?: string;
   conversationId?: string | null;
   voiceOutput?: boolean;
+  attachments?: ChatAttachmentItem[];
 }
 
 export function buildChatMessage(
@@ -34,6 +38,7 @@ export function buildChatMessage(
   options: BuildChatMessageOptions = {},
 ): WsMessage<ChatMessagePayload> {
   const conversationId = options.conversationId?.trim();
+  const attachments = options.attachments?.length ? options.attachments : undefined;
   return {
     id: options.id ?? crypto.randomUUID(),
     type: "chat.message",
@@ -45,6 +50,7 @@ export function buildChatMessage(
       ...(conversationId ? { conversation_id: conversationId } : {}),
       ...(options.source ? { source: options.source } : {}),
       ...(options.voiceOutput ? { voice_output: true } : {}),
+      ...(attachments ? { attachments } : {}),
     },
   };
 }
@@ -56,27 +62,24 @@ export async function sendChatMessage(
   options: BuildChatMessageOptions = {},
 ): Promise<WsMessage<ChatMessagePayload>> {
   const trimmed = text.trim();
-  if (!trimmed) {
+  const attachments = options.attachments?.length ? options.attachments : undefined;
+  if (!trimmed && !attachments?.length) {
     throw new Error(getTranslateFn()("chatOutbound.error.emptyMessage"));
   }
 
   const conversationId =
-    options.conversationId ??
-    get(chatConversationState).activeConversationId ??
-    undefined;
+    options.conversationId ?? get(chatConversationState).activeConversationId ?? undefined;
 
   const appSettings = get(settings);
   const voiceOutput =
     options.voiceOutput ??
-    shouldSendVoiceOutputForSettings(
-      appSettings,
-      get(sessionState).advertisedCapabilities,
-    );
+    shouldSendVoiceOutputForSettings(appSettings, get(sessionState).advertisedCapabilities);
 
   const message = buildChatMessage(sessionId, trimmed, {
     ...options,
     conversationId: conversationId ?? null,
     voiceOutput,
+    attachments,
   });
 
   chatMessages.addMessage({
@@ -84,6 +87,7 @@ export async function sendChatMessage(
     role: "user",
     text: trimmed,
     timestamp: message.timestamp,
+    ...(attachments ? { attachments } : {}),
   });
 
   chatConversationState.beginRequest(message.id);
@@ -95,7 +99,7 @@ export async function sendChatMessageWithConversation(
   ws: NativeWebSocketService,
   sessionId: string,
   text: string,
-  options: Omit<BuildChatMessageOptions, "conversationId"> = {},
+  options: Omit<BuildChatMessageOptions, "conversationId"> & { files?: File[] } = {},
 ): Promise<WsMessage<ChatMessagePayload>> {
   const caps = get(sessionState).advertisedCapabilities;
   let conversationId = get(chatConversationState).activeConversationId;
@@ -110,17 +114,43 @@ export async function sendChatMessageWithConversation(
       throw new Error(getTranslateFn()("chatOutbound.error.conversationNotReady"));
     }
   }
-  return sendChatMessage(
-    (message) => ws.send(message),
-    sessionId,
-    text,
-    { ...options, conversationId },
-  );
+
+  const { files = [], ...messageOptions } = options;
+  let attachments = messageOptions.attachments;
+
+  if (files.length > 0) {
+    const caps = get(sessionState).advertisedCapabilities;
+    if (!canUseChatAttachments(caps)) {
+      throw new Error(getTranslateFn()("chatOutbound.error.attachmentsNotSupported"));
+    }
+    if (!conversationId) {
+      throw new Error(getTranslateFn()("chatOutbound.error.conversationNotReady"));
+    }
+    const uploaded: ChatAttachmentItem[] = [];
+    for (const file of files) {
+      const prepared = await prepareChatAttachment((message) => ws.send(message), {
+        sessionId,
+        conversationId,
+        filename: file.name,
+        mimeType: file.type || "application/octet-stream",
+        sizeBytes: file.size,
+      });
+      const result = await uploadChatAttachmentFile(get(settings).serverUrl, prepared, file);
+      uploaded.push(
+        toChatAttachmentItem(result, file.name, file.type || "application/octet-stream", file.size),
+      );
+    }
+    attachments = uploaded;
+  }
+
+  return sendChatMessage((message) => ws.send(message), sessionId, text, {
+    ...messageOptions,
+    attachments,
+    conversationId,
+  });
 }
 
-export async function stopActiveChatRequest(
-  ws: NativeWebSocketService,
-): Promise<boolean> {
+export async function stopActiveChatRequest(ws: NativeWebSocketService): Promise<boolean> {
   const session = get(sessionState);
   const convo = get(chatConversationState);
   const requestId = convo.activeRequestId;
@@ -151,9 +181,7 @@ export async function stopActiveChatRequest(
   }
 
   if (hasAdvertisedChatCancel(session.advertisedCapabilities)) {
-    await ws.send(
-      buildChatCancelMessage(session.sessionId, conversationId, requestId),
-    );
+    await ws.send(buildChatCancelMessage(session.sessionId, conversationId, requestId));
   }
 
   return true;

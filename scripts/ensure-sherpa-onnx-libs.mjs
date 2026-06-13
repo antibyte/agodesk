@@ -10,9 +10,13 @@ if (isSherpaReady() || isSherpaArchivePresent()) {
 }
 
 console.log("sherpa-onnx libs missing — downloading…");
-const result = spawnSync(process.execPath, [join(root, "scripts", "download-sherpa-onnx-libs.mjs")], {
-  stdio: "inherit",
-  cwd: root,
-});
+const result = spawnSync(
+  process.execPath,
+  [join(root, "scripts", "download-sherpa-onnx-libs.mjs")],
+  {
+    stdio: "inherit",
+    cwd: root,
+  },
+);
 
 process.exit(result.status ?? 1);

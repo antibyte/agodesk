@@ -1,10 +1,7 @@
 import { get } from "svelte/store";
 import type { UiSoundEvent, UiSoundTheme } from "../types/protocol";
 import { settings } from "../stores/settings";
-import {
-  UI_SOUND_THEME_DEFINITIONS,
-  type ToneDef,
-} from "./ui-sound-themes";
+import { UI_SOUND_THEME_DEFINITIONS, type ToneDef } from "./ui-sound-themes";
 
 const DEBOUNCE_MS = 80;
 
@@ -28,10 +25,7 @@ function scheduleTone(
   const duration = tone.attack + tone.decay;
   const gainNode = context.createGain();
   gainNode.gain.setValueAtTime(0, start);
-  gainNode.gain.linearRampToValueAtTime(
-    tone.peakGain * masterGain,
-    start + tone.attack,
-  );
+  gainNode.gain.linearRampToValueAtTime(tone.peakGain * masterGain, start + tone.attack);
   gainNode.gain.exponentialRampToValueAtTime(0.001, start + duration);
   gainNode.connect(destination);
 
@@ -60,10 +54,7 @@ function scheduleTone(
   oscillator.type = tone.type;
   oscillator.frequency.setValueAtTime(tone.freq, start);
   if (tone.freqEnd && tone.freqEnd > 0) {
-    oscillator.frequency.exponentialRampToValueAtTime(
-      tone.freqEnd,
-      start + duration,
-    );
+    oscillator.frequency.exponentialRampToValueAtTime(tone.freqEnd, start + duration);
   }
   oscillator.connect(gainNode);
   oscillator.start(start);
@@ -118,10 +109,7 @@ function resolveOptions(overrides?: PlayUiSoundOverrides): {
   };
 }
 
-export function playUiSound(
-  event: UiSoundEvent,
-  overrides?: PlayUiSoundOverrides,
-): void {
+export function playUiSound(event: UiSoundEvent, overrides?: PlayUiSoundOverrides): void {
   const { enabled, theme, volume } = resolveOptions(overrides);
   if (!enabled || volume <= 0) {
     return;

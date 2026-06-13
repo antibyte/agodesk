@@ -1,15 +1,10 @@
 import { get } from "svelte/store";
 import { sessionState } from "../stores/session";
 import type { WsMessage } from "../types/protocol";
-import {
-  hasAdvertisedIntegrationsWebhosts,
-  hasAdvertisedSystemWarnings,
-} from "../types/protocol";
+import { hasAdvertisedIntegrationsWebhosts, hasAdvertisedSystemWarnings } from "../types/protocol";
 import type { NativeWebSocketService } from "./websocket";
 
-export function buildIntegrationsWebhostsListMessage(
-  sessionId: string,
-): WsMessage {
+export function buildIntegrationsWebhostsListMessage(sessionId: string): WsMessage {
   return {
     id: crypto.randomUUID(),
     type: "integrations.webhosts.list",
@@ -44,27 +39,17 @@ export async function bootstrapAgodeskFeatures(
   await Promise.all(tasks);
 }
 
-export async function refreshIntegrationsWebhosts(
-  ws: NativeWebSocketService,
-): Promise<void> {
+export async function refreshIntegrationsWebhosts(ws: NativeWebSocketService): Promise<void> {
   const session = get(sessionState);
-  if (
-    !session.sessionId ||
-    !hasAdvertisedIntegrationsWebhosts(session.advertisedCapabilities)
-  ) {
+  if (!session.sessionId || !hasAdvertisedIntegrationsWebhosts(session.advertisedCapabilities)) {
     return;
   }
   await ws.send(buildIntegrationsWebhostsListMessage(session.sessionId));
 }
 
-export async function refreshSystemWarnings(
-  ws: NativeWebSocketService,
-): Promise<void> {
+export async function refreshSystemWarnings(ws: NativeWebSocketService): Promise<void> {
   const session = get(sessionState);
-  if (
-    !session.sessionId ||
-    !hasAdvertisedSystemWarnings(session.advertisedCapabilities)
-  ) {
+  if (!session.sessionId || !hasAdvertisedSystemWarnings(session.advertisedCapabilities)) {
     return;
   }
   await ws.send(buildSystemWarningsListMessage(session.sessionId));

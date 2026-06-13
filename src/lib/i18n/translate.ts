@@ -3,11 +3,7 @@ import type { MessageKey } from "./types";
 
 export type TranslateParams = Record<string, string | number>;
 
-export function translate(
-  messages: Messages,
-  key: MessageKey,
-  params?: TranslateParams,
-): string {
+export function translate(messages: Messages, key: MessageKey, params?: TranslateParams): string {
   let text = messages[key];
 
   if (text === undefined) {
@@ -27,10 +23,6 @@ export function translate(
 }
 
 /** Non-reactive translate for services/tests. */
-export function tStatic(
-  messages: Messages,
-  key: MessageKey,
-  params?: TranslateParams,
-): string {
+export function tStatic(messages: Messages, key: MessageKey, params?: TranslateParams): string {
   return translate(messages, key, params);
 }

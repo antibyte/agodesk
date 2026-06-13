@@ -238,28 +238,22 @@ async function fetchFirstServerAssetFromCandidates(
   }
 
   if (import.meta.env.DEV && lastError) {
-    console.warn(
-      "[agodesk:server-asset]",
-      formatInvokeError(lastError, "Asset fetch failed"),
-      {
-        path: audioBasename(path),
-        attempts: candidates.length,
-        candidates: candidates.map((url) => {
-          try {
-            const parsed = new URL(url);
-            return `${parsed.pathname}${parsed.search ? parsed.search.slice(0, 40) : ""}`;
-          } catch {
-            return audioBasename(url);
-          }
-        }),
-      },
-    );
+    console.warn("[agodesk:server-asset]", formatInvokeError(lastError, "Asset fetch failed"), {
+      path: audioBasename(path),
+      attempts: candidates.length,
+      candidates: candidates.map((url) => {
+        try {
+          const parsed = new URL(url);
+          return `${parsed.pathname}${parsed.search ? parsed.search.slice(0, 40) : ""}`;
+        } catch {
+          return audioBasename(url);
+        }
+      }),
+    });
   } else if (lastError) {
-    console.warn(
-      "[agodesk:server-asset]",
-      formatInvokeError(lastError, "Asset fetch failed"),
-      { attempts: candidates.length },
-    );
+    console.warn("[agodesk:server-asset]", formatInvokeError(lastError, "Asset fetch failed"), {
+      attempts: candidates.length,
+    });
   }
 
   return null;

@@ -83,8 +83,7 @@ export class LocalSpeechUtteranceEndpoint {
       return;
     }
 
-    const durationMs =
-      chunkDurationMs ?? Math.round((pcm.length / SAMPLE_RATE) * 1000);
+    const durationMs = chunkDurationMs ?? Math.round((pcm.length / SAMPLE_RATE) * 1000);
     const floatSamples = int16ToFloat32(pcm);
     const speaking = this.vad.process(floatSamples);
 

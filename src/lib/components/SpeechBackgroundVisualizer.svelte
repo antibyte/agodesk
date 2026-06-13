@@ -95,7 +95,8 @@
     offset: number,
   ): void {
     const { waveform, energy, speaking } = metrics;
-    const amplitude = height * amplitudeScale * (speaking ? 0.5 + energy * 1.0 : 0.03 + energy * 0.08);
+    const amplitude =
+      height * amplitudeScale * (speaking ? 0.5 + energy * 1.0 : 0.03 + energy * 0.08);
 
     ctx.beginPath();
     ctx.lineWidth = lineWidth;
@@ -115,8 +116,7 @@
         Math.floor(position * (waveform.length - 1)),
       );
       const sample = waveform[sampleIndex] ?? 0;
-      const neighbor =
-        waveform[Math.min(waveform.length - 1, sampleIndex + 1)] ?? sample;
+      const neighbor = waveform[Math.min(waveform.length - 1, sampleIndex + 1)] ?? sample;
       const smooth = sample * 0.6 + neighbor * 0.4;
       const envelope = Math.sin(position * Math.PI) * (0.92 + Math.sin(position * 6) * 0.08);
       const y = centerY + offset + smooth * amplitude * envelope;
@@ -267,7 +267,18 @@
         ctx.fillRect(x, 0, bw, topH);
       }
 
-      drawVoiceWaveform(ctx, metrics, width, height, centerY, danger, 0.55 * globalAlpha, 0.28, 4, 0);
+      drawVoiceWaveform(
+        ctx,
+        metrics,
+        width,
+        height,
+        centerY,
+        danger,
+        0.55 * globalAlpha,
+        0.28,
+        4,
+        0,
+      );
       drawVoiceWaveform(
         ctx,
         metrics,
@@ -306,8 +317,7 @@
           (particle.radius + bass * (speaking ? 0.12 : 0.015) + energy * (speaking ? 0.07 : 0.015));
         const px = centerX + Math.cos(particle.angle) * orbitRadius;
         const py =
-          centerY +
-          Math.sin(particle.angle * 1.15 + particle.wobble * 0.7) * orbitRadius * 0.65;
+          centerY + Math.sin(particle.angle * 1.15 + particle.wobble * 0.7) * orbitRadius * 0.65;
         const size = particle.size + voiceDrive * (speaking ? 6 : 1.3);
 
         particlePositions.push({ x: px, y: py, size });
@@ -329,7 +339,8 @@
         ctx.lineWidth = 0.9;
         for (let i = 0; i < particlePositions.length; i += 1) {
           const p1 = particlePositions[i];
-          for (let j = i + 1; j < particlePositions.length; j += 3) {  // every 3rd for perf
+          for (let j = i + 1; j < particlePositions.length; j += 3) {
+            // every 3rd for perf
             const p2 = particlePositions[j];
             const dx = p1.x - p2.x;
             const dy = p1.y - p2.y;

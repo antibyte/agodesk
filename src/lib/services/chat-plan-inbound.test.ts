@@ -1,9 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {
-  handleChatPlanUpdate,
-  reconcilePlanFromResponse,
-} from "./chat-plan-inbound.ts";
+import { handleChatPlanUpdate, reconcilePlanFromResponse } from "./chat-plan-inbound.ts";
 import { chatPlanState } from "../stores/chat-plan.ts";
 
 test("handleChatPlanUpdate setzt Plan aus chat.plan_update", () => {

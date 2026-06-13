@@ -1,10 +1,6 @@
 import type { UiLocaleSetting } from "../i18n/locales";
 
-export type ConnectionStatus =
-  | "connecting"
-  | "connected"
-  | "disconnected"
-  | "error";
+export type ConnectionStatus = "connecting" | "connected" | "disconnected" | "error";
 
 export type SessionStatus =
   | "idle"
@@ -40,6 +36,9 @@ export type MessageType =
   | "chat.cancelled"
   | "chat.audio"
   | "chat.media"
+  | "chat.attachment.prepare"
+  | "chat.attachment.prepared"
+  | "chat.attachment.accepted"
   | "chat.voice_output.status"
   | "integrations.webhosts.list"
   | "integrations.webhosts"
@@ -104,9 +103,21 @@ export interface SessionStartReconnectPayload extends SessionStartCommon {
   shared_key_proof: SharedKeyProofPayload;
 }
 
-export type SessionStartPayload =
-  | SessionStartPairingPayload
-  | SessionStartReconnectPayload;
+export type SessionStartPayload = SessionStartPairingPayload | SessionStartReconnectPayload;
+
+export interface ChatAttachmentLimits {
+  max_file_bytes: number;
+  max_files_per_message: number;
+  max_total_bytes_per_message: number;
+  allowed_mime_prefixes: string[];
+}
+
+export const DEFAULT_CHAT_ATTACHMENT_LIMITS: ChatAttachmentLimits = {
+  max_file_bytes: 8 * 1024 * 1024,
+  max_files_per_message: 5,
+  max_total_bytes_per_message: 24 * 1024 * 1024,
+  allowed_mime_prefixes: ["image/", "text/", "application/pdf"],
+};
 
 export interface SessionAcceptedPayload {
   session_id: string;
@@ -114,6 +125,7 @@ export interface SessionAcceptedPayload {
   shared_key?: string;
   advertised_capabilities?: string[];
   capabilities?: string[];
+  attachment_limits?: ChatAttachmentLimits;
 }
 
 export interface SessionClearPayload {
@@ -122,9 +134,7 @@ export interface SessionClearPayload {
   clear_chat?: boolean;
 }
 
-export function normalizeSessionClearPayload(
-  payload: unknown,
-): SessionClearPayload | null {
+export function normalizeSessionClearPayload(payload: unknown): SessionClearPayload | null {
   if (!payload || typeof payload !== "object") {
     return null;
   }
@@ -148,9 +158,7 @@ export function normalizeSessionClearPayload(
   return result;
 }
 
-export function normalizeSessionAcceptedPayload(
-  payload: unknown,
-): SessionAcceptedPayload | null {
+export function normalizeSessionAcceptedPayload(payload: unknown): SessionAcceptedPayload | null {
   if (!payload || typeof payload !== "object") {
     return null;
   }
@@ -164,23 +172,66 @@ export function normalizeSessionAcceptedPayload(
 
   const sharedKeyRaw = record.shared_key ?? record.sharedKey;
   const sharedKey =
-    typeof sharedKeyRaw === "string" && sharedKeyRaw.length > 0
-      ? sharedKeyRaw
-      : undefined;
+    typeof sharedKeyRaw === "string" && sharedKeyRaw.length > 0 ? sharedKeyRaw : undefined;
 
   const capsRaw = record.advertised_capabilities ?? record.capabilities;
   const advertisedCapabilities = Array.isArray(capsRaw)
     ? capsRaw.filter((cap): cap is string => typeof cap === "string")
     : undefined;
 
+  const attachmentLimits = normalizeChatAttachmentLimits(
+    record.attachment_limits ?? record.attachmentLimits,
+  );
+
   return {
     session_id: sessionId,
     device_id: deviceId,
     shared_key: sharedKey,
-    ...(advertisedCapabilities?.length
-      ? { advertised_capabilities: advertisedCapabilities }
-      : {}),
+    ...(advertisedCapabilities?.length ? { advertised_capabilities: advertisedCapabilities } : {}),
+    ...(attachmentLimits ? { attachment_limits: attachmentLimits } : {}),
   };
+}
+
+export interface ChatAttachmentItem {
+  attachment_id: string;
+  filename: string;
+  mime_type: string;
+  size_bytes?: number;
+  path?: string;
+  kind?: ChatMediaKind;
+}
+
+export interface ChatAttachmentPreparePayload {
+  session_id: string;
+  conversation_id: string;
+  filename: string;
+  mime_type: string;
+  size_bytes: number;
+  sha256?: string;
+}
+
+export interface ChatAttachmentPreparedPayload {
+  session_id: string;
+  conversation_id: string;
+  prepare_id: string;
+  attachment_id: string;
+  upload_url: string;
+  upload_method: "POST";
+  upload_field: string;
+  expires_at: string;
+  max_bytes: number;
+}
+
+export interface ChatAttachmentAcceptedPayload {
+  session_id: string;
+  conversation_id: string;
+  request_id: string;
+  attachments: Array<{
+    attachment_id: string;
+    status: "accepted" | "rejected" | string;
+    kind?: ChatMediaKind;
+    path?: string;
+  }>;
 }
 
 export interface ChatMessagePayload {
@@ -192,6 +243,7 @@ export interface ChatMessagePayload {
   source?: "user" | "speech" | "tool";
   /** Request AuraGo TTS when chat.voice_output is negotiated. */
   voice_output?: boolean;
+  attachments?: ChatAttachmentItem[];
 }
 
 export interface ChatSessionSummary {
@@ -225,6 +277,7 @@ export interface LoadedConversationMessage {
   role: ChatRole;
   content: string;
   timestamp?: string;
+  attachments?: ChatAttachmentItem[];
 }
 
 export interface ChatSessionPayload {
@@ -573,9 +626,10 @@ export function normalizeChatResponseMetadata(raw: unknown): ChatResponseMetadat
   const planRaw = record.plan;
 
   const agentMood =
-    agentMoodRaw === undefined ? undefined : normalizeAgentMoodMetadata(agentMoodRaw) ?? undefined;
-  const plan =
-    planRaw === undefined ? undefined : normalizeAgoDeskPlan(planRaw);
+    agentMoodRaw === undefined
+      ? undefined
+      : (normalizeAgentMoodMetadata(agentMoodRaw) ?? undefined);
+  const plan = planRaw === undefined ? undefined : normalizeAgoDeskPlan(planRaw);
 
   const metadata: ChatResponseMetadata = { ...record };
   if (source) {
@@ -715,8 +769,14 @@ function normalizeChatSessionSummary(raw: unknown): ChatSessionSummary | null {
   }
   const record = raw as Record<string, unknown>;
   let id =
-    readString(record, "id", "conversation_id", "conversationId", "chat_session_id", "chatSessionId") ??
-    undefined;
+    readString(
+      record,
+      "id",
+      "conversation_id",
+      "conversationId",
+      "chat_session_id",
+      "chatSessionId",
+    ) ?? undefined;
   if (!id) {
     const sessionIdCandidate = readString(record, "session_id", "sessionId");
     if (sessionIdCandidate && !isTransportSessionId(sessionIdCandidate)) {
@@ -749,9 +809,7 @@ export function isVisibleChatSession(session: ChatSessionSummary): boolean {
   return session.message_count > 0;
 }
 
-export function filterVisibleChatSessions(
-  sessions: ChatSessionSummary[],
-): ChatSessionSummary[] {
+export function filterVisibleChatSessions(sessions: ChatSessionSummary[]): ChatSessionSummary[] {
   return sessions.filter(isVisibleChatSession);
 }
 
@@ -796,19 +854,26 @@ export function extractConversationIdFromPayload(payload: unknown): string | nul
   return conversationId ?? null;
 }
 
-export function normalizeLoadedConversationMessage(
-  raw: unknown,
-): LoadedConversationMessage | null {
+export function normalizeLoadedConversationMessage(raw: unknown): LoadedConversationMessage | null {
   if (!raw || typeof raw !== "object") {
     return null;
   }
   const record = raw as Record<string, unknown>;
   const roleRaw = readString(record, "role");
-  const content = readString(record, "content") ?? readString(record, "text");
-  if (!roleRaw || !content) {
+  const content = readString(record, "content") ?? readString(record, "text") ?? "";
+  const attachmentsRaw = record.attachments;
+  const attachments = Array.isArray(attachmentsRaw)
+    ? attachmentsRaw
+        .map((entry) => normalizeChatAttachmentItem(entry))
+        .filter((entry): entry is ChatAttachmentItem => entry !== null)
+    : undefined;
+  if (!roleRaw) {
     return null;
   }
   if (roleRaw !== "user" && roleRaw !== "assistant" && roleRaw !== "system") {
+    return null;
+  }
+  if (!content.trim() && (!attachments || attachments.length === 0)) {
     return null;
   }
   const timestamp = readString(record, "timestamp");
@@ -816,6 +881,7 @@ export function normalizeLoadedConversationMessage(
     role: roleRaw,
     content,
     ...(timestamp ? { timestamp } : {}),
+    ...(attachments?.length ? { attachments } : {}),
   };
 }
 
@@ -835,11 +901,7 @@ export function normalizeChatSessionPayload(payload: unknown): ChatSessionPayloa
     "id",
   );
 
-  if (
-    !conversationId &&
-    transportSessionId &&
-    looksLikeConversationId(transportSessionId)
-  ) {
+  if (!conversationId && transportSessionId && looksLikeConversationId(transportSessionId)) {
     conversationId = transportSessionId;
     transportSessionId = undefined;
   }
@@ -885,9 +947,7 @@ export function normalizeChatSessionPayload(payload: unknown): ChatSessionPayloa
   };
 }
 
-export function normalizeChatCancelledPayload(
-  payload: unknown,
-): ChatCancelledPayload | null {
+export function normalizeChatCancelledPayload(payload: unknown): ChatCancelledPayload | null {
   if (!payload || typeof payload !== "object") {
     return null;
   }
@@ -955,14 +1015,10 @@ function normalizeChatMediaItem(
   if (!kind) {
     return null;
   }
-  const id =
-    readString(record, "id") ??
-    fallbackId ??
-    crypto.randomUUID();
+  const id = readString(record, "id") ?? fallbackId ?? crypto.randomUUID();
   const conversationId =
     readString(record, "conversation_id", "conversationId") ?? fallbackConversationId;
-  const requestId =
-    readString(record, "request_id", "requestId") ?? fallbackRequestId;
+  const requestId = readString(record, "request_id", "requestId") ?? fallbackRequestId;
   const path = readString(record, "path", "web_path", "webPath");
   const previewUrl = readString(record, "preview_url", "previewUrl");
   const url = readString(record, "url");
@@ -1046,6 +1102,119 @@ export function normalizeChatMediaPayload(
   };
 }
 
+export function inferAttachmentKindFromMime(mimeType: string): ChatMediaKind {
+  const mime = mimeType.trim().toLowerCase();
+  if (mime.startsWith("image/")) {
+    return "image";
+  }
+  if (mime.startsWith("audio/")) {
+    return "audio";
+  }
+  if (mime.startsWith("video/")) {
+    return "video";
+  }
+  return "document";
+}
+
+export function normalizeChatAttachmentLimits(raw: unknown): ChatAttachmentLimits | null {
+  if (!raw || typeof raw !== "object") {
+    return null;
+  }
+  const record = raw as Record<string, unknown>;
+  const maxFileBytes = readOptionalFiniteNumber(record.max_file_bytes ?? record.maxFileBytes);
+  const maxFiles = readOptionalFiniteNumber(
+    record.max_files_per_message ?? record.maxFilesPerMessage,
+  );
+  const maxTotalBytes = readOptionalFiniteNumber(
+    record.max_total_bytes_per_message ?? record.maxTotalBytesPerMessage,
+  );
+  const prefixesRaw = record.allowed_mime_prefixes ?? record.allowedMimePrefixes;
+  const allowedMimePrefixes = Array.isArray(prefixesRaw)
+    ? prefixesRaw.filter((entry): entry is string => typeof entry === "string" && entry.length > 0)
+    : [];
+  if (
+    maxFileBytes === undefined ||
+    maxFiles === undefined ||
+    maxTotalBytes === undefined ||
+    allowedMimePrefixes.length === 0
+  ) {
+    return null;
+  }
+  return {
+    max_file_bytes: maxFileBytes,
+    max_files_per_message: maxFiles,
+    max_total_bytes_per_message: maxTotalBytes,
+    allowed_mime_prefixes: allowedMimePrefixes,
+  };
+}
+
+export function normalizeChatAttachmentItem(raw: unknown): ChatAttachmentItem | null {
+  if (!raw || typeof raw !== "object") {
+    return null;
+  }
+  const record = raw as Record<string, unknown>;
+  const attachmentId = readString(record, "attachment_id", "attachmentId", "id");
+  const filename = readString(record, "filename");
+  const mimeType = readString(record, "mime_type", "mimeType");
+  if (!attachmentId || !filename || !mimeType) {
+    return null;
+  }
+  const sizeBytes = readOptionalFiniteNumber(record.size_bytes ?? record.sizeBytes);
+  const path = readString(record, "path");
+  const kindRaw = readString(record, "kind");
+  const kind = kindRaw ? normalizeChatMediaKind(kindRaw) : inferAttachmentKindFromMime(mimeType);
+  return {
+    attachment_id: attachmentId,
+    filename,
+    mime_type: mimeType,
+    ...(sizeBytes !== undefined ? { size_bytes: sizeBytes } : {}),
+    ...(path ? { path } : {}),
+    ...(kind ? { kind } : {}),
+  };
+}
+
+export function normalizeChatAttachmentPreparedPayload(
+  payload: unknown,
+): ChatAttachmentPreparedPayload | null {
+  if (!payload || typeof payload !== "object") {
+    return null;
+  }
+  const record = payload as Record<string, unknown>;
+  const sessionId = readString(record, "session_id", "sessionId");
+  const conversationId = readString(record, "conversation_id", "conversationId");
+  const prepareId = readString(record, "prepare_id", "prepareId");
+  const attachmentId = readString(record, "attachment_id", "attachmentId");
+  const uploadUrl = readString(record, "upload_url", "uploadUrl");
+  const uploadMethod = readString(record, "upload_method", "uploadMethod") ?? "POST";
+  const uploadField = readString(record, "upload_field", "uploadField") ?? "file";
+  const expiresAt = readString(record, "expires_at", "expiresAt");
+  const maxBytes = readOptionalFiniteNumber(record.max_bytes ?? record.maxBytes);
+  if (
+    !sessionId ||
+    !conversationId ||
+    !prepareId ||
+    !attachmentId ||
+    !uploadUrl ||
+    uploadMethod !== "POST" ||
+    !uploadField ||
+    !expiresAt ||
+    maxBytes === undefined
+  ) {
+    return null;
+  }
+  return {
+    session_id: sessionId,
+    conversation_id: conversationId,
+    prepare_id: prepareId,
+    attachment_id: attachmentId,
+    upload_url: uploadUrl,
+    upload_method: "POST",
+    upload_field: uploadField,
+    expires_at: expiresAt,
+    max_bytes: maxBytes,
+  };
+}
+
 function normalizeWebhostIntegration(raw: unknown): WebhostIntegration | null {
   if (!raw || typeof raw !== "object") {
     return null;
@@ -1115,9 +1284,7 @@ function normalizeSystemWarning(raw: unknown): SystemWarning | null {
   };
 }
 
-export function normalizeSystemWarningsPayload(
-  payload: unknown,
-): SystemWarningsPayload | null {
+export function normalizeSystemWarningsPayload(payload: unknown): SystemWarningsPayload | null {
   if (!payload || typeof payload !== "object") {
     return null;
   }
@@ -1131,7 +1298,8 @@ export function normalizeSystemWarningsPayload(
     .map((entry) => normalizeSystemWarning(entry))
     .filter((entry): entry is SystemWarning => entry !== null);
   const totalRaw = record.total;
-  const unackRaw = record.unacknowledged ?? record.unacknowledged_count ?? record.unacknowledgedCount;
+  const unackRaw =
+    record.unacknowledged ?? record.unacknowledged_count ?? record.unacknowledgedCount;
   const total = typeof totalRaw === "number" ? totalRaw : warnings.length;
   const unacknowledged =
     typeof unackRaw === "number"
@@ -1158,11 +1326,7 @@ export function normalizeChatVoiceOutputStatusPayload(
   }
   const modeRaw = readString(record, "mode");
   const mode: ChatVoiceOutputProtocolMode =
-    modeRaw === "on" || modeRaw === "off"
-      ? modeRaw
-      : speakerModeRaw
-        ? "on"
-        : "off";
+    modeRaw === "on" || modeRaw === "off" ? modeRaw : speakerModeRaw ? "on" : "off";
   const reason = readString(record, "reason");
   const status = readString(record, "status");
   return {
@@ -1433,12 +1597,7 @@ export type DesktopOperation =
   | "file_write"
   | "file_search";
 
-export const FILE_OPERATIONS = [
-  "file_list",
-  "file_read",
-  "file_write",
-  "file_search",
-] as const;
+export const FILE_OPERATIONS = ["file_list", "file_read", "file_write", "file_search"] as const;
 
 export type FileOperation = (typeof FILE_OPERATIONS)[number];
 
@@ -1468,10 +1627,7 @@ export const DESKTOP_DISCOVERY_OPERATIONS = [
   "desktop_host_info",
 ] as const;
 
-export const DESKTOP_UI_OPERATIONS = [
-  "desktop_ui_tree",
-  "desktop_ui_action",
-] as const;
+export const DESKTOP_UI_OPERATIONS = ["desktop_ui_tree", "desktop_ui_action"] as const;
 
 export const DESKTOP_BROWSER_OPERATIONS = [
   "desktop_browser_connect",
@@ -1580,9 +1736,7 @@ function readString(record: Record<string, unknown>, ...keys: string[]): string 
   return undefined;
 }
 
-function normalizeDesktopScreenshotParams(
-  raw: Record<string, unknown>,
-): DesktopScreenshotParams {
+function normalizeDesktopScreenshotParams(raw: Record<string, unknown>): DesktopScreenshotParams {
   return {
     display_id: readString(raw, "display_id", "displayId"),
     window_id: readString(raw, "window_id", "windowId"),
@@ -1591,21 +1745,16 @@ function normalizeDesktopScreenshotParams(
   };
 }
 
-function normalizeDesktopStreamStartParams(
-  raw: Record<string, unknown>,
-): DesktopStreamStartParams {
+function normalizeDesktopStreamStartParams(raw: Record<string, unknown>): DesktopStreamStartParams {
   const base = normalizeDesktopScreenshotParams(raw);
-  const fps =
-    typeof raw.fps === "number" && Number.isFinite(raw.fps) ? raw.fps : undefined;
+  const fps = typeof raw.fps === "number" && Number.isFinite(raw.fps) ? raw.fps : undefined;
   return {
     ...base,
     fps,
   };
 }
 
-function normalizeDesktopStreamStopParams(
-  raw: Record<string, unknown>,
-): DesktopStreamStopParams {
+function normalizeDesktopStreamStopParams(raw: Record<string, unknown>): DesktopStreamStopParams {
   return {
     stream_id: readString(raw, "stream_id", "streamId"),
   };
@@ -1632,9 +1781,7 @@ function normalizeDesktopInputParams(raw: Record<string, unknown>): DesktopInput
   };
 }
 
-export function normalizeDesktopCommandPayload(
-  raw: unknown,
-): DesktopCommandPayload | null {
+export function normalizeDesktopCommandPayload(raw: unknown): DesktopCommandPayload | null {
   if (!raw || typeof raw !== "object") {
     return null;
   }
@@ -1648,9 +1795,7 @@ export function normalizeDesktopCommandPayload(
 
   const paramsRaw = record.params;
   const paramsRecord =
-    paramsRaw && typeof paramsRaw === "object"
-      ? (paramsRaw as Record<string, unknown>)
-      : {};
+    paramsRaw && typeof paramsRaw === "object" ? (paramsRaw as Record<string, unknown>) : {};
 
   let params: DesktopCommandPayload["params"];
   if (operation === "desktop_screenshot") {
@@ -1668,8 +1813,7 @@ export function normalizeDesktopCommandPayload(
   } else if (operation === "desktop_ui_action") {
     params = {
       action: readString(paramsRecord, "action") ?? "click",
-      element_id:
-        readString(paramsRecord, "element_id", "elementId") ?? "",
+      element_id: readString(paramsRecord, "element_id", "elementId") ?? "",
       value: readString(paramsRecord, "value"),
       window_id: readString(paramsRecord, "window_id", "windowId"),
     };
@@ -1678,8 +1822,7 @@ export function normalizeDesktopCommandPayload(
       typeof paramsRecord.port === "number" && Number.isFinite(paramsRecord.port)
         ? paramsRecord.port
         : undefined;
-    const autoLaunchRaw =
-      paramsRecord.auto_launch ?? paramsRecord.autoLaunch;
+    const autoLaunchRaw = paramsRecord.auto_launch ?? paramsRecord.autoLaunch;
     params = {
       endpoint: readString(paramsRecord, "endpoint"),
       port,
@@ -1688,28 +1831,17 @@ export function normalizeDesktopCommandPayload(
     };
   } else if (operation === "desktop_browser_snapshot") {
     const qualityRaw = paramsRecord.quality;
-    const formatRaw = readString(
-      paramsRecord,
-      "screenshot_format",
-      "screenshotFormat",
-    );
+    const formatRaw = readString(paramsRecord, "screenshot_format", "screenshotFormat");
     params = {
       selector: readString(paramsRecord, "selector"),
-      include_html:
-        paramsRecord.include_html === true || paramsRecord.includeHtml === true,
+      include_html: paramsRecord.include_html === true || paramsRecord.includeHtml === true,
       include_screenshot:
-        paramsRecord.include_screenshot === true ||
-        paramsRecord.includeScreenshot === true,
+        paramsRecord.include_screenshot === true || paramsRecord.includeScreenshot === true,
       screenshot_format:
-        formatRaw === "png" || formatRaw === "webp" || formatRaw === "jpeg"
-          ? formatRaw
-          : undefined,
+        formatRaw === "png" || formatRaw === "webp" || formatRaw === "jpeg" ? formatRaw : undefined,
       quality:
-        typeof qualityRaw === "number" && Number.isFinite(qualityRaw)
-          ? qualityRaw
-          : undefined,
-      full_page:
-        paramsRecord.full_page === true || paramsRecord.fullPage === true,
+        typeof qualityRaw === "number" && Number.isFinite(qualityRaw) ? qualityRaw : undefined,
+      full_page: paramsRecord.full_page === true || paramsRecord.fullPage === true,
       tab_id: readString(paramsRecord, "tab_id", "tabId"),
     };
   } else if (operation === "desktop_browser_action") {
@@ -1754,9 +1886,7 @@ export function isFileOperation(operation: string): operation is FileOperation {
   return FILE_OPERATIONS.includes(operation as FileOperation);
 }
 
-export function normalizeFileCommandParams(
-  raw: Record<string, unknown>,
-): FileCommandParams {
+export function normalizeFileCommandParams(raw: Record<string, unknown>): FileCommandParams {
   return {
     root_id: readString(raw, "root_id", "rootId"),
     path:
@@ -1773,9 +1903,7 @@ export function normalizeFileCommandParams(
       ) ?? "",
     recursive: raw.recursive === true,
     encoding:
-      raw.encoding === "utf-8" ||
-      raw.encoding === "base64" ||
-      raw.encoding === "auto"
+      raw.encoding === "utf-8" || raw.encoding === "base64" || raw.encoding === "auto"
         ? raw.encoding
         : undefined,
     content: readString(raw, "content"),
@@ -1805,20 +1933,14 @@ export function resolveFileCommandPath(
   return options.defaultPath ?? ".";
 }
 
-export function requiresLocalDesktopApproval(
-  operation: string,
-  params?: unknown,
-): boolean {
+export function requiresLocalDesktopApproval(operation: string, params?: unknown): boolean {
   if (operation === "desktop_browser_action" && isBrowserTabAction(params)) {
     return false;
   }
   return (DESKTOP_INPUT_OPERATIONS as readonly string[]).includes(operation);
 }
 
-export function requiresRemoteControlBanner(
-  operation: string,
-  params?: unknown,
-): boolean {
+export function requiresRemoteControlBanner(operation: string, params?: unknown): boolean {
   if (operation === "desktop_browser_action" && isBrowserTabAction(params)) {
     return false;
   }
@@ -1860,6 +1982,7 @@ export interface ChatMessage {
   messageKey?: string;
   messageParams?: Record<string, string | number>;
   tone?: "info" | "success" | "error";
+  attachments?: ChatAttachmentItem[];
 }
 
 export type ThemeMode = "system" | "light" | "dark";
@@ -2054,6 +2177,8 @@ export const AGODESK_CHAT_AUDIO_EVENTS_CAPABILITY = "chat.audio_events";
 export const AGODESK_CHAT_VOICE_OUTPUT_CAPABILITY = "chat.voice_output";
 export const AGODESK_CHAT_VOICE_OUTPUT_STATUS_CAPABILITY = "chat.voice_output_status";
 export const AGODESK_CHAT_MEDIA_EVENTS_CAPABILITY = "chat.media_events";
+export const AGODESK_CHAT_MEDIA_UPLOAD_CAPABILITY = "chat.media_upload";
+export const AGODESK_CHAT_ATTACHMENTS_CAPABILITY = "chat.attachments";
 export const AGODESK_INTEGRATIONS_WEBHOSTS_CAPABILITY = "integrations.webhosts";
 export const AGODESK_SYSTEM_WARNINGS_CAPABILITY = "system.warnings";
 
@@ -2067,6 +2192,8 @@ export const AGODESK_BASE_CAPABILITIES = [
   AGODESK_CHAT_VOICE_OUTPUT_CAPABILITY,
   AGODESK_CHAT_VOICE_OUTPUT_STATUS_CAPABILITY,
   AGODESK_CHAT_MEDIA_EVENTS_CAPABILITY,
+  AGODESK_CHAT_MEDIA_UPLOAD_CAPABILITY,
+  AGODESK_CHAT_ATTACHMENTS_CAPABILITY,
   AGODESK_INTEGRATIONS_WEBHOSTS_CAPABILITY,
   AGODESK_SYSTEM_WARNINGS_CAPABILITY,
   "persona.assets",
@@ -2094,6 +2221,8 @@ export const AGODESK_CLIENT_CAPABILITIES = [
   AGODESK_CHAT_VOICE_OUTPUT_CAPABILITY,
   AGODESK_CHAT_VOICE_OUTPUT_STATUS_CAPABILITY,
   AGODESK_CHAT_MEDIA_EVENTS_CAPABILITY,
+  AGODESK_CHAT_MEDIA_UPLOAD_CAPABILITY,
+  AGODESK_CHAT_ATTACHMENTS_CAPABILITY,
   AGODESK_INTEGRATIONS_WEBHOSTS_CAPABILITY,
   AGODESK_SYSTEM_WARNINGS_CAPABILITY,
   ...AGODESK_DESKTOP_CAPABILITIES,
@@ -2110,10 +2239,7 @@ export function isLoopbackHost(host: string): boolean {
 export function isInsecureLoopbackUrl(url: string): boolean {
   try {
     const parsed = new URL(url);
-    return (
-      isLoopbackHost(parsed.hostname) &&
-      parsed.searchParams.get("insecure_loopback") === "1"
-    );
+    return isLoopbackHost(parsed.hostname) && parsed.searchParams.get("insecure_loopback") === "1";
   } catch {
     return false;
   }
@@ -2144,11 +2270,7 @@ export function getWsOrigin(url: string): string {
 export function getHttpOrigin(url: string): string {
   const parsed = new URL(url);
   const protocol =
-    parsed.protocol === "wss:"
-      ? "https:"
-      : parsed.protocol === "ws:"
-        ? "http:"
-        : parsed.protocol;
+    parsed.protocol === "wss:" ? "https:" : parsed.protocol === "ws:" ? "http:" : parsed.protocol;
   return `${protocol}//${parsed.host}`;
 }
 
@@ -2195,9 +2317,7 @@ export interface PersonaAssetsPayload {
   persona_prompt?: string;
 }
 
-export function normalizePersonaAssetsPayload(
-  payload: unknown,
-): PersonaAssetsPayload | null {
+export function normalizePersonaAssetsPayload(payload: unknown): PersonaAssetsPayload | null {
   if (!payload || typeof payload !== "object") {
     return null;
   }
@@ -2260,9 +2380,7 @@ export function resolvePersonaAssetUrl(serverUrl: string, assetUrl: string): str
   }
 }
 
-export function hasAdvertisedRemoteDesktopCapture(
-  capabilities: readonly string[],
-): boolean {
+export function hasAdvertisedRemoteDesktopCapture(capabilities: readonly string[]): boolean {
   return capabilities.includes("remote.desktop.capture");
 }
 
@@ -2306,14 +2424,34 @@ export function hasAdvertisedChatVoiceOutput(capabilities: readonly string[]): b
 }
 
 export function hasAdvertisedChatVoiceOutputStatus(capabilities: readonly string[]): boolean {
-  return hasAdvertisedCapability(
-    capabilities,
-    AGODESK_CHAT_VOICE_OUTPUT_STATUS_CAPABILITY,
-  );
+  return hasAdvertisedCapability(capabilities, AGODESK_CHAT_VOICE_OUTPUT_STATUS_CAPABILITY);
 }
 
 export function hasAdvertisedChatMediaEvents(capabilities: readonly string[]): boolean {
   return hasAdvertisedCapability(capabilities, AGODESK_CHAT_MEDIA_EVENTS_CAPABILITY);
+}
+
+export function hasAdvertisedChatMediaUpload(capabilities: readonly string[]): boolean {
+  return hasAdvertisedCapability(capabilities, AGODESK_CHAT_MEDIA_UPLOAD_CAPABILITY);
+}
+
+export function hasAdvertisedChatAttachments(capabilities: readonly string[]): boolean {
+  return hasAdvertisedCapability(capabilities, AGODESK_CHAT_ATTACHMENTS_CAPABILITY);
+}
+
+/** Server must advertise upload + attachments before chat.message with files works. */
+export function canUseChatAttachments(capabilities: readonly string[]): boolean {
+  return hasAdvertisedChatMediaUpload(capabilities) && hasAdvertisedChatAttachments(capabilities);
+}
+
+export function isChatAttachmentNegotiationError(payload: ChatErrorPayload): boolean {
+  const code = payload.code.trim().toUpperCase();
+  const message = payload.message.trim().toLowerCase();
+  return (
+    code.startsWith("ATTACHMENT_") ||
+    message.includes("chat.attachments") ||
+    message.includes("attachments requires")
+  );
 }
 
 export function hasAdvertisedIntegrationsWebhosts(capabilities: readonly string[]): boolean {
@@ -2325,10 +2463,7 @@ export function hasAdvertisedSystemWarnings(capabilities: readonly string[]): bo
 }
 
 export function auragoServerTtsAvailable(capabilities: readonly string[]): boolean {
-  return (
-    hasAdvertisedChatVoiceOutput(capabilities) &&
-    hasAdvertisedChatAudioEvents(capabilities)
-  );
+  return hasAdvertisedChatVoiceOutput(capabilities) && hasAdvertisedChatAudioEvents(capabilities);
 }
 
 export function buildFileAccessSessionPayload(
@@ -2377,6 +2512,8 @@ export function agodeskClientCapabilities(
     AGODESK_CHAT_VOICE_OUTPUT_CAPABILITY,
     AGODESK_CHAT_VOICE_OUTPUT_STATUS_CAPABILITY,
     AGODESK_CHAT_MEDIA_EVENTS_CAPABILITY,
+    AGODESK_CHAT_MEDIA_UPLOAD_CAPABILITY,
+    AGODESK_CHAT_ATTACHMENTS_CAPABILITY,
     AGODESK_INTEGRATIONS_WEBHOSTS_CAPABILITY,
     AGODESK_SYSTEM_WARNINGS_CAPABILITY,
   ];

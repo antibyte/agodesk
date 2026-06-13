@@ -73,18 +73,12 @@ test("parseChatContent erkennt Codebloecke", () => {
 });
 
 test("plainTextForSpeech entfernt Markdown fuer TTS", () => {
-  assert.equal(
-    plainTextForSpeech("Hallo **Welt** und `code`"),
-    "Hallo Welt und code",
-  );
+  assert.equal(plainTextForSpeech("Hallo **Welt** und `code`"), "Hallo Welt und code");
   assert.equal(
     plainTextForSpeech("## Titel\n\nText mit [Link](https://example.com)."),
     "Titel Text mit Link.",
   );
-  assert.equal(
-    plainTextForSpeech("Text\n\n```js\nconsole.log(1)\n```"),
-    "Text",
-  );
+  assert.equal(plainTextForSpeech("Text\n\n```js\nconsole.log(1)\n```"), "Text");
 });
 
 test("messageGroupMeta gruppiert gleiche Rolle", () => {

@@ -25,8 +25,7 @@ function normalizeOrigin(serverUrlOrOrigin: string): string {
 
 async function readPairedDevices(): Promise<Record<string, string>> {
   const store = await getDeviceStore();
-  const devices =
-    (await store.get<Record<string, string>>(PAIRED_DEVICES_KEY)) ?? {};
+  const devices = (await store.get<Record<string, string>>(PAIRED_DEVICES_KEY)) ?? {};
 
   const legacy = await store.get<string>(LEGACY_DEVICE_ID_KEY);
   if (legacy && Object.keys(devices).length === 0) {
@@ -53,14 +52,10 @@ export async function loadDeviceId(serverUrlOrOrigin: string): Promise<string | 
   }
 }
 
-export async function saveDeviceId(
-  serverUrlOrOrigin: string,
-  deviceId: string,
-): Promise<void> {
+export async function saveDeviceId(serverUrlOrOrigin: string, deviceId: string): Promise<void> {
   const origin = normalizeOrigin(serverUrlOrOrigin);
   const store = await getDeviceStore();
-  const devices =
-    (await store.get<Record<string, string>>(PAIRED_DEVICES_KEY)) ?? {};
+  const devices = (await store.get<Record<string, string>>(PAIRED_DEVICES_KEY)) ?? {};
   devices[origin] = deviceId;
   await store.set(PAIRED_DEVICES_KEY, devices);
   if (await store.get<string>(LEGACY_DEVICE_ID_KEY)) {
@@ -73,8 +68,7 @@ export async function clearDeviceId(serverUrlOrOrigin: string): Promise<void> {
   try {
     const origin = normalizeOrigin(serverUrlOrOrigin);
     const store = await getDeviceStore();
-    const devices =
-      (await store.get<Record<string, string>>(PAIRED_DEVICES_KEY)) ?? {};
+    const devices = (await store.get<Record<string, string>>(PAIRED_DEVICES_KEY)) ?? {};
     if (!devices[origin]) {
       return;
     }
@@ -94,10 +88,7 @@ export async function loadSharedKey(deviceId: string): Promise<string | null> {
   }
 }
 
-export async function saveSharedKey(
-  deviceId: string,
-  sharedKey: string,
-): Promise<void> {
+export async function saveSharedKey(deviceId: string, sharedKey: string): Promise<void> {
   await invoke("store_shared_key", { deviceId, sharedKey });
 }
 
@@ -109,9 +100,7 @@ export async function clearSharedKey(deviceId: string): Promise<void> {
   }
 }
 
-export async function clearCredentialsForOrigin(
-  serverUrlOrOrigin: string,
-): Promise<void> {
+export async function clearCredentialsForOrigin(serverUrlOrOrigin: string): Promise<void> {
   const origin = normalizeOrigin(serverUrlOrOrigin);
   const deviceId = await loadDeviceId(origin);
   if (deviceId) {
@@ -134,8 +123,7 @@ export async function savePairingToken(
 
   try {
     const store = await getDeviceStore();
-    const tokens =
-      (await store.get<Record<string, string>>(PAIRING_TOKENS_KEY)) ?? {};
+    const tokens = (await store.get<Record<string, string>>(PAIRING_TOKENS_KEY)) ?? {};
     tokens[origin] = trimmed;
     await store.set(PAIRING_TOKENS_KEY, tokens);
     await store.save();
@@ -144,9 +132,7 @@ export async function savePairingToken(
   }
 }
 
-export async function loadPairingToken(
-  serverUrlOrOrigin: string,
-): Promise<string | null> {
+export async function loadPairingToken(serverUrlOrOrigin: string): Promise<string | null> {
   try {
     const origin = normalizeOrigin(serverUrlOrOrigin);
     const store = await getDeviceStore();
@@ -157,9 +143,7 @@ export async function loadPairingToken(
   }
 }
 
-export async function clearPairingToken(
-  serverUrlOrOrigin: string,
-): Promise<void> {
+export async function clearPairingToken(serverUrlOrOrigin: string): Promise<void> {
   try {
     const origin = normalizeOrigin(serverUrlOrOrigin);
     const store = await getDeviceStore();

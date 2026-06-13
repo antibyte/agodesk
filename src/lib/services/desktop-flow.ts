@@ -39,14 +39,10 @@ async function rejectCommand(
   message: string,
   context?: DesktopCommandContext,
 ): Promise<void> {
-  await executeDesktopCommand(
-    wsSend,
-    command,
-    {
-      context,
-      forcedError: { code: errorCode, message },
-    },
-  );
+  await executeDesktopCommand(wsSend, command, {
+    context,
+    forcedError: { code: errorCode, message },
+  });
 }
 
 export async function handleIncomingDesktopCommand(
@@ -61,8 +57,7 @@ export async function handleIncomingDesktopCommand(
   },
 ): Promise<void> {
   const command =
-    normalizeDesktopCommandPayload(message.payload) ??
-    (message.payload as DesktopCommandPayload);
+    normalizeDesktopCommandPayload(message.payload) ?? (message.payload as DesktopCommandPayload);
 
   const desktopContext: DesktopCommandContext = {
     sessionId: context.sessionId,
@@ -102,10 +97,7 @@ export async function handleIncomingDesktopCommand(
     return;
   }
 
-  if (
-    isDesktopBrowserOperation(command.operation) &&
-    !get(settings).browserControlEnabled
-  ) {
+  if (isDesktopBrowserOperation(command.operation) && !get(settings).browserControlEnabled) {
     await rejectCommand(
       context.wsSend,
       command,

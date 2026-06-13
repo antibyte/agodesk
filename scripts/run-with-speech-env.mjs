@@ -21,9 +21,7 @@ function applySherpaEnv() {
   }
   process.env.SHERPA_ONNX_LIB_DIR = libDir;
   const crtFlag = "-C target-feature=+crt-static";
-  process.env.RUSTFLAGS = process.env.RUSTFLAGS
-    ? `${process.env.RUSTFLAGS} ${crtFlag}`
-    : crtFlag;
+  process.env.RUSTFLAGS = process.env.RUSTFLAGS ? `${process.env.RUSTFLAGS} ${crtFlag}` : crtFlag;
 }
 
 function copySherpaDllsToTauriTarget() {

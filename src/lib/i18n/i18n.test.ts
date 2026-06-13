@@ -1,11 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {
-  APP_LOCALES,
-  LOCALE_LABELS,
-  normalizeLocaleSetting,
-  resolveLocale,
-} from "./locales.ts";
+import { APP_LOCALES, LOCALE_LABELS, normalizeLocaleSetting, resolveLocale } from "./locales.ts";
 import { getDeMessages, getEnMessages, loadMessages } from "./loader.ts";
 import { translate } from "./translate.ts";
 import type { MessageKey } from "./types.ts";
@@ -88,10 +83,7 @@ test("alle Locale-Dateien enthalten alle de.json Keys", async () => {
     const raw = fs.readFileSync(path.join(dir, `${locale}.json`), "utf8");
     const data = JSON.parse(raw) as Record<string, string>;
     for (const key of Object.keys(de)) {
-      assert.ok(
-        typeof data[key] === "string" && data[key].length > 0,
-        `missing ${locale}: ${key}`,
-      );
+      assert.ok(typeof data[key] === "string" && data[key].length > 0, `missing ${locale}: ${key}`);
     }
   }
 });
@@ -99,15 +91,9 @@ test("alle Locale-Dateien enthalten alle de.json Keys", async () => {
 test("formatDayLabel lokalisiert Heute/Today", async () => {
   const now = new Date("2026-05-30T12:00:00Z");
   await initLocale("de");
-  assert.equal(
-    formatDayLabel("2026-05-30T10:00:00Z", "de", now),
-    "Heute",
-  );
+  assert.equal(formatDayLabel("2026-05-30T10:00:00Z", "de", now), "Heute");
   await initLocale("en");
-  assert.equal(
-    formatDayLabel("2026-05-30T10:00:00Z", "en", now),
-    "Today",
-  );
+  assert.equal(formatDayLabel("2026-05-30T10:00:00Z", "en", now), "Today");
 });
 
 test("LOCALE_LABELS deckt alle APP_LOCALES ab", () => {

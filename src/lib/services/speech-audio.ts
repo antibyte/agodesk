@@ -208,11 +208,7 @@ export class SpeechAudioCapture {
       return;
     }
 
-    const downsampled = downsampleBuffer(
-      channel,
-      this.inputRate,
-      TARGET_SAMPLE_RATE,
-    );
+    const downsampled = downsampleBuffer(channel, this.inputRate, TARGET_SAMPLE_RATE);
     if (downsampled.length === 0) {
       return;
     }
@@ -263,8 +259,5 @@ export class SpeechAudioCapture {
 }
 
 export function isMicrophoneSupported(): boolean {
-  return (
-    typeof navigator !== "undefined" &&
-    !!navigator.mediaDevices?.getUserMedia
-  );
+  return typeof navigator !== "undefined" && !!navigator.mediaDevices?.getUserMedia;
 }

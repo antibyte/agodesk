@@ -33,14 +33,10 @@ describe("speech types", () => {
     );
     assert.equal(normalizeModelId(""), DEFAULT_GEMINI_LIVE_MODEL);
     assert.equal(toGeminiModelPath("gemini-live"), "models/gemini-live");
-    assert.equal(
-      isNativeAudioLiveModel("gemini-2.5-flash-native-audio-preview-12-2025"),
-      true,
-    );
-    assert.deepEqual(
-      resolveResponseModalities("gemini-2.5-flash-native-audio-preview-12-2025"),
-      ["AUDIO"],
-    );
+    assert.equal(isNativeAudioLiveModel("gemini-2.5-flash-native-audio-preview-12-2025"), true);
+    assert.deepEqual(resolveResponseModalities("gemini-2.5-flash-native-audio-preview-12-2025"), [
+      "AUDIO",
+    ]);
     assert.deepEqual(resolveLiveApiVersions("gemini-2.5-flash-native-audio-preview-12-2025"), [
       "v1alpha",
       "v1beta",
@@ -130,11 +126,11 @@ describe("gemini-live parsing", () => {
     assert.equal(accumulator.push("einen"), "Erstelle einen");
     assert.equal(accumulator.push("Screenshot"), "Erstelle einen Screenshot");
     assert.equal(accumulator.push("und"), "Erstelle einen Screenshot und");
-    assert.equal(accumulator.push(" werte ihn aus."), "Erstelle einen Screenshot und werte ihn aus.");
     assert.equal(
-      accumulator.finalize(),
+      accumulator.push(" werte ihn aus."),
       "Erstelle einen Screenshot und werte ihn aus.",
     );
+    assert.equal(accumulator.finalize(), "Erstelle einen Screenshot und werte ihn aus.");
   });
 
   it("mergeTranscriptChunks erkennt Suffix-Prefix-Ueberlappung", () => {
@@ -209,19 +205,12 @@ describe("gemini-live parsing", () => {
       };
     };
 
-    assert.equal(
-      setup.setup.model,
-      "models/gemini-2.5-flash-native-audio-preview-12-2025",
-    );
-    assert.deepEqual(setup.setup.generationConfig.responseModalities, [
-      "AUDIO",
-    ]);
+    assert.equal(setup.setup.model, "models/gemini-2.5-flash-native-audio-preview-12-2025");
+    assert.deepEqual(setup.setup.generationConfig.responseModalities, ["AUDIO"]);
     assert.ok(setup.setup.inputAudioTranscription);
     assert.deepEqual(setup.setup.inputAudioTranscription, {});
     assert.ok(setup.setup.outputAudioTranscription);
-    assert.ok(
-      (setup.setup.generationConfig as { speechConfig?: unknown }).speechConfig,
-    );
+    assert.ok((setup.setup.generationConfig as { speechConfig?: unknown }).speechConfig);
   });
 
   it("builds agent setup with tools", () => {

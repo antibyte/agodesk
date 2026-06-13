@@ -21,9 +21,7 @@ test("buildMediaUrlCandidates nutzt /api/agodesk/tts fuer reine Dateinamen", () 
     ),
   );
   assert.ok(
-    !candidates.includes(
-      "https://aurago.example.com/tts/adb36fd734e6c6aec96c54f446c78215.mp3",
-    ),
+    !candidates.includes("https://aurago.example.com/tts/adb36fd734e6c6aec96c54f446c78215.mp3"),
   );
 });
 
@@ -37,10 +35,7 @@ test("buildMediaUrlCandidates laesst AuraGo-TTS-Pfade unveraendert", () => {
 
 test("resolveAuraGoMediaUrl bevorzugt den AuraGo-TTS-Pfad", () => {
   assert.equal(
-    resolveAuraGoMediaUrl(
-      "wss://aurago.example.com/api/agodesk/ws",
-      "/api/agodesk/tts/abc.mp3",
-    ),
+    resolveAuraGoMediaUrl("wss://aurago.example.com/api/agodesk/ws", "/api/agodesk/tts/abc.mp3"),
     "https://aurago.example.com/api/agodesk/tts/abc.mp3",
   );
 });
@@ -59,19 +54,13 @@ test("isSignedAgodeskMediaPath erkennt agodesk_exp und agodesk_sig", () => {
     ),
     true,
   );
-  assert.equal(
-    isSignedAgodeskMediaPath("/api/agodesk/media/generated_images/chart.png"),
-    false,
-  );
+  assert.equal(isSignedAgodeskMediaPath("/api/agodesk/media/generated_images/chart.png"), false);
 });
 
 test("buildChatMediaUrlCandidates nutzt signierte Media-URLs unveraendert", () => {
   const signed =
     "/api/agodesk/media/generated_images/img_1780947889201.jpeg?agodesk_exp=1780833600&agodesk_sig=abc";
-  const candidates = buildChatMediaUrlCandidates(
-    "wss://aurago.example.com/api/agodesk/ws",
-    signed,
-  );
+  const candidates = buildChatMediaUrlCandidates("wss://aurago.example.com/api/agodesk/ws", signed);
   assert.deepEqual(candidates, [`https://aurago.example.com${signed}`]);
 });
 

@@ -2,9 +2,7 @@ import type { SessionStartPayload, WsMessage } from "../types/protocol";
 import { buildSessionStartCommon } from "./session-start";
 
 function toHex(buffer: ArrayBuffer): string {
-  return [...new Uint8Array(buffer)]
-    .map((byte) => byte.toString(16).padStart(2, "0"))
-    .join("");
+  return [...new Uint8Array(buffer)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
 function sharedKeyBytes(sharedKey: string): Uint8Array {
@@ -29,8 +27,7 @@ export async function computeSharedKeyProof(
   timestamp: string,
 ): Promise<string> {
   const material =
-    "agodesk.v1\nsession.start\n" +
-    `${envelopeId}\n${deviceId}\n${nonce}\n${timestamp}`;
+    "agodesk.v1\nsession.start\n" + `${envelopeId}\n${deviceId}\n${nonce}\n${timestamp}`;
   const key = await crypto.subtle.importKey(
     "raw",
     sharedKeyBytes(sharedKey),
@@ -38,11 +35,7 @@ export async function computeSharedKeyProof(
     false,
     ["sign"],
   );
-  const signature = await crypto.subtle.sign(
-    "HMAC",
-    key,
-    new TextEncoder().encode(material),
-  );
+  const signature = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(material));
   return toHex(signature);
 }
 
@@ -83,10 +76,7 @@ export async function buildReconnectSessionStart(
     },
   };
 
-  const reconnectPayload = message.payload as Extract<
-    SessionStartPayload,
-    { device_id: string }
-  >;
+  const reconnectPayload = message.payload as Extract<SessionStartPayload, { device_id: string }>;
 
   reconnectPayload.shared_key_proof.hmac = await computeSharedKeyProof(
     sharedKey,

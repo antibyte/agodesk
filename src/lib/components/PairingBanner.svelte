@@ -6,8 +6,10 @@
   interface Props {
     visible?: boolean;
     busy?: boolean;
+    compact?: boolean;
     serverUrl?: string;
     errorMessage?: string;
+    focusRequest?: number;
     onPair?: (token: string) => void;
     onUnpair?: () => void;
   }
@@ -15,8 +17,10 @@
   let {
     visible = false,
     busy = false,
+    compact = false,
     serverUrl = "",
     errorMessage = "",
+    focusRequest = 0,
     onPair,
     onUnpair,
   }: Props = $props();
@@ -24,6 +28,7 @@
   let pairingToken = $state("");
   let showToken = $state(false);
   let loadedOrigin = $state("");
+  let tokenInputEl = $state<HTMLInputElement | undefined>();
 
   $effect(() => {
     if (!visible || !serverUrl) {
@@ -41,6 +46,17 @@
     });
   });
 
+  $effect(() => {
+    void focusRequest;
+    if (!visible || focusRequest <= 0) {
+      return;
+    }
+    queueMicrotask(() => {
+      tokenInputEl?.focus();
+      tokenInputEl?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    });
+  });
+
   function submit(): void {
     const token = pairingToken.trim();
     if (!token) {
@@ -54,14 +70,16 @@
 </script>
 
 {#if visible}
-  <section class="pairing-banner banner-glass" data-tone="accent" aria-live="polite">
+  <section class="pairing-banner banner-glass" class:compact data-tone="accent" aria-live="polite">
     <div class="intro">
       <strong>{$i18n("pairing.title")}</strong>
-      <p>{$i18n("pairing.description")}</p>
-      <ol class="steps">
-        <li>{$i18n("pairing.step1")}</li>
-        <li>{$i18n("pairing.step2")}</li>
-      </ol>
+      {#if !compact}
+        <p>{$i18n("pairing.description")}</p>
+        <ol class="steps">
+          <li>{$i18n("pairing.step1")}</li>
+          <li>{$i18n("pairing.step2")}</li>
+        </ol>
+      {/if}
       {#if errorMessage}
         <p class="error banner-glass" data-tone="danger">{errorMessage}</p>
       {/if}
@@ -69,6 +87,7 @@
     <div class="actions">
       <div class="token-row">
         <input
+          bind:this={tokenInputEl}
           class="ui-input"
           type={showToken ? "text" : "password"}
           bind:value={pairingToken}
@@ -87,9 +106,7 @@
           aria-label={showToken
             ? $i18n("pairing.token.hide.ariaLabel")
             : $i18n("pairing.token.show.ariaLabel")}
-          title={showToken
-            ? $i18n("pairing.token.hide.title")
-            : $i18n("pairing.token.show.title")}
+          title={showToken ? $i18n("pairing.token.hide.title") : $i18n("pairing.token.show.title")}
           onclick={() => (showToken = !showToken)}
         >
           {showToken ? "◉" : "◎"}
@@ -128,6 +145,14 @@
     border-left: none;
     border-right: none;
     border-top: none;
+  }
+
+  .pairing-banner.compact {
+    gap: var(--space-2);
+  }
+
+  .pairing-banner.compact .actions {
+    flex-wrap: nowrap;
   }
 
   .intro p {

@@ -30,7 +30,8 @@ export function sherpaArchiveName(platform = process.platform, arch = process.ar
 export function sherpaPlatformDir(platform = process.platform) {
   if (platform === "win32") return join(vendorRoot, "win-x64-shared");
   if (platform === "linux") return join(vendorRoot, "linux-x64");
-  if (platform === "darwin") return join(vendorRoot, process.arch === "arm64" ? "osx-arm64" : "osx-x64");
+  if (platform === "darwin")
+    return join(vendorRoot, process.arch === "arm64" ? "osx-arm64" : "osx-x64");
   throw new Error(`Unsupported platform: ${platform}`);
 }
 
@@ -68,7 +69,10 @@ async function download(url, destination) {
       downloadWithCurl(url, destination);
       return;
     } catch (curlError) {
-      console.warn("curl download failed, trying fetch…", curlError instanceof Error ? curlError.message : curlError);
+      console.warn(
+        "curl download failed, trying fetch…",
+        curlError instanceof Error ? curlError.message : curlError,
+      );
     }
   }
   await downloadWithFetch(url, destination);
@@ -158,7 +162,9 @@ if (isMain) {
     console.error("");
     console.error(`Manual fallback: download ${sherpaArchiveName()} from`);
     console.error(`https://github.com/k2-fsa/sherpa-onnx/releases/tag/v${VERSION}`);
-    console.error(`Place the .tar.bz2 in ${sherpaArchiveDir()}, then re-run this script or cargo build.`);
+    console.error(
+      `Place the .tar.bz2 in ${sherpaArchiveDir()}, then re-run this script or cargo build.`,
+    );
     process.exit(1);
   });
 }

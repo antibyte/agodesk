@@ -75,10 +75,22 @@ function normalizeHotkeyTokens(raw: string): string | null {
 
 function normalizeModifierToken(token: string): string | null {
   const lower = token.toLowerCase();
-  if (lower === "ctrl" || lower === "control" || lower === "commandorcontrol" || lower === "cmdorctrl") {
+  if (
+    lower === "ctrl" ||
+    lower === "control" ||
+    lower === "commandorcontrol" ||
+    lower === "cmdorctrl"
+  ) {
     return "CommandOrControl";
   }
-  if (lower === "command" || lower === "cmd" || lower === "meta" || lower === "super" || lower === "win" || lower === "windows") {
+  if (
+    lower === "command" ||
+    lower === "cmd" ||
+    lower === "meta" ||
+    lower === "super" ||
+    lower === "win" ||
+    lower === "windows"
+  ) {
     return "Super";
   }
   if (lower === "alt" || lower === "option") {
@@ -130,10 +142,7 @@ export function isValidShowWindowHotkey(hotkey: string): boolean {
   return normalizeHotkeyTokens(hotkey.trim()) !== null;
 }
 
-export type ShowWindowHotkeyWarning =
-  | "reserved"
-  | "no_modifier"
-  | "modifier_only";
+export type ShowWindowHotkeyWarning = "reserved" | "no_modifier" | "modifier_only";
 
 export function analyzeShowWindowHotkey(hotkey: string): {
   valid: boolean;
@@ -147,7 +156,10 @@ export function analyzeShowWindowHotkey(hotkey: string): {
 
   const normalized = normalizeHotkeyTokens(trimmed);
   if (!normalized) {
-    const parts = trimmed.split("+").map((part) => part.trim()).filter(Boolean);
+    const parts = trimmed
+      .split("+")
+      .map((part) => part.trim())
+      .filter(Boolean);
     if (parts.length === 1) {
       return { valid: false, normalized: trimmed, warning: "no_modifier" };
     }

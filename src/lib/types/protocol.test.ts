@@ -16,7 +16,6 @@ import {
   normalizeSessionClearPayload,
   normalizeChatPlanUpdatePayload,
   normalizeChatResponsePayload,
-  normalizeChatResponseMetadata,
   normalizeAgentMoodMetadata,
   normalizeAgoDeskPlan,
   hasAdvertisedAgentMetadata,
@@ -31,6 +30,8 @@ import {
   AGODESK_CHAT_SESSIONS_CAPABILITY,
   AGODESK_CHAT_VOICE_OUTPUT_STATUS_CAPABILITY,
   AGODESK_CHAT_MEDIA_EVENTS_CAPABILITY,
+  AGODESK_CHAT_MEDIA_UPLOAD_CAPABILITY,
+  AGODESK_CHAT_ATTACHMENTS_CAPABILITY,
   AGODESK_INTEGRATIONS_WEBHOSTS_CAPABILITY,
   AGODESK_SYSTEM_WARNINGS_CAPABILITY,
   normalizeChatVoiceOutputStatusPayload,
@@ -38,7 +39,13 @@ import {
   normalizeIntegrationsWebhostsPayload,
   normalizeSystemWarningsPayload,
   hasAdvertisedChatMediaEvents,
+  hasAdvertisedChatMediaUpload,
+  canUseChatAttachments,
+  isChatAttachmentNegotiationError,
   hasAdvertisedIntegrationsWebhosts,
+  normalizeChatAttachmentItem,
+  normalizeChatAttachmentPreparedPayload,
+  normalizeLoadedConversationMessage,
   hasAdvertisedSystemWarnings,
   AGODESK_CHAT_CANCEL_CAPABILITY,
   normalizeChatSessionsPayload,
@@ -449,14 +456,8 @@ test("browser tab actions brauchen keine lokale Freigabe", () => {
     requiresLocalDesktopApproval("desktop_browser_action", { action: "select_tab" }),
     false,
   );
-  assert.equal(
-    requiresRemoteControlBanner("desktop_browser_action", { action: "new_tab" }),
-    false,
-  );
-  assert.equal(
-    requiresLocalDesktopApproval("desktop_browser_action", { action: "click" }),
-    true,
-  );
+  assert.equal(requiresRemoteControlBanner("desktop_browser_action", { action: "new_tab" }), false);
+  assert.equal(requiresLocalDesktopApproval("desktop_browser_action", { action: "click" }), true);
 });
 
 test("normalizeSessionClearPayload akzeptiert snake_case und camelCase", () => {
@@ -488,27 +489,18 @@ test("normalizeSessionClearPayload akzeptiert snake_case und camelCase", () => {
 
 test("resolvePersonaAssetUrl loest relative Pfade auf", () => {
   assert.equal(
-    resolvePersonaAssetUrl(
-      "wss://192.168.1.10:8443/api/agodesk/ws",
-      "/static/persona.png",
-    ),
+    resolvePersonaAssetUrl("wss://192.168.1.10:8443/api/agodesk/ws", "/static/persona.png"),
     "https://192.168.1.10:8443/static/persona.png",
   );
   assert.equal(
-    resolvePersonaAssetUrl(
-      "ws://127.0.0.1:8080/api/agodesk/ws",
-      "/static/persona.png",
-    ),
+    resolvePersonaAssetUrl("ws://127.0.0.1:8080/api/agodesk/ws", "/static/persona.png"),
     "http://127.0.0.1:8080/static/persona.png",
   );
 });
 
 test("resolvePersonaAssetUrl laesst data-URLs unveraendert", () => {
   const dataUrl = "data:image/svg+xml;base64,PHN2Zy8+";
-  assert.equal(
-    resolvePersonaAssetUrl("ws://127.0.0.1:8080/api/agodesk/ws", dataUrl),
-    dataUrl,
-  );
+  assert.equal(resolvePersonaAssetUrl("ws://127.0.0.1:8080/api/agodesk/ws", dataUrl), dataUrl);
 });
 
 test("agodeskClientCapabilities enthaelt Mood- und Plan-Capabilities", () => {
@@ -658,14 +650,8 @@ test("normalizeChatSessionPayload akzeptiert sess-* als session_id", () => {
 });
 
 test("extractConversationIdFromPayload findet verschiedene Feldnamen", () => {
-  assert.equal(
-    extractConversationIdFromPayload({ session_id: "sess-xyz" }),
-    "sess-xyz",
-  );
-  assert.equal(
-    extractConversationIdFromPayload({ session: { id: "sess-nested" } }),
-    "sess-nested",
-  );
+  assert.equal(extractConversationIdFromPayload({ session_id: "sess-xyz" }), "sess-xyz");
+  assert.equal(extractConversationIdFromPayload({ session: { id: "sess-nested" } }), "sess-nested");
 });
 
 test("normalizeChatSessionsPayload toleriert fehlende transport session_id", () => {
@@ -758,6 +744,8 @@ test("auragoServerTtsAvailable prueft verhandelte Voice-Caps", () => {
 test("agodeskClientCapabilities enthaelt Media-, Integrations- und Warning-Caps", () => {
   const caps = agodeskClientCapabilities(false);
   assert.ok(caps.includes(AGODESK_CHAT_MEDIA_EVENTS_CAPABILITY));
+  assert.ok(caps.includes(AGODESK_CHAT_MEDIA_UPLOAD_CAPABILITY));
+  assert.ok(caps.includes(AGODESK_CHAT_ATTACHMENTS_CAPABILITY));
   assert.ok(caps.includes(AGODESK_INTEGRATIONS_WEBHOSTS_CAPABILITY));
   assert.ok(caps.includes(AGODESK_SYSTEM_WARNINGS_CAPABILITY));
 });
@@ -823,4 +811,76 @@ test("normalizeSystemWarningsPayload parst Warnungen und Zaehler", () => {
   assert.equal(hasAdvertisedChatMediaEvents(["chat.media_events"]), true);
   assert.equal(hasAdvertisedIntegrationsWebhosts(["integrations.webhosts"]), true);
   assert.equal(hasAdvertisedSystemWarnings(["system.warnings"]), true);
+});
+
+test("normalizeChatAttachmentItem parst Attachment-Referenzen", () => {
+  const item = normalizeChatAttachmentItem({
+    attachment_id: "att-1",
+    filename: "shot.png",
+    mime_type: "image/png",
+    path: "/api/agodesk/media/att-1/shot.png?agodesk_exp=1&agodesk_sig=abc",
+    kind: "image",
+  });
+  assert.equal(item?.attachment_id, "att-1");
+  assert.equal(item?.kind, "image");
+});
+
+test("normalizeChatAttachmentPreparedPayload parst Upload-Metadaten", () => {
+  const payload = normalizeChatAttachmentPreparedPayload({
+    session_id: "sess-a",
+    conversation_id: "sess-b",
+    prepare_id: "prep-1",
+    attachment_id: "att-1",
+    upload_url: "https://aurago.local/api/agodesk/media/upload/att-1?agodesk_exp=1&agodesk_sig=abc",
+    upload_method: "POST",
+    upload_field: "file",
+    expires_at: "2026-06-04T12:05:00.000Z",
+    max_bytes: 8388608,
+  });
+  assert.equal(payload?.attachment_id, "att-1");
+  assert.equal(payload?.upload_field, "file");
+});
+
+test("hasAdvertisedChatMediaUpload erkennt Upload-Capability", () => {
+  assert.equal(hasAdvertisedChatMediaUpload(["chat.media_upload"]), true);
+  assert.equal(hasAdvertisedChatMediaUpload(["chat.media_events"]), false);
+});
+
+test("canUseChatAttachments braucht Upload- und Attachments-Cap", () => {
+  assert.equal(canUseChatAttachments(["chat.media_upload", "chat.attachments"]), true);
+  assert.equal(canUseChatAttachments(["chat.media_upload"]), false);
+  assert.equal(canUseChatAttachments(["chat.attachments"]), false);
+});
+
+test("isChatAttachmentNegotiationError erkennt Attachments-Fehler", () => {
+  assert.equal(
+    isChatAttachmentNegotiationError({
+      code: "ATTACHMENT_REJECTED",
+      message: "rejected",
+    }),
+    true,
+  );
+  assert.equal(
+    isChatAttachmentNegotiationError({
+      code: "INVALID",
+      message: "chat.message attachments requires chat.attachments",
+    }),
+    true,
+  );
+});
+
+test("normalizeLoadedConversationMessage erlaubt reine Attachment-Nachrichten", () => {
+  const message = normalizeLoadedConversationMessage({
+    role: "user",
+    content: "",
+    attachments: [
+      {
+        attachment_id: "att-1",
+        filename: "notes.txt",
+        mime_type: "text/plain",
+      },
+    ],
+  });
+  assert.equal(message?.attachments?.length, 1);
+  assert.equal(message?.content, "");
 });

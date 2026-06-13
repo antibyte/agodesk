@@ -7,7 +7,7 @@ pub fn browser_profile_dir() -> PathBuf {
     #[cfg(windows)]
     {
         let base = std::env::var("LOCALAPPDATA").unwrap_or_else(|_| ".".to_string());
-        return PathBuf::from(base).join("agodesk").join("browser-profile");
+        PathBuf::from(base).join("agodesk").join("browser-profile")
     }
     #[cfg(not(windows))]
     {
@@ -23,12 +23,9 @@ pub fn browser_profile_dir() -> PathBuf {
 }
 
 pub fn find_browser_binary() -> Option<PathBuf> {
-    for candidate in browser_binary_candidates() {
-        if candidate.is_file() {
-            return Some(candidate);
-        }
-    }
-    None
+    browser_binary_candidates()
+        .into_iter()
+        .find(|candidate| candidate.is_file())
 }
 
 fn browser_binary_candidates() -> Vec<PathBuf> {

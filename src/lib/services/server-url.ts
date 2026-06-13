@@ -1,7 +1,4 @@
-import {
-  appendInsecureLoopbackIfNeeded,
-  isLoopbackHost,
-} from "../types/protocol";
+import { appendInsecureLoopbackIfNeeded, isLoopbackHost } from "../types/protocol";
 
 export { appendInsecureLoopbackIfNeeded, isLoopbackHost };
 

@@ -9,7 +9,11 @@ const PRECISE_MOODS = new Set(["focused", "analytical", "cautious"]);
 const WARM_MOODS = new Set(["curious", "creative", "playful"]);
 const SERIOUS_MOODS = new Set(["concerned", "frustrated"]);
 
-export function clampMoodScalar(value: number | undefined, min: number, max: number): number | undefined {
+export function clampMoodScalar(
+  value: number | undefined,
+  min: number,
+  max: number,
+): number | undefined {
   if (value === undefined || !Number.isFinite(value)) {
     return undefined;
   }
@@ -84,7 +88,10 @@ export function buildAgentMoodInstructionBlock(mood: AgentMoodMetadata): string 
   return parts.join(" ");
 }
 
-export function appendAgentMoodHint(baseInstruction: string, mood?: AgentMoodMetadata | null): string {
+export function appendAgentMoodHint(
+  baseInstruction: string,
+  mood?: AgentMoodMetadata | null,
+): string {
   if (!mood) {
     return baseInstruction;
   }

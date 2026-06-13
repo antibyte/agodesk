@@ -20,20 +20,22 @@ fn length_scale_from_rate(rate: Option<f32>) -> f32 {
 }
 
 fn create_piper_tts(files: &super::tts::PiperVoiceFiles, rate: Option<f32>) -> Result<OfflineTts, String> {
-    let mut config = OfflineTtsConfig::default();
-    config.model = OfflineTtsModelConfig {
-        vits: OfflineTtsVitsModelConfig {
-            model: Some(files.model_path.to_string_lossy().to_string()),
-            tokens: Some(files.tokens_path.to_string_lossy().to_string()),
-            data_dir: files
-                .data_dir
-                .as_ref()
-                .map(|path| path.to_string_lossy().to_string()),
-            length_scale: length_scale_from_rate(rate),
+    let config = OfflineTtsConfig {
+        model: OfflineTtsModelConfig {
+            vits: OfflineTtsVitsModelConfig {
+                model: Some(files.model_path.to_string_lossy().to_string()),
+                tokens: Some(files.tokens_path.to_string_lossy().to_string()),
+                data_dir: files
+                    .data_dir
+                    .as_ref()
+                    .map(|path| path.to_string_lossy().to_string()),
+                length_scale: length_scale_from_rate(rate),
+                ..Default::default()
+            },
+            num_threads: 2,
+            provider: Some("cpu".into()),
             ..Default::default()
         },
-        num_threads: 2,
-        provider: Some("cpu".into()),
         ..Default::default()
     };
 

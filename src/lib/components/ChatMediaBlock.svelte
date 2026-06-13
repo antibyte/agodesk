@@ -27,9 +27,7 @@
   let unregisterMedia: (() => void) | null = null;
 
   const displayTitle = $derived(item.title || item.filename || item.kind);
-  const resolvedPath = $derived(
-    item.path ? resolveAuraGoChatMediaUrl(serverUrl, item.path) : "",
-  );
+  const resolvedPath = $derived(item.path ? resolveAuraGoChatMediaUrl(serverUrl, item.path) : "");
   const resolvedUrl = $derived(
     item.url ? resolvePersonaAssetUrl(serverUrl, item.url) : resolvedPath,
   );
@@ -101,13 +99,7 @@
     if (!path) {
       return;
     }
-    enqueueChatMediaAudio(
-      serverUrl,
-      item.conversation_id,
-      item.request_id,
-      path,
-      item.mime_type,
-    );
+    enqueueChatMediaAudio(serverUrl, item.conversation_id, item.request_id, path, item.mime_type);
   }
 
   function trackMediaElement(element: HTMLMediaElement): { destroy: () => void } {
@@ -143,11 +135,7 @@
   {:else if item.kind === "audio"}
     <div class="media-audio">
       {#if item.path || item.url}
-        <audio
-          controls
-          preload="none"
-          src={resolvedPath || resolvedUrl}
-          use:trackMediaElement
+        <audio controls preload="none" src={resolvedPath || resolvedUrl} use:trackMediaElement
         ></audio>
       {/if}
       <button type="button" class="ui-btn ui-btn-secondary ui-btn-sm" onclick={handlePlayAudio}>
@@ -206,7 +194,11 @@
         {$i18n("chatMedia.openExternal")}
       </button>
       {#if onOpenEmbedded && (item.kind === "link" || item.kind === "document")}
-        <button type="button" class="ui-btn ui-btn-secondary ui-btn-sm" onclick={handleOpenEmbedded}>
+        <button
+          type="button"
+          class="ui-btn ui-btn-secondary ui-btn-sm"
+          onclick={handleOpenEmbedded}
+        >
           {$i18n("chatMedia.openEmbedded")}
         </button>
       {/if}

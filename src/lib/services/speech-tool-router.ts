@@ -1,11 +1,5 @@
-import type {
-  ConnectionStatus,
-  SessionStatus,
-} from "../types/protocol";
-import type {
-  GeminiFunctionCall,
-  GeminiFunctionResponse,
-} from "./speech-tools";
+import type { ConnectionStatus, SessionStatus } from "../types/protocol";
+import type { GeminiFunctionCall, GeminiFunctionResponse } from "./speech-tools";
 
 export interface SpeechToolContext {
   sessionId: string;
@@ -34,9 +28,7 @@ export async function executeSpeechTool(
       }
 
       if (!context.canSendChat) {
-        context.onSystemNotice(
-          `AuraGo nicht erreichbar — Befehl nicht gesendet: ${message}`,
-        );
+        context.onSystemNotice(`AuraGo nicht erreichbar — Befehl nicht gesendet: ${message}`);
         return {
           success: false,
           error: "Chat ist derzeit nicht verfügbar.",
@@ -49,8 +41,7 @@ export async function executeSpeechTool(
         context.onSystemNotice(`Sprachbefehl an AuraGo gesendet.`);
         return { success: true, sent: true, message };
       } catch (error) {
-        const errorMessage =
-          error instanceof Error ? error.message : "Senden fehlgeschlagen.";
+        const errorMessage = error instanceof Error ? error.message : "Senden fehlgeschlagen.";
         return { success: false, error: errorMessage, message };
       }
     }
@@ -71,8 +62,7 @@ export async function executeSpeechTool(
         try {
           status.desktopPermissions = await context.getDesktopPermissionStatus();
         } catch (error) {
-          status.desktopPermissionError =
-            error instanceof Error ? error.message : String(error);
+          status.desktopPermissionError = error instanceof Error ? error.message : String(error);
         }
       }
       return status;

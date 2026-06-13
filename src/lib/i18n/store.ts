@@ -1,10 +1,6 @@
 import { derived, writable, get } from "svelte/store";
 import type { UiLocaleSetting } from "./locales";
-import {
-  localeToBcp47,
-  normalizeLocaleSetting,
-  resolveLocale,
-} from "./locales";
+import { localeToBcp47, normalizeLocaleSetting, resolveLocale } from "./locales";
 import { loadMessages } from "./loader";
 import type { Messages } from "./types";
 import type { MessageKey } from "./types";
@@ -12,13 +8,10 @@ import { translate, type TranslateParams } from "./translate";
 
 export const localeSetting = writable<UiLocaleSetting>("system");
 export const activeLocale = derived(localeSetting, ($setting) => resolveLocale($setting));
-export const messages = writable<Messages>(
-  loadMessages(resolveLocale("system")),
-);
+export const messages = writable<Messages>(loadMessages(resolveLocale("system")));
 
 export const i18n = derived([activeLocale, messages], ([, msgs]) => {
-  return (key: MessageKey, params?: TranslateParams): string =>
-    translate(msgs, key, params);
+  return (key: MessageKey, params?: TranslateParams): string => translate(msgs, key, params);
 });
 
 export { normalizeLocaleSetting };

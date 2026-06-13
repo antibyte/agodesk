@@ -18,10 +18,7 @@ export interface AppendStreamingChunkResult {
   text: string;
 }
 
-function trimMessageHistory(
-  messages: ChatMessage[],
-  seenIds: Set<string>,
-): ChatMessage[] {
+function trimMessageHistory(messages: ChatMessage[], seenIds: Set<string>): ChatMessage[] {
   if (messages.length <= MAX_CHAT_MESSAGES) {
     return messages;
   }
@@ -44,16 +41,11 @@ function createChatStore() {
         return;
       }
       seenIds.add(message.id);
-      update((messages) =>
-        trimMessageHistory([...messages, message], seenIds),
-      );
+      update((messages) => trimMessageHistory([...messages, message], seenIds));
     },
-    appendStreamingChunk(
-      options: AppendStreamingChunkOptions,
-    ): AppendStreamingChunkResult {
+    appendStreamingChunk(options: AppendStreamingChunkOptions): AppendStreamingChunkResult {
       const messageId =
-        streamingByRequestId.get(options.requestId) ??
-        `stream-${options.requestId}`;
+        streamingByRequestId.get(options.requestId) ?? `stream-${options.requestId}`;
       let created = false;
       let finalText = options.delta;
 
@@ -87,9 +79,7 @@ function createChatStore() {
                 ...message,
                 text: finalText,
                 streaming: !options.done,
-                timestamp: options.done
-                  ? options.timestamp
-                  : message.timestamp,
+                timestamp: options.done ? options.timestamp : message.timestamp,
               }
             : message,
         );

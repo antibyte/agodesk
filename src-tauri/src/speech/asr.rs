@@ -260,7 +260,7 @@ fn whisper_files_in_dir(dir: &Path) -> Option<AsrModelFiles> {
 pub fn asr_model_ready(model_id: Option<&str>) -> bool {
     #[cfg(feature = "speech-asr")]
     {
-        return super::asr_sherpa::probe_asr_model(model_id);
+        super::asr_sherpa::probe_asr_model(model_id)
     }
     #[cfg(not(feature = "speech-asr"))]
     {

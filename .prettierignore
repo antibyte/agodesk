@@ -1,4 +1,8 @@
 dist
 node_modules
 src-tauri/target
+src-tauri/vendor
 package-lock.json
+mcps/
+assets/vad/
+tsconfig.tsbuildinfo

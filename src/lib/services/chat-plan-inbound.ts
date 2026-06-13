@@ -1,9 +1,6 @@
 import { chatPlanState } from "../stores/chat-plan";
 import type { ChatResponseMetadata } from "../types/protocol";
-import {
-  normalizeChatPlanUpdatePayload,
-  normalizeAgoDeskPlan,
-} from "../types/protocol";
+import { normalizeChatPlanUpdatePayload, normalizeAgoDeskPlan } from "../types/protocol";
 
 export function handleChatPlanUpdate(payload: unknown): boolean {
   const normalized = normalizeChatPlanUpdatePayload(payload);

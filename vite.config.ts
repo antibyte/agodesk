@@ -73,6 +73,26 @@ function vadAssetsPlugin(): Plugin {
 export default defineConfig({
   plugins: [vadAssetsPlugin(), svelte()],
   clearScreen: false,
+  build: {
+    // WebView2 / modern desktop runtimes; avoids esbuild 0.28 downlevel of destructuring in vad-web.
+    target: "es2022",
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes("onnxruntime-web")) {
+            return "onnx";
+          }
+
+          if (id.includes("mdast-util") || id.includes("micromark") || id.includes("mdast")) {
+            return "markdown";
+          }
+          if (id.includes("@tauri-apps")) {
+            return "tauri";
+          }
+        },
+      },
+    },
+  },
   server: {
     port: 1420,
     strictPort: true,

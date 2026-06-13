@@ -191,7 +191,7 @@ fn split_relative_components(relative: &str) -> Vec<std::ffi::OsString> {
         .replace('\\', "/")
         .split('/')
         .filter(|part| !part.is_empty() && *part != ".")
-        .map(|part| std::ffi::OsString::from(part))
+        .map(std::ffi::OsString::from)
         .collect()
 }
 
@@ -240,10 +240,9 @@ fn file_names_match(left: &std::ffi::OsStr, right: &std::ffi::OsStr) -> bool {
         if left.len() != right.len() {
             return false;
         }
-        return left
-            .iter()
+        left.iter()
             .zip(right.iter())
-            .all(|(a, b)| wide_chars_match_case_insensitive(*a, *b));
+            .all(|(a, b)| wide_chars_match_case_insensitive(*a, *b))
     }
     #[cfg(not(windows))]
     {
@@ -313,7 +312,7 @@ pub fn normalize_path_input(raw: &str) -> PathBuf {
         if trimmed.starts_with(r"\\?\") {
             return PathBuf::from(trimmed.replace('/', "\\"));
         }
-        return PathBuf::from(trimmed.replace('/', "\\"));
+        PathBuf::from(trimmed.replace('/', "\\"))
     }
 
     #[cfg(not(windows))]

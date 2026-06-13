@@ -3,7 +3,10 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-const messagesDir = path.join(path.dirname(fileURLToPath(import.meta.url)), "../src/lib/i18n/messages");
+const messagesDir = path.join(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "../src/lib/i18n/messages",
+);
 const en = JSON.parse(fs.readFileSync(path.join(messagesDir, "en.json"), "utf8"));
 const fr = JSON.parse(fs.readFileSync(path.join(messagesDir, "fr.json"), "utf8"));
 
@@ -83,9 +86,7 @@ const TRANSLATIONS = {
 const KEYS = Object.keys(TRANSLATIONS.fr);
 
 function writeJson(filePath, data) {
-  const lines = Object.entries(data).map(
-    ([key, value]) => `  "${key}": ${JSON.stringify(value)}`,
-  );
+  const lines = Object.entries(data).map(([key, value]) => `  "${key}": ${JSON.stringify(value)}`);
   fs.writeFileSync(filePath, `{\n${lines.join(",\n")}\n}\n`, "utf8");
 }
 

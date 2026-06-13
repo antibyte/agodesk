@@ -14,13 +14,7 @@
     onOpenEmbedded?: (url: string, title?: string) => void;
   }
 
-  let {
-    visible = false,
-    webhosts = [],
-    serverUrl = "",
-    onClose,
-    onOpenEmbedded,
-  }: Props = $props();
+  let { visible = false, webhosts = [], serverUrl = "", onClose, onOpenEmbedded }: Props = $props();
 
   function resolveWebhostUrl(url: string): string {
     return resolvePersonaAssetUrl(serverUrl, url);

@@ -155,7 +155,8 @@
     </header>
     <div class="embed-host" bind:this={hostEl}>
       {#if !nativeEmbedAvailable}
-        <iframe class="embed-frame" src={url} title={title || $i18n("integrations.embed.title")}></iframe>
+        <iframe class="embed-frame" src={url} title={title || $i18n("integrations.embed.title")}
+        ></iframe>
       {:else if embedLoading}
         <p class="embed-placeholder">{$i18n("integrations.embed.loading")}</p>
       {:else if embedFailed}

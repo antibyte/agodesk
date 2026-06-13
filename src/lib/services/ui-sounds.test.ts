@@ -59,7 +59,7 @@ test("UI_SOUND_THEME_DEFINITIONS enthalten alle Events pro Theme", () => {
 
 test("normalizeAppSettings normalisiert voiceName und Sprache", async () => {
   const { normalizeAppSettings } = await import("./settings.ts");
-  
+
   // Ohne gespeicherte Einstellungen:
   const emptyNormalized = normalizeAppSettings({});
   assert.equal(emptyNormalized.speech.voiceName, "Zephyr");
@@ -76,7 +76,7 @@ test("normalizeAppSettings normalisiert voiceName und Sprache", async () => {
       agentMode: false,
       voiceResponses: false,
       voiceName: "Aoede",
-    }
+    },
   });
 
   assert.equal(customNormalized.speech.voiceName, "Aoede");

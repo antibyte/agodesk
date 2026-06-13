@@ -79,10 +79,47 @@
     desktopControlEnabled && hasAdvertisedRemoteDesktopCapture(advertisedCapabilities),
   );
 
+  let overflowOpen = $state(false);
+  let overflowWrapEl = $state<HTMLDivElement | undefined>();
+
   function handleReconnect(): void {
     playUiSound("notice");
     onReconnect?.();
+    overflowOpen = false;
   }
+
+  function toggleOverflow(): void {
+    overflowOpen = !overflowOpen;
+  }
+
+  function runOverflowAction(action: () => void): void {
+    action();
+    overflowOpen = false;
+  }
+
+  $effect(() => {
+    if (!overflowOpen) {
+      return;
+    }
+    const handlePointerDown = (event: MouseEvent) => {
+      const target = event.target;
+      if (target instanceof Node && overflowWrapEl?.contains(target)) {
+        return;
+      }
+      overflowOpen = false;
+    };
+    const handleKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        overflowOpen = false;
+      }
+    };
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("keydown", handleKey);
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("keydown", handleKey);
+    };
+  });
 </script>
 
 <header class="status-bar glass-panel">
@@ -122,9 +159,7 @@
           ? $i18n("statusBar.remote.ready.title")
           : $i18n("statusBar.remote.missing.title")}
       >
-        {remoteDesktopReady
-          ? $i18n("statusBar.remote.ready")
-          : $i18n("statusBar.remote.missing")}
+        {remoteDesktopReady ? $i18n("statusBar.remote.ready") : $i18n("statusBar.remote.missing")}
       </span>
     {/if}
   </button>
@@ -134,7 +169,7 @@
   <div class="actions">
     {#if historyEnabled}
       <button
-        class="ui-btn ui-btn-secondary ui-btn-icon"
+        class="ui-btn ui-btn-secondary ui-btn-icon compact-hide"
         class:is-active={historyActive}
         type="button"
         title={$i18n("chatView.history.title")}
@@ -142,7 +177,17 @@
         aria-pressed={historyActive}
         onclick={() => onToggleHistory?.()}
       >
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <svg
+          width="15"
+          height="15"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2.2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
           <path d="M3 12a9 9 0 1 0 3-6.7"></path>
           <polyline points="3 3 3 9 9 9"></polyline>
           <path d="M12 7v5l3 2"></path>
@@ -152,7 +197,7 @@
 
     {#if integrationsEnabled}
       <button
-        class="ui-btn ui-btn-secondary ui-btn-icon"
+        class="ui-btn ui-btn-secondary ui-btn-icon compact-hide"
         class:is-active={integrationsActive}
         type="button"
         title={$i18n("integrations.title")}
@@ -160,7 +205,17 @@
         aria-pressed={integrationsActive}
         onclick={() => onToggleIntegrations?.()}
       >
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <svg
+          width="15"
+          height="15"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2.2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
           <rect x="3" y="3" width="7" height="7" rx="1"></rect>
           <rect x="14" y="3" width="7" height="7" rx="1"></rect>
           <rect x="3" y="14" width="7" height="7" rx="1"></rect>
@@ -175,7 +230,7 @@
 
     {#if warningsEnabled}
       <button
-        class="ui-btn ui-btn-secondary ui-btn-icon"
+        class="ui-btn ui-btn-secondary ui-btn-icon compact-hide"
         class:is-active={warningsActive}
         type="button"
         title={warningsUnacknowledged > 0
@@ -185,19 +240,33 @@
         aria-pressed={warningsActive}
         onclick={() => onToggleWarnings?.()}
       >
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"></path>
+        <svg
+          width="15"
+          height="15"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2.2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <path
+            d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"
+          ></path>
           <line x1="12" y1="9" x2="12" y2="13"></line>
           <line x1="12" y1="17" x2="12.01" y2="17"></line>
         </svg>
         {#if warningsUnacknowledged > 0}
-          <span class="action-badge warning">{warningsUnacknowledged > 9 ? "9+" : warningsUnacknowledged}</span>
+          <span class="action-badge warning"
+            >{warningsUnacknowledged > 9 ? "9+" : warningsUnacknowledged}</span
+          >
         {/if}
       </button>
     {/if}
 
     <button
-      class="ui-btn ui-btn-secondary ui-btn-icon"
+      class="ui-btn ui-btn-secondary ui-btn-icon compact-hide"
       class:is-active={voiceResponsesEnabled}
       type="button"
       title={voiceResponsesEnabled
@@ -208,13 +277,33 @@
       onclick={() => onToggleVoiceOutput?.()}
     >
       {#if voiceResponsesEnabled}
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" class="icon-voice">
+        <svg
+          width="15"
+          height="15"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2.2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          class="icon-voice"
+        >
           <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
           <path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>
           <path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path>
         </svg>
       {:else}
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" class="icon-voice">
+        <svg
+          width="15"
+          height="15"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2.2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          class="icon-voice"
+        >
           <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
           <line x1="22" x2="16" y1="9" y2="15"></line>
           <line x1="16" x2="22" y1="9" y2="15"></line>
@@ -223,7 +312,7 @@
     </button>
 
     <button
-      class="ui-btn ui-btn-secondary ui-btn-icon"
+      class="ui-btn ui-btn-secondary ui-btn-icon compact-hide"
       type="button"
       title={$i18n("statusBar.theme.toggle.title", { theme: currentThemeLabel })}
       aria-label={$i18n("statusBar.theme.toggle.ariaLabel", {
@@ -232,16 +321,48 @@
       onclick={() => onToggleTheme?.()}
     >
       {#if theme === "light"}
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" class="icon-theme">
+        <svg
+          width="15"
+          height="15"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2.2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          class="icon-theme"
+        >
           <circle cx="12" cy="12" r="4"></circle>
-          <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"></path>
+          <path
+            d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"
+          ></path>
         </svg>
       {:else if theme === "dark"}
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" class="icon-theme">
+        <svg
+          width="15"
+          height="15"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2.2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          class="icon-theme"
+        >
           <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"></path>
         </svg>
       {:else}
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" class="icon-theme">
+        <svg
+          width="15"
+          height="15"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2.2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          class="icon-theme"
+        >
           <circle cx="12" cy="12" r="10"></circle>
           <path d="M12 2v20M12 2a10 10 0 0 1 0 20Z" fill="currentColor"></path>
         </svg>
@@ -249,14 +370,99 @@
     </button>
 
     {#if connectionStatus === "disconnected" || connectionStatus === "error"}
-      <button
-        class="ui-btn ui-btn-secondary"
-        type="button"
-        onclick={handleReconnect}
-      >
+      <button class="ui-btn ui-btn-secondary compact-hide" type="button" onclick={handleReconnect}>
         {$i18n("statusBar.reconnect")}
       </button>
     {/if}
+
+    <div class="overflow-wrap compact-only" bind:this={overflowWrapEl}>
+      <button
+        class="ui-btn ui-btn-secondary ui-btn-icon"
+        type="button"
+        title={$i18n("statusBar.overflow.title")}
+        aria-label={$i18n("statusBar.overflow.ariaLabel")}
+        aria-expanded={overflowOpen}
+        aria-haspopup="menu"
+        onclick={toggleOverflow}
+      >
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+          <circle cx="5" cy="12" r="1.8"></circle>
+          <circle cx="12" cy="12" r="1.8"></circle>
+          <circle cx="19" cy="12" r="1.8"></circle>
+        </svg>
+      </button>
+      {#if overflowOpen}
+        <div class="overflow-menu glass-panel" role="menu">
+          {#if historyEnabled}
+            <button
+              type="button"
+              class="overflow-item"
+              class:is-active={historyActive}
+              role="menuitem"
+              onclick={() => runOverflowAction(() => onToggleHistory?.())}
+            >
+              {$i18n("chatView.history.title")}
+            </button>
+          {/if}
+          {#if integrationsEnabled}
+            <button
+              type="button"
+              class="overflow-item"
+              class:is-active={integrationsActive}
+              role="menuitem"
+              onclick={() => runOverflowAction(() => onToggleIntegrations?.())}
+            >
+              {$i18n("integrations.title")}
+              {#if integrationsCount > 0}
+                <span class="overflow-badge"
+                  >{integrationsCount > 9 ? "9+" : integrationsCount}</span
+                >
+              {/if}
+            </button>
+          {/if}
+          {#if warningsEnabled}
+            <button
+              type="button"
+              class="overflow-item"
+              class:is-active={warningsActive}
+              role="menuitem"
+              onclick={() => runOverflowAction(() => onToggleWarnings?.())}
+            >
+              {$i18n("warnings.title")}
+              {#if warningsUnacknowledged > 0}
+                <span class="overflow-badge warning"
+                  >{warningsUnacknowledged > 9 ? "9+" : warningsUnacknowledged}</span
+                >
+              {/if}
+            </button>
+          {/if}
+          <button
+            type="button"
+            class="overflow-item"
+            class:is-active={voiceResponsesEnabled}
+            role="menuitem"
+            onclick={() => runOverflowAction(() => onToggleVoiceOutput?.())}
+          >
+            {voiceResponsesEnabled
+              ? $i18n("statusBar.voiceOutput.on.title")
+              : $i18n("statusBar.voiceOutput.off.title")}
+          </button>
+          <button
+            type="button"
+            class="overflow-item"
+            role="menuitem"
+            onclick={() => runOverflowAction(() => onToggleTheme?.())}
+          >
+            {$i18n("statusBar.theme.toggle.title", { theme: currentThemeLabel })}
+          </button>
+          {#if connectionStatus === "disconnected" || connectionStatus === "error"}
+            <button type="button" class="overflow-item" role="menuitem" onclick={handleReconnect}>
+              {$i18n("statusBar.reconnect")}
+            </button>
+          {/if}
+        </div>
+      {/if}
+    </div>
 
     <button
       class="ui-btn ui-btn-secondary ui-btn-icon btn-settings"
@@ -265,8 +471,20 @@
       aria-label={$i18n("statusBar.settings.ariaLabel")}
       onclick={() => onOpenSettings?.()}
     >
-      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" class="icon-settings">
-        <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.1a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path>
+      <svg
+        width="15"
+        height="15"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2.2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        class="icon-settings"
+      >
+        <path
+          d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.1a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"
+        ></path>
         <circle cx="12" cy="12" r="3"></circle>
       </svg>
     </button>
@@ -464,5 +682,71 @@
 
   .action-badge.warning {
     background: var(--color-warning);
+  }
+
+  .compact-only {
+    display: none;
+    position: relative;
+  }
+
+  .overflow-menu {
+    position: absolute;
+    top: calc(100% + var(--space-2));
+    right: 0;
+    min-width: 11rem;
+    padding: var(--space-2);
+    border-radius: var(--radius-lg);
+    z-index: 30;
+    display: grid;
+    gap: var(--space-1);
+  }
+
+  .overflow-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2);
+    width: 100%;
+    border: none;
+    border-radius: var(--radius-md);
+    background: transparent;
+    color: inherit;
+    padding: var(--space-2) var(--space-3);
+    font: inherit;
+    font-size: 0.8125rem;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .overflow-item:hover,
+  .overflow-item.is-active {
+    background: color-mix(in srgb, var(--color-accent) 10%, transparent);
+  }
+
+  .overflow-badge {
+    border-radius: var(--radius-full);
+    background: var(--color-accent);
+    color: white;
+    font-size: 0.625rem;
+    font-weight: 700;
+    padding: 0.1rem 0.35rem;
+  }
+
+  .overflow-badge.warning {
+    background: var(--color-warning);
+  }
+
+  @media (max-width: 720px) {
+    .compact-hide {
+      display: none !important;
+    }
+
+    .compact-only {
+      display: block;
+    }
+
+    .status-pill .url {
+      max-width: 8rem;
+    }
   }
 </style>

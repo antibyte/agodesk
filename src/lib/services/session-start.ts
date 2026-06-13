@@ -46,6 +46,9 @@ export async function buildSessionStartCommon(): Promise<SessionStartCommon> {
     file_access_enabled: Boolean(fileAccessPayload),
     file_roots: fileAccessPayload?.roots.map((root) => root.root_id) ?? [],
     client_file_capabilities: clientCapabilities.filter((cap) => cap.startsWith("remote.files.")),
+    client_chat_attachment_capabilities: clientCapabilities.filter(
+      (cap) => cap === "chat.media_upload" || cap === "chat.attachments",
+    ),
   });
 
   return common;

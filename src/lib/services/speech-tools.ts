@@ -29,8 +29,7 @@ export function buildAgentToolDeclarations(): Record<string, unknown>[] {
             properties: {
               message: {
                 type: "string",
-                description:
-                  "Die Nachricht an AuraGo in natürlicher Sprache, präzise formuliert.",
+                description: "Die Nachricht an AuraGo in natürlicher Sprache, präzise formuliert.",
               },
             },
             required: ["message"],
@@ -74,8 +73,7 @@ export function buildTranscriptionSystemInstruction(
   usesAudioOutput = false,
   agentMood?: AgentMoodMetadata | null,
 ): string {
-  const languageHint =
-    speech.language.trim().length > 0 ? speech.language.trim() : "de-DE";
+  const languageHint = speech.language.trim().length > 0 ? speech.language.trim() : "de-DE";
 
   if (usesAudioOutput && speech.voiceResponses) {
     const personaLead = resolvePersonaInstructionLead(
@@ -97,8 +95,7 @@ export function buildAgentSystemInstruction(
   context: SpeechAgentContext,
   agentMood?: AgentMoodMetadata | null,
 ): string {
-  const languageHint =
-    speech.language.trim().length > 0 ? speech.language.trim() : "de-DE";
+  const languageHint = speech.language.trim().length > 0 ? speech.language.trim() : "de-DE";
 
   const promptBody = resolvePersonaInstructionLead(
     "Du bist der Sprach-Assistent von agodesk. Der Nutzer spricht über das Mikrofon.",

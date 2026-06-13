@@ -15,7 +15,7 @@ let queue: QueuedMediaAudio[] = [];
 let playbackBusy = false;
 let playbackChain: Promise<void> = Promise.resolve();
 const mediaPlayback = new SpeechAudioPlayback();
-let activeVideoElements = new Set<HTMLMediaElement>();
+const activeVideoElements = new Set<HTMLMediaElement>();
 
 function extractBase64FromDataUrl(dataUrl: string): string | null {
   if (!dataUrl.startsWith("data:")) {

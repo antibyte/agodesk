@@ -19,9 +19,7 @@ const voices = (() => {
 
 function voiceReady(voiceId) {
   const dir = join(piperRoot, `vits-piper-${voiceId}`);
-  return (
-    existsSync(join(dir, `${voiceId}.onnx`)) && existsSync(join(dir, "tokens.txt"))
-  );
+  return existsSync(join(dir, `${voiceId}.onnx`)) && existsSync(join(dir, "tokens.txt"));
 }
 
 async function download(url, destination) {

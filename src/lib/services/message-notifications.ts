@@ -1,12 +1,6 @@
-import {
-  isPermissionGranted,
-  requestPermission,
-} from "@tauri-apps/plugin-notification";
+import { isPermissionGranted, requestPermission } from "@tauri-apps/plugin-notification";
 import { getTranslateFn } from "../i18n/store";
-import {
-  isMainWindowVisible,
-  showMainWindowFromTray,
-} from "./tray";
+import { isMainWindowVisible, showMainWindowFromTray } from "./tray";
 
 const TOAST_BODY_MAX = 240;
 

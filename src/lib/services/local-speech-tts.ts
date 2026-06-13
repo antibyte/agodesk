@@ -58,23 +58,17 @@ export function registerActiveLocalSpeechSession(session: SpeakableLocalSession 
 }
 
 export function shouldSpeakAssistantText(speech: SpeechSettings): boolean {
-  return (
-    speech.voiceResponses &&
-    !speechProviderRequiresGeminiApiKey(speech.provider)
-  );
+  return speech.voiceResponses && !speechProviderRequiresGeminiApiKey(speech.provider);
 }
 
 /** @deprecated Use shouldSpeakAssistantText */
-export function shouldUseLocalSpeechTts(
-  speech: SpeechSettings,
-  _sessionActive: boolean,
-): boolean {
+export function shouldUseLocalSpeechTts(speech: SpeechSettings, _sessionActive: boolean): boolean {
   return shouldSpeakAssistantText(speech);
 }
 
 export function resolveLocalTtsConfig(speech: SpeechSettings): ResolvedLocalTtsConfig {
-  const piperFallbackVoice = speech.offlineTtsVoice.trim()
-    || defaultPiperVoiceForSpeechLanguage(speech.language);
+  const piperFallbackVoice =
+    speech.offlineTtsVoice.trim() || defaultPiperVoiceForSpeechLanguage(speech.language);
 
   if (speech.provider === "offline") {
     return {
@@ -86,23 +80,22 @@ export function resolveLocalTtsConfig(speech: SpeechSettings): ResolvedLocalTtsC
 
   const configuredBackend = speech.hybridTtsBackend;
   const configuredVoice =
-    speech.hybridTtsVoice.trim()
-    || defaultEdgeTtsVoiceForSpeechLanguage(speech.language);
+    speech.hybridTtsVoice.trim() || defaultEdgeTtsVoiceForSpeechLanguage(speech.language);
 
-    if (configuredBackend === "edge_tts") {
-      return {
-        backend: "edge_tts",
-        voice: configuredVoice,
-        piperFallbackVoice,
-      };
-    }
-
+  if (configuredBackend === "edge_tts") {
     return {
-      backend: "piper",
-      voice: piperFallbackVoice,
+      backend: "edge_tts",
+      voice: configuredVoice,
       piperFallbackVoice,
     };
   }
+
+  return {
+    backend: "piper",
+    voice: piperFallbackVoice,
+    piperFallbackVoice,
+  };
+}
 
 export async function synthesizeLocalSpeech(
   text: string,
@@ -200,10 +193,7 @@ export async function testLocalSpeechTts(
   }
 }
 
-export async function speakLocalAssistantText(
-  text: string,
-  speech: SpeechSettings,
-): Promise<void> {
+export async function speakLocalAssistantText(text: string, speech: SpeechSettings): Promise<void> {
   if (!shouldSpeakAssistantText(speech)) {
     return;
   }
@@ -212,10 +202,7 @@ export async function speakLocalAssistantText(
 }
 
 /** Chat-TTS fallback — unabhängig von speech.voiceResponses (Gemini Live). */
-export async function speakChatAssistantText(
-  text: string,
-  speech: SpeechSettings,
-): Promise<void> {
+export async function speakChatAssistantText(text: string, speech: SpeechSettings): Promise<void> {
   const spoken = plainTextForSpeech(text);
   if (!spoken) {
     return;

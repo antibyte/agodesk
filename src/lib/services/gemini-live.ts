@@ -66,9 +66,7 @@ export interface GeminiLiveMessage {
 const SETUP_TIMEOUT_MS = 30_000;
 const TURN_FINALIZE_GRACE_MS = 1500;
 
-export function normalizeGeminiWsPayload(
-  data: string | ArrayBuffer | Blob,
-): string {
+export function normalizeGeminiWsPayload(data: string | ArrayBuffer | Blob): string {
   if (typeof data === "string") {
     return data;
   }
@@ -96,25 +94,20 @@ function asRecord(value: unknown): Record<string, unknown> | null {
     : null;
 }
 
-function readTranscription(
-  value: unknown,
-): { text?: string; finished?: boolean } | undefined {
+function readTranscription(value: unknown): { text?: string; finished?: boolean } | undefined {
   const record = asRecord(value);
   if (!record) {
     return undefined;
   }
   const text = typeof record.text === "string" ? record.text : undefined;
-  const finished =
-    typeof record.finished === "boolean" ? record.finished : undefined;
+  const finished = typeof record.finished === "boolean" ? record.finished : undefined;
   if (!text && finished === undefined) {
     return undefined;
   }
   return { text, finished };
 }
 
-export function normalizeGeminiLiveMessage(
-  parsed: Record<string, unknown>,
-): GeminiLiveMessage {
+export function normalizeGeminiLiveMessage(parsed: Record<string, unknown>): GeminiLiveMessage {
   const serverRaw = asRecord(parsed.serverContent ?? parsed.server_content);
   const errorRaw = asRecord(parsed.error);
   const toolCallRaw = asRecord(parsed.toolCall ?? parsed.tool_call);
@@ -130,15 +123,10 @@ export function normalizeGeminiLiveMessage(
             if (!partRecord) {
               return null;
             }
-            const functionCallRaw = asRecord(
-              partRecord.functionCall ?? partRecord.function_call,
-            );
-            const inlineDataRaw = asRecord(
-              partRecord.inlineData ?? partRecord.inline_data,
-            );
+            const functionCallRaw = asRecord(partRecord.functionCall ?? partRecord.function_call);
+            const inlineDataRaw = asRecord(partRecord.inlineData ?? partRecord.inline_data);
             return {
-              text:
-                typeof partRecord.text === "string" ? partRecord.text : undefined,
+              text: typeof partRecord.text === "string" ? partRecord.text : undefined,
               inlineData: inlineDataRaw
                 ? {
                     mimeType:
@@ -147,22 +135,14 @@ export function normalizeGeminiLiveMessage(
                         : typeof inlineDataRaw.mime_type === "string"
                           ? inlineDataRaw.mime_type
                           : undefined,
-                    data:
-                      typeof inlineDataRaw.data === "string"
-                        ? inlineDataRaw.data
-                        : undefined,
+                    data: typeof inlineDataRaw.data === "string" ? inlineDataRaw.data : undefined,
                   }
                 : undefined,
               functionCall: functionCallRaw
                 ? {
-                    id:
-                      typeof functionCallRaw.id === "string"
-                        ? functionCallRaw.id
-                        : undefined,
+                    id: typeof functionCallRaw.id === "string" ? functionCallRaw.id : undefined,
                     name:
-                      typeof functionCallRaw.name === "string"
-                        ? functionCallRaw.name
-                        : undefined,
+                      typeof functionCallRaw.name === "string" ? functionCallRaw.name : undefined,
                     args: asRecord(functionCallRaw.args) ?? undefined,
                   }
                 : undefined,
@@ -173,11 +153,8 @@ export function normalizeGeminiLiveMessage(
 
     serverContent = {
       turnComplete:
-        serverRaw.turnComplete === true || serverRaw.turn_complete === true
-          ? true
-          : undefined,
-      interrupted:
-        serverRaw.interrupted === true ? true : undefined,
+        serverRaw.turnComplete === true || serverRaw.turn_complete === true ? true : undefined,
+      interrupted: serverRaw.interrupted === true ? true : undefined,
       inputTranscription: readTranscription(
         serverRaw.inputTranscription ?? serverRaw.input_transcription,
       ),
@@ -202,8 +179,7 @@ export function normalizeGeminiLiveMessage(
           }
           return {
             id: typeof callRecord.id === "string" ? callRecord.id : undefined,
-            name:
-              typeof callRecord.name === "string" ? callRecord.name : undefined,
+            name: typeof callRecord.name === "string" ? callRecord.name : undefined,
             args: asRecord(callRecord.args) ?? undefined,
           };
         })
@@ -216,8 +192,7 @@ export function normalizeGeminiLiveMessage(
     Object.prototype.hasOwnProperty.call(parsed, "setupComplete") ||
     Object.prototype.hasOwnProperty.call(parsed, "setup_complete")
   ) {
-    message.setupComplete =
-      asRecord(parsed.setupComplete ?? parsed.setup_complete) ?? {};
+    message.setupComplete = asRecord(parsed.setupComplete ?? parsed.setup_complete) ?? {};
   }
 
   if (serverContent) {
@@ -230,11 +205,9 @@ export function normalizeGeminiLiveMessage(
 
   if (errorRaw) {
     message.error = {
-      message:
-        typeof errorRaw.message === "string" ? errorRaw.message : undefined,
+      message: typeof errorRaw.message === "string" ? errorRaw.message : undefined,
       code: typeof errorRaw.code === "number" ? errorRaw.code : undefined,
-      status:
-        typeof errorRaw.status === "string" ? errorRaw.status : undefined,
+      status: typeof errorRaw.status === "string" ? errorRaw.status : undefined,
     };
   }
 
@@ -311,9 +284,7 @@ export function extractUserTranscript(message: GeminiLiveMessage): {
 
 export function extractAssistantText(message: GeminiLiveMessage): string {
   const parts = message.serverContent?.modelTurn?.parts ?? [];
-  const textParts = parts
-    .map((part) => part.text?.trim() ?? "")
-    .filter(Boolean);
+  const textParts = parts.map((part) => part.text?.trim() ?? "").filter(Boolean);
 
   if (textParts.length > 0) {
     return textParts.join("\n").trim();
@@ -506,7 +477,7 @@ function shouldInsertSpaceBetween(left: string, right: string): boolean {
   if (/^[,.!?;:)\]}]/.test(right)) {
     return false;
   }
-  if (/[(\[{]$/.test(left)) {
+  if (/[([{]$/.test(left)) {
     return false;
   }
   if (leftLast === "-" || rightFirst === "-") {
@@ -604,9 +575,7 @@ export class GeminiLiveSession {
         return;
       } catch (error) {
         const message =
-          error instanceof Error
-            ? error.message
-            : "Gemini Live Verbindung fehlgeschlagen.";
+          error instanceof Error ? error.message : "Gemini Live Verbindung fehlgeschlagen.";
         errors.push(`[${apiVersion}] ${message}`);
         this.cleanupConnection();
 
@@ -626,9 +595,7 @@ export class GeminiLiveSession {
       }
     }
 
-    throw new Error(
-      `${errors.join(" · ")} (Modell: ${normalizedModel})`,
-    );
+    throw new Error(`${errors.join(" · ")} (Modell: ${normalizedModel})`);
   }
 
   private cleanupConnection(): void {
@@ -653,10 +620,7 @@ export class GeminiLiveSession {
     ws.onerror = null;
     ws.onclose = null;
 
-    if (
-      ws.readyState === WebSocket.OPEN ||
-      ws.readyState === WebSocket.CONNECTING
-    ) {
+    if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
       ws.close(1000, "session ended");
     }
   }
@@ -687,9 +651,7 @@ export class GeminiLiveSession {
         this.resolveSetup = null;
         this.rejectSetup = null;
         reject(
-          new Error(
-            `Setup-Timeout. Modell „${normalizeModelId(this.speech.modelId)}“ prüfen.`,
-          ),
+          new Error(`Setup-Timeout. Modell „${normalizeModelId(this.speech.modelId)}“ prüfen.`),
         );
       }, SETUP_TIMEOUT_MS);
 
@@ -738,9 +700,7 @@ export class GeminiLiveSession {
           (event.code === 1000
             ? "Verbindung vom Server beendet (kein setupComplete)."
             : `WebSocket Code ${event.code}.`);
-        this.rejectSetup?.(
-          new Error(`Verbindung getrennt (${apiVersion}): ${detail}`),
-        );
+        this.rejectSetup?.(new Error(`Verbindung getrennt (${apiVersion}): ${detail}`));
       }
 
       if (this.ws === ws) {
@@ -803,11 +763,7 @@ export class GeminiLiveSession {
   }
 
   sendToolResponse(responses: GeminiFunctionResponse[]): void {
-    if (
-      !this.ws ||
-      this.ws.readyState !== WebSocket.OPEN ||
-      responses.length === 0
-    ) {
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN || responses.length === 0) {
       return;
     }
     this.ws.send(JSON.stringify(buildGeminiToolResponseMessage(responses)));
@@ -877,9 +833,7 @@ export class GeminiLiveSession {
         this.sendToolResponse(responses);
       } catch (error) {
         this.callbacks.onError?.(
-          error instanceof Error
-            ? error.message
-            : "Tool-Ausführung fehlgeschlagen.",
+          error instanceof Error ? error.message : "Tool-Ausführung fehlgeschlagen.",
         );
       } finally {
         this.handlingTools = false;
@@ -967,9 +921,7 @@ export class GeminiLiveSession {
       return;
     }
 
-    const accumulated = this.inputTranscripts.push(
-      content.inputTranscription?.text,
-    );
+    const accumulated = this.inputTranscripts.push(content.inputTranscription?.text);
     if (accumulated) {
       this.callbacks.onPartialTranscript?.(accumulated);
       if (this.turnFinalizeTimer !== null) {
@@ -980,8 +932,7 @@ export class GeminiLiveSession {
     }
 
     const shouldFinalize =
-      content.turnComplete === true ||
-      content.inputTranscription?.finished === true;
+      content.turnComplete === true || content.inputTranscription?.finished === true;
 
     if (shouldFinalize) {
       if (this.inputTranscripts.current || accumulated) {
@@ -1001,7 +952,4 @@ export class GeminiLiveSession {
   }
 }
 
-export {
-  buildAgentSystemInstruction,
-  buildTranscriptionSystemInstruction,
-} from "./speech-tools";
+export { buildAgentSystemInstruction, buildTranscriptionSystemInstruction } from "./speech-tools";

@@ -29,10 +29,7 @@ export class NativeWebSocketService {
     this.errorHandler = handler;
   }
 
-  async connect(
-    url: string,
-    options?: { pinnedFingerprint?: string },
-  ): Promise<void> {
+  async connect(url: string, options?: { pinnedFingerprint?: string }): Promise<void> {
     this.url = prepareServerUrl(url);
     await this.setupListeners();
     setConnecting();
@@ -55,9 +52,7 @@ export class NativeWebSocketService {
       });
     } catch (error) {
       setConnectionError();
-      throw new Error(
-        formatInvokeError(error, "Verbindung konnte nicht gestartet werden."),
-      );
+      throw new Error(formatInvokeError(error, "Verbindung konnte nicht gestartet werden."));
     }
   }
 
@@ -85,58 +80,49 @@ export class NativeWebSocketService {
     try {
       this.unlisteners.push(
         await listen<string>("agodesk:message", (event) => {
-        try {
-          const message = JSON.parse(event.payload) as WsMessage;
-          this.messageHandler?.(message);
-        } catch {
-          // ignore invalid frames
-        }
-      }),
-    );
+          try {
+            const message = JSON.parse(event.payload) as WsMessage;
+            this.messageHandler?.(message);
+          } catch {
+            // ignore invalid frames
+          }
+        }),
+      );
 
-    this.unlisteners.push(
-      await listen<{ state: string }>("agodesk:connection-state", (event) => {
-        switch (event.payload.state) {
-          case "connecting":
-            setConnecting();
-            break;
-          case "connected":
-            setConnected();
-            this.startPing();
-            break;
-          case "disconnected":
-            this.clearPingTimer();
-            setDisconnected();
-            break;
-          case "error":
+      this.unlisteners.push(
+        await listen<{ state: string }>("agodesk:connection-state", (event) => {
+          switch (event.payload.state) {
+            case "connecting":
+              setConnecting();
+              break;
+            case "connected":
+              setConnected();
+              this.startPing();
+              break;
+            case "disconnected":
+              this.clearPingTimer();
+              setDisconnected();
+              break;
+            case "error":
+              this.clearPingTimer();
+              setConnectionError();
+              break;
+          }
+        }),
+      );
+
+      this.unlisteners.push(
+        await listen<{ code: ClientErrorCode; message: string; origin?: string }>(
+          "agodesk:error",
+          (event) => {
             this.clearPingTimer();
             setConnectionError();
-            break;
-        }
-      }),
-    );
-
-    this.unlisteners.push(
-      await listen<{ code: ClientErrorCode; message: string; origin?: string }>(
-        "agodesk:error",
-        (event) => {
-          this.clearPingTimer();
-          setConnectionError();
-          this.errorHandler?.(
-            event.payload.code,
-            event.payload.message,
-            event.payload.origin,
-          );
-        },
-      ),
-    );
-    } catch (error) {
-      throw new Error(
-        formatInvokeError(
-          error,
-          "Event-Listener konnten nicht registriert werden.",
+            this.errorHandler?.(event.payload.code, event.payload.message, event.payload.origin);
+          },
         ),
       );
+    } catch (error) {
+      throw new Error(formatInvokeError(error, "Event-Listener konnten nicht registriert werden."));
     }
   }
 
@@ -257,6 +243,12 @@ export function isChatVoiceOutputStatus(
   message: WsMessage,
 ): message is WsMessage<import("../types/protocol").ChatVoiceOutputStatusPayload> {
   return message.type === "chat.voice_output.status";
+}
+
+export function isChatAttachmentPrepared(
+  message: WsMessage,
+): message is WsMessage<import("../types/protocol").ChatAttachmentPreparedPayload> {
+  return message.type === "chat.attachment.prepared";
 }
 
 export function isDesktopCommand(

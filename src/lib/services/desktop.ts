@@ -25,16 +25,8 @@ import type {
 import type { DesktopStreamStartParams, DesktopStreamStopParams } from "../types/protocol";
 import { resolveFileCommandPath } from "../types/protocol";
 import { settings } from "../stores/settings";
-import {
-  resetDesktopStreamState,
-  startDesktopStream,
-  stopDesktopStream,
-} from "./desktop-stream";
-import {
-  listRemoteFiles,
-  readRemoteFile,
-  writeRemoteFile,
-} from "./file-commands";
+import { resetDesktopStreamState, startDesktopStream, stopDesktopStream } from "./desktop-stream";
+import { listRemoteFiles, readRemoteFile, writeRemoteFile } from "./file-commands";
 import { searchRemoteFiles, parseFileSearchContent, fileSearchErrorCode } from "./file-search-sync";
 import { fileAccessIsConfigured } from "./file-access";
 
@@ -68,7 +60,9 @@ export async function browserListTabs(): Promise<Record<string, unknown>> {
   return invoke<Record<string, unknown>>("browser_list_tabs");
 }
 
-export async function browserConnect(params: BrowserConnectParams = {}): Promise<Record<string, unknown>> {
+export async function browserConnect(
+  params: BrowserConnectParams = {},
+): Promise<Record<string, unknown>> {
   return invoke<Record<string, unknown>>("browser_connect", { params });
 }
 
@@ -104,8 +98,7 @@ export async function probeBrowserConnection(
       url: params.url ?? "about:blank",
     });
     await browserDisconnect();
-    const endpoint =
-      typeof session.endpoint === "string" ? session.endpoint : undefined;
+    const endpoint = typeof session.endpoint === "string" ? session.endpoint : undefined;
     return {
       success: true,
       message: endpoint ?? "",
@@ -193,11 +186,7 @@ export async function injectInput(event: DesktopInputEvent): Promise<void> {
   await invoke("inject_input", { event });
 }
 
-export async function moveMouse(
-  x: number,
-  y: number,
-  absolute = true,
-): Promise<void> {
+export async function moveMouse(x: number, y: number, absolute = true): Promise<void> {
   await injectInput({
     kind: "mouse_move",
     payload: { x, y, absolute },
@@ -216,10 +205,7 @@ export async function clickMouse(
   });
 }
 
-export async function pressKey(
-  key: string,
-  action: "down" | "up" = "down",
-): Promise<void> {
+export async function pressKey(key: string, action: "down" | "up" = "down"): Promise<void> {
   await injectInput({
     kind: action === "up" ? "key_up" : "key_down",
     payload: { key },
@@ -266,9 +252,7 @@ async function sendDesktopResult(
   payload: DesktopResultPayload,
   context?: DesktopCommandContext,
 ): Promise<void> {
-  await Promise.resolve(
-    wsSend(buildDesktopResultMessage(enrichDesktopResult(payload, context))),
-  );
+  await Promise.resolve(wsSend(buildDesktopResultMessage(enrichDesktopResult(payload, context))));
 }
 
 function desktopFailure(
@@ -440,8 +424,7 @@ export async function executeDesktopCommand(
       }
       case "desktop_stream_stop": {
         const stopped = stopDesktopStream({
-          stream_id:
-            typeof params.stream_id === "string" ? params.stream_id : undefined,
+          stream_id: typeof params.stream_id === "string" ? params.stream_id : undefined,
         });
         if (!stopped) {
           desktopFailure(
@@ -551,8 +534,7 @@ export async function executeDesktopCommand(
           action: String(params.action ?? "click"),
           element_id: String(params.element_id ?? ""),
           value: typeof params.value === "string" ? params.value : undefined,
-          window_id:
-            typeof params.window_id === "string" ? params.window_id : undefined,
+          window_id: typeof params.window_id === "string" ? params.window_id : undefined,
         });
         result.success = true;
         result.data = actionResult;
@@ -573,8 +555,7 @@ export async function executeDesktopCommand(
       case "desktop_browser_connect": {
         try {
           const session = await browserConnect({
-            endpoint:
-              typeof params.endpoint === "string" ? params.endpoint : undefined,
+            endpoint: typeof params.endpoint === "string" ? params.endpoint : undefined,
             port: typeof params.port === "number" ? params.port : undefined,
             auto_launch:
               typeof params.auto_launch === "boolean"
@@ -597,11 +578,9 @@ export async function executeDesktopCommand(
         try {
           const snapshot = await browserSnapshot({
             selector: typeof params.selector === "string" ? params.selector : undefined,
-            include_html:
-              params.include_html === true || params.includeHtml === true,
+            include_html: params.include_html === true || params.includeHtml === true,
             include_screenshot:
-              params.include_screenshot === true ||
-              params.includeScreenshot === true,
+              params.include_screenshot === true || params.includeScreenshot === true,
             screenshot_format:
               params.screenshot_format === "png" ||
               params.screenshot_format === "webp" ||
@@ -632,10 +611,7 @@ export async function executeDesktopCommand(
       }
       case "desktop_browser_action": {
         const action = String(params.action ?? "click");
-        const tabOnly =
-          action === "select_tab" ||
-          action === "new_tab" ||
-          action === "close_tab";
+        const tabOnly = action === "select_tab" || action === "new_tab" || action === "close_tab";
         if (!tabOnly) {
           const status = await controlPermissionStatus();
           if (!status.input_injection) {
@@ -658,8 +634,7 @@ export async function executeDesktopCommand(
         try {
           const browserResult = await browserAction({
             action: String(params.action ?? "click"),
-            selector:
-              typeof params.selector === "string" ? params.selector : undefined,
+            selector: typeof params.selector === "string" ? params.selector : undefined,
             tab_id:
               typeof params.tab_id === "string"
                 ? params.tab_id
@@ -732,11 +707,7 @@ export async function executeDesktopCommand(
             result.data = { content };
             if (parsed?.status === "error") {
               const message = parsed.message?.trim() || "file_search failed";
-              desktopFailure(
-                result,
-                fileSearchErrorCode(message) as DesktopErrorCode,
-                message,
-              );
+              desktopFailure(result, fileSearchErrorCode(message) as DesktopErrorCode, message);
               break;
             }
             result.success = true;
@@ -754,11 +725,7 @@ export async function executeDesktopCommand(
           } else if (command.operation === "file_read") {
             const readPath = resolveFileCommandPath(fileParams, { required: true });
             if (!readPath) {
-              desktopFailure(
-                result,
-                "FILE_PATH_DENIED",
-                "'path' is required for file_read.",
-              );
+              desktopFailure(result, "FILE_PATH_DENIED", "'path' is required for file_read.");
               break;
             }
             const read = await readRemoteFile(
@@ -774,11 +741,7 @@ export async function executeDesktopCommand(
           } else {
             const writePath = resolveFileCommandPath(fileParams, { required: true });
             if (!writePath) {
-              desktopFailure(
-                result,
-                "FILE_PATH_DENIED",
-                "'path' is required for file_write.",
-              );
+              desktopFailure(result, "FILE_PATH_DENIED", "'path' is required for file_write.");
               break;
             }
             const content = fileParams.content ?? "";
@@ -827,8 +790,7 @@ export async function executeDesktopCommand(
         );
     }
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Desktop command failed.";
+    const message = error instanceof Error ? error.message : "Desktop command failed.";
     result.error = message;
     if (!result.error_code) {
       result.error_code = "DESKTOP_OPERATION_UNSUPPORTED";
@@ -838,9 +800,7 @@ export async function executeDesktopCommand(
   await sendDesktopResult(wsSend, finalizeDesktopResult(result), context);
 }
 
-function buildDesktopResultMessage(
-  payload: DesktopResultPayload,
-): WsMessage<DesktopResultPayload> {
+function buildDesktopResultMessage(payload: DesktopResultPayload): WsMessage<DesktopResultPayload> {
   return {
     id: crypto.randomUUID(),
     type: "desktop.result",

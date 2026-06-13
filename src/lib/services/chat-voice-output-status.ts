@@ -8,9 +8,7 @@ import type {
   ChatVoiceOutputStatusReason,
   WsMessage,
 } from "../types/protocol";
-import {
-  hasAdvertisedChatVoiceOutputStatus,
-} from "../types/protocol";
+import { hasAdvertisedChatVoiceOutputStatus } from "../types/protocol";
 import type { NativeWebSocketService } from "./websocket";
 
 export function resolveChatSpeakerMode(appSettings: AppSettings): boolean {
@@ -20,9 +18,7 @@ export function resolveChatSpeakerMode(appSettings: AppSettings): boolean {
   return appSettings.chatSpeakerMode;
 }
 
-export function resolveVoiceOutputProtocolMode(
-  speakerMode: boolean,
-): ChatVoiceOutputProtocolMode {
+export function resolveVoiceOutputProtocolMode(speakerMode: boolean): ChatVoiceOutputProtocolMode {
   return speakerMode ? "on" : "off";
 }
 
@@ -64,18 +60,11 @@ export async function notifyAuraGoVoiceOutputStatus(
   const conversationId = get(chatConversationState).activeConversationId;
 
   await ws.send(
-    buildChatVoiceOutputStatusMessage(
-      session.sessionId,
-      conversationId,
-      speakerMode,
-      reason,
-    ),
+    buildChatVoiceOutputStatusMessage(session.sessionId, conversationId, speakerMode, reason),
   );
   return true;
 }
 
-export async function syncAuraGoVoiceOutputStatus(
-  ws: NativeWebSocketService,
-): Promise<void> {
+export async function syncAuraGoVoiceOutputStatus(ws: NativeWebSocketService): Promise<void> {
   await notifyAuraGoVoiceOutputStatus(ws, "session_sync");
 }

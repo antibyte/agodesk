@@ -2,13 +2,8 @@ import type { AgentMoodMetadata, SpeechSettings } from "../types/protocol";
 import { getTranslateFn } from "../i18n/store";
 import type { ActiveSpeechSession, SpeechSessionCallbacks } from "./speech-session";
 import { LocalSpeechUtteranceEndpoint } from "./local-speech-utterance";
-import {
-  synthesizeAndPlayLocalSpeech,
-} from "./local-speech-tts";
-import {
-  speechSidecarPing,
-  speechSidecarTranscribe,
-} from "./speech-sidecar";
+import { synthesizeAndPlayLocalSpeech } from "./local-speech-tts";
+import { speechSidecarPing, speechSidecarTranscribe } from "./speech-sidecar";
 import { SpeechAudioPlayback } from "./speech-audio-playback";
 
 /**
@@ -59,8 +54,7 @@ export class LocalSpeechSession implements ActiveSpeechSession {
     try {
       await speechSidecarPing();
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : String(error);
+      const message = error instanceof Error ? error.message : String(error);
       const translated = getTranslateFn()("speechFlow.error.sidecarUnavailable", {
         message,
       });
@@ -105,11 +99,8 @@ export class LocalSpeechSession implements ActiveSpeechSession {
     try {
       await synthesizeAndPlayLocalSpeech(trimmed, this.speech, this.playback);
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : String(error);
-      this.callbacks.onError?.(
-        getTranslateFn()("speechFlow.error.synthesizeFailed", { message }),
-      );
+      const message = error instanceof Error ? error.message : String(error);
+      this.callbacks.onError?.(getTranslateFn()("speechFlow.error.synthesizeFailed", { message }));
     } finally {
       this.speaking = false;
       if (!this.closed) {
@@ -125,9 +116,7 @@ export class LocalSpeechSession implements ActiveSpeechSession {
 
     this.transcribing = true;
     this.callbacks.onStatus?.("processing");
-    this.callbacks.onPartialTranscript?.(
-      getTranslateFn()("speechFlow.processingUtterance"),
-    );
+    this.callbacks.onPartialTranscript?.(getTranslateFn()("speechFlow.processingUtterance"));
 
     try {
       const result = await speechSidecarTranscribe({
@@ -156,11 +145,8 @@ export class LocalSpeechSession implements ActiveSpeechSession {
         }, 1500);
       }
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : String(error);
-      this.callbacks.onError?.(
-        getTranslateFn()("speechFlow.error.transcribeFailed", { message }),
-      );
+      const message = error instanceof Error ? error.message : String(error);
+      this.callbacks.onError?.(getTranslateFn()("speechFlow.error.transcribeFailed", { message }));
     } finally {
       this.transcribing = false;
       if (!this.closed) {

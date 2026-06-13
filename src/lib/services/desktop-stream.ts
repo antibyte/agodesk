@@ -8,11 +8,7 @@ import type {
   DesktopStreamStopResult,
   WsMessage,
 } from "../types/protocol";
-import {
-  captureScreen,
-  normalizeCaptureResultForWire,
-  type DesktopResultSender,
-} from "./desktop";
+import { captureScreen, normalizeCaptureResultForWire, type DesktopResultSender } from "./desktop";
 
 const MIN_FPS = 1;
 const MAX_FPS = 10;
@@ -76,14 +72,12 @@ async function captureAndSendFrame(stream: ActiveDesktopStream): Promise<void> {
       ...(stream.context?.deviceId ? { device_id: stream.context.deviceId } : {}),
       frame: {
         source: String(frame.source ?? "display"),
-        display_id:
-          typeof frame.display_id === "string" ? frame.display_id : null,
+        display_id: typeof frame.display_id === "string" ? frame.display_id : null,
         window_id: typeof frame.window_id === "string" ? frame.window_id : null,
         format: String(frame.format ?? "jpeg"),
         width: typeof frame.width === "number" ? frame.width : 0,
         height: typeof frame.height === "number" ? frame.height : 0,
-        scale_factor:
-          typeof frame.scale_factor === "number" ? frame.scale_factor : 1,
+        scale_factor: typeof frame.scale_factor === "number" ? frame.scale_factor : 1,
         mime: String(frame.mime ?? "image/jpeg"),
         data_base64: String(frame.data_base64),
       },
@@ -128,9 +122,12 @@ export async function startDesktopStream(
 
   const stream: ActiveDesktopStream = {
     streamId,
-    timer: setInterval(() => {
-      void captureAndSendFrame(stream);
-    }, Math.round(1000 / fps)),
+    timer: setInterval(
+      () => {
+        void captureAndSendFrame(stream);
+      },
+      Math.round(1000 / fps),
+    ),
     sequence: 0,
     framesSent: 0,
     capturing: false,

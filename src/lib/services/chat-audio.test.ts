@@ -13,9 +13,6 @@ function extractBase64FromDataUrl(dataUrl: string): string | null {
 }
 
 test("extractBase64FromDataUrl liest base64 aus data-URLs", () => {
-  assert.equal(
-    extractBase64FromDataUrl("data:audio/mpeg;base64,QUJD"),
-    "QUJD",
-  );
+  assert.equal(extractBase64FromDataUrl("data:audio/mpeg;base64,QUJD"), "QUJD");
   assert.equal(extractBase64FromDataUrl("https://example.com/a.mp3"), null);
 });

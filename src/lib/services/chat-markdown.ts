@@ -3,11 +3,7 @@ import { gfmFromMarkdown } from "mdast-util-gfm";
 import { toString } from "mdast-util-to-string";
 import { gfm } from "micromark-extension-gfm";
 import type { Content, ListItem, PhrasingContent, Root } from "mdast";
-import type {
-  ChatContentBlock,
-  ChatListItem,
-  ChatTextSegment,
-} from "./chat-format-types";
+import type { ChatContentBlock, ChatListItem, ChatTextSegment } from "./chat-format-types";
 
 export function sanitizeChatLinkHref(href: string): string | null {
   const trimmed = href.trim();

@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { ChatMessage } from "../types/protocol";
   import ChatMessageBody from "./ChatMessageBody.svelte";
+  import ChatUserAttachmentPreview from "./ChatUserAttachmentPreview.svelte";
   import PersonaAvatar from "./PersonaAvatar.svelte";
   import { formatMessageTime, messageGroupMeta } from "../services/chat-format";
   import { chatMessages } from "../stores/chat";
@@ -9,21 +10,16 @@
   interface Props {
     message: ChatMessage;
     index: number;
+    serverUrl?: string;
   }
 
-  let { message, index }: Props = $props();
+  let { message, index, serverUrl = "" }: Props = $props();
 
   const group = $derived(messageGroupMeta($chatMessages, index));
-  const showAssistantAvatar = $derived(
-    message.role === "assistant" && !group.groupWithPrevious,
-  );
-  const showUserAvatar = $derived(
-    message.role === "user" && !group.groupWithPrevious,
-  );
+  const showAssistantAvatar = $derived(message.role === "assistant" && !group.groupWithPrevious);
+  const showUserAvatar = $derived(message.role === "user" && !group.groupWithPrevious);
   const showTime = $derived(!group.groupWithNext);
-  const personaImageUrl = $derived(
-    $personaState.iconUrl || $personaState.avatarUrl,
-  );
+  const personaImageUrl = $derived($personaState.iconUrl || $personaState.avatarUrl);
 </script>
 
 <div
@@ -39,7 +35,12 @@
       class:tail-user={!group.groupWithNext}
       class:grouped={group.groupWithPrevious}
     >
-      <ChatMessageBody text={message.text} tone={message.role} />
+      {#if message.attachments?.length}
+        <ChatUserAttachmentPreview attachments={message.attachments} {serverUrl} />
+      {/if}
+      {#if message.text.trim()}
+        <ChatMessageBody text={message.text} tone={message.role} />
+      {/if}
       {#if showTime}
         <time datetime={message.timestamp}>{formatMessageTime(message.timestamp)}</time>
       {/if}

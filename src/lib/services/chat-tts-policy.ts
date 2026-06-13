@@ -1,8 +1,5 @@
 import type { AppSettings, ChatTtsMode } from "../types/protocol";
-import {
-  auragoServerTtsAvailable,
-  hasAdvertisedChatVoiceOutput,
-} from "../types/protocol";
+import { auragoServerTtsAvailable, hasAdvertisedChatVoiceOutput } from "../types/protocol";
 import { resolveChatSpeakerMode } from "./chat-voice-output-status";
 
 export function shouldSendVoiceOutputFlag(
@@ -68,6 +65,9 @@ export function shouldUseFrontendTtsForSettings(
   );
 }
 
-export function auragoTtsUnavailable(mode: ChatTtsMode, advertisedCapabilities: readonly string[]): boolean {
+export function auragoTtsUnavailable(
+  mode: ChatTtsMode,
+  advertisedCapabilities: readonly string[],
+): boolean {
   return mode === "aurago" && !auragoServerTtsAvailable(advertisedCapabilities);
 }

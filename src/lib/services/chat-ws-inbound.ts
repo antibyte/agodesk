@@ -10,23 +10,12 @@ import { handleChatResponseChunk } from "./chat-inbound";
 import { applySessionClear } from "./session-clear";
 import { handleChatPlanUpdate, reconcilePlanFromResponse } from "./chat-plan-inbound";
 import { handleChatResponseMood, handleChatChunkMood } from "./agent-mood-inbound";
-import {
-  applyPersonaAssets,
-  clearPersonaAssets,
-  requestPersonaAssets,
-} from "./persona-flow";
-import {
-  handleSessionAccepted,
-  handleSessionError,
-  handleSystemConnected,
-} from "./session-flow";
+import { applyPersonaAssets, clearPersonaAssets, requestPersonaAssets } from "./persona-flow";
+import { handleSessionAccepted, handleSessionError, handleSystemConnected } from "./session-flow";
 import { handleIncomingDesktopCommand } from "./desktop-flow";
 import { playUiSound } from "./ui-sounds";
 import { notifyIncomingMessageIfHidden } from "./message-notifications";
-import {
-  cancelAssistantFrontendTts,
-  scheduleAssistantFrontendTts,
-} from "./chat-assistant-tts";
+import { cancelAssistantFrontendTts, scheduleAssistantFrontendTts } from "./chat-assistant-tts";
 import {
   applyChatSessionPayload,
   bootstrapChatConversation,
@@ -39,21 +28,22 @@ import {
 import { enqueueChatAudio } from "./chat-audio";
 import { handleChatMediaMessage } from "./chat-media-flow";
 import { enqueueChatMediaAudio } from "./chat-media-playback";
+import {
+  handleChatAttachmentPreparedMessage,
+  rejectAttachmentPrepareByRequestId,
+} from "./chat-attachment-flow";
 import { bootstrapAgodeskFeatures } from "./agodesk-features-bootstrap";
 import { handleIntegrationsWebhostsMessage } from "./integrations-flow";
 import { handleSystemWarningsMessage } from "./system-warnings-flow";
-import {
-  shouldUseFrontendTtsForSettings,
-} from "./chat-tts-policy";
-import {
-  syncAuraGoVoiceOutputStatus,
-} from "./chat-voice-output-status";
+import { shouldUseFrontendTtsForSettings } from "./chat-tts-policy";
+import { syncAuraGoVoiceOutputStatus } from "./chat-voice-output-status";
 import { saveSettings } from "./settings";
 import type { WebSocketService } from "./websocket";
 import {
   isChatAudio,
   isChatCancelled,
   isChatError,
+  isChatAttachmentPrepared,
   isChatMedia,
   isChatPlanUpdate,
   isChatResponse,
@@ -79,6 +69,7 @@ import {
   normalizeChatCancelledPayload,
   normalizeChatResponsePayload,
   normalizeChatVoiceOutputStatusPayload,
+  isChatAttachmentNegotiationError,
 } from "../types/protocol";
 import { resolveChatSpeakerMode } from "./chat-voice-output-status";
 
@@ -104,10 +95,7 @@ export interface ChatWsInboundContext extends ChatWsInboundCallbacks {
 
 function maybeRequestPersonaAssets(wsService: WebSocketService): void {
   const session = get(sessionState);
-  if (
-    !session.sessionId ||
-    (session.status !== "loopback" && session.status !== "accepted")
-  ) {
+  if (!session.sessionId || (session.status !== "loopback" && session.status !== "accepted")) {
     return;
   }
   void requestPersonaAssets(wsService, session.sessionId);
@@ -115,10 +103,7 @@ function maybeRequestPersonaAssets(wsService: WebSocketService): void {
 
 function maybeBootstrapConversation(wsService: WebSocketService): void {
   const session = get(sessionState);
-  if (
-    !session.sessionId ||
-    (session.status !== "loopback" && session.status !== "accepted")
-  ) {
+  if (!session.sessionId || (session.status !== "loopback" && session.status !== "accepted")) {
     return;
   }
 
@@ -140,20 +125,12 @@ function maybeSpeakAssistantResponse(requestId: string, text: string): void {
   const appSettings = get(settings);
   const caps = get(sessionState).advertisedCapabilities;
   const serverAudio = convo.serverAudioRequestIds.includes(requestId);
-  if (
-    !shouldUseFrontendTtsForSettings(
-      appSettings,
-      caps,
-      serverAudio,
-    )
-  ) {
+  if (!shouldUseFrontendTtsForSettings(appSettings, caps, serverAudio)) {
     return;
   }
 
   const delayMs =
-    appSettings.chatTtsMode === "auto" &&
-    auragoServerTtsAvailable(caps) &&
-    !serverAudio
+    appSettings.chatTtsMode === "auto" && auragoServerTtsAvailable(caps) && !serverAudio
       ? AUTO_TTS_FALLBACK_DELAY_MS
       : 0;
 
@@ -166,10 +143,7 @@ function finishRequest(requestId?: string): void {
 
 function maybeBootstrapAgodeskFeatures(wsService: WebSocketService): void {
   const session = get(sessionState);
-  if (
-    !session.sessionId ||
-    (session.status !== "loopback" && session.status !== "accepted")
-  ) {
+  if (!session.sessionId || (session.status !== "loopback" && session.status !== "accepted")) {
     return;
   }
   void bootstrapAgodeskFeatures(wsService, session.sessionId);
@@ -196,9 +170,7 @@ export async function handleChatWsMessage(
     const cleared = await applySessionClear(message.payload);
     if (cleared) {
       ctx.addSystemMessage(
-        cleared.reason
-          ? "chatView.sessionClear.withReason"
-          : "chatView.sessionClear.notice",
+        cleared.reason ? "chatView.sessionClear.withReason" : "chatView.sessionClear.notice",
         cleared.reason ? { reason: cleared.reason } : undefined,
         "info",
       );
@@ -213,11 +185,7 @@ export async function handleChatWsMessage(
     ctx.resetPlanAndMoodState();
     clearPersonaAssets();
     try {
-      await handleSystemConnected(
-        ctx.wsService,
-        message.payload,
-        ctx.serverUrl,
-      );
+      await handleSystemConnected(ctx.wsService, message.payload, ctx.serverUrl);
       maybeRequestPersonaAssets(ctx.wsService);
       maybeBootstrapConversation(ctx.wsService);
       maybeBootstrapAgodeskFeatures(ctx.wsService);
@@ -271,9 +239,7 @@ export async function handleChatWsMessage(
   if (isChatAudio(message)) {
     const normalized = normalizeChatAudioPayload(message.payload);
     const conversationId =
-      normalized?.conversation_id ||
-      get(chatConversationState).activeConversationId ||
-      "";
+      normalized?.conversation_id || get(chatConversationState).activeConversationId || "";
     if (normalized && conversationId && resolveChatSpeakerMode(get(settings))) {
       enqueueChatAudio(
         ctx.serverUrl,
@@ -292,11 +258,7 @@ export async function handleChatWsMessage(
   }
 
   if (isChatMedia(message) && hasAdvertisedChatMediaEvents(caps)) {
-    const normalized = handleChatMediaMessage(
-      message.payload,
-      message.id,
-      message.timestamp,
-    );
+    const normalized = handleChatMediaMessage(message.payload, message.id, message.timestamp);
     if (normalized?.item.kind === "audio") {
       const path = normalized.item.path ?? normalized.item.url;
       if (path) {
@@ -309,6 +271,11 @@ export async function handleChatWsMessage(
         );
       }
     }
+    return;
+  }
+
+  if (isChatAttachmentPrepared(message)) {
+    handleChatAttachmentPreparedMessage(message);
     return;
   }
 
@@ -335,10 +302,7 @@ export async function handleChatWsMessage(
         message.payload.metadata,
       );
     }
-    const result = handleChatResponseChunk(
-      message.payload,
-      message.timestamp,
-    );
+    const result = handleChatResponseChunk(message.payload, message.timestamp);
     if (!result) {
       return;
     }
@@ -365,8 +329,7 @@ export async function handleChatWsMessage(
     }
 
     const responseText = normalized?.text ?? message.payload.text;
-    const responseRequestId =
-      normalized?.request_id ?? message.payload.request_id;
+    const responseRequestId = normalized?.request_id ?? message.payload.request_id;
 
     finishRequest(responseRequestId);
 
@@ -396,10 +359,13 @@ export async function handleChatWsMessage(
     ctx.setPairingBusy(false);
     finishRequest(message.payload.request_id);
 
+    if (rejectAttachmentPrepareByRequestId(message.payload.request_id, message.payload.message)) {
+      return;
+    }
+
     const bootstrapActive = isConversationBootstrapPending();
     const transportSessionError =
-      message.payload.code.startsWith("SESSION_") &&
-      !message.payload.code.includes("CONVERSATION");
+      message.payload.code.startsWith("SESSION_") && !message.payload.code.includes("CONVERSATION");
 
     if (bootstrapActive) {
       await recoverConversationBootstrap(ctx.wsService);
@@ -417,18 +383,21 @@ export async function handleChatWsMessage(
     chatMessages.addMessage({
       id: message.id,
       role: "system",
-      text: message.payload.message,
+      text: isChatAttachmentNegotiationError(message.payload)
+        ? getTranslateFn()("chatView.error.attachmentsNotSupported")
+        : message.payload.message,
       timestamp: message.timestamp,
       requestId: message.payload.request_id,
       tone: "error",
+      ...(isChatAttachmentNegotiationError(message.payload)
+        ? { messageKey: "chatView.error.attachmentsNotSupported" as const }
+        : {}),
     });
     return;
   }
 
   if (isDesktopCommand(message)) {
-    ctx.setRemoteOperation(
-      String((message.payload as { operation?: string })?.operation ?? ""),
-    );
+    ctx.setRemoteOperation(String((message.payload as { operation?: string })?.operation ?? ""));
     await handleIncomingDesktopCommand(message, {
       sessionStatus: get(sessionState).status,
       remoteControlActive: get(sessionState).remoteControlActive,
@@ -441,11 +410,7 @@ export async function handleChatWsMessage(
         try {
           await ctx.wsSend(resultMessage);
         } catch (error) {
-          ctx.addSystemMessage(
-            "chatView.error.desktopResultSendFailed",
-            undefined,
-            "error",
-          );
+          ctx.addSystemMessage("chatView.error.desktopResultSendFailed", undefined, "error");
           void error;
         }
       },

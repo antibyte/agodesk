@@ -45,7 +45,7 @@ pub fn run() {
                 if let WindowEvent::CloseRequested { api, .. } = event {
                     api.prevent_close();
                     let app = window.app_handle();
-                    let _ = integration_embed::integration_embed_hide_impl(&app);
+                    let _ = integration_embed::integration_embed_hide_impl(app);
                     let _ = app.emit("integration-embed-closed", ());
                 }
                 return;
@@ -54,11 +54,11 @@ pub fn run() {
             if window.label() == "main" {
                 let state = window.state::<TrayState>();
                 let tray_state = state.inner();
-                if !tray_state.minimize_to_tray.load(Ordering::Relaxed) {
-                    if matches!(event, WindowEvent::CloseRequested { .. }) {
-                        tray::request_app_exit(window.app_handle());
-                        return;
-                    }
+                if !tray_state.minimize_to_tray.load(Ordering::Relaxed)
+                    && matches!(event, WindowEvent::CloseRequested { .. })
+                {
+                    tray::request_app_exit(window.app_handle());
+                    return;
                 }
                 tray::handle_window_event(window, event, tray_state);
                 return;
@@ -104,6 +104,7 @@ pub fn run() {
             tray::update_tray_labels,
             tray::show_main_window,
             ws::transport::fetch_server_asset,
+            ws::transport::upload_chat_attachment,
             ws::transport::probe_server_certificate,
             ws::transport::save_trusted_certificate,
             ws::transport::get_trusted_certificates,

@@ -4,28 +4,27 @@
   import InputBox from "./InputBox.svelte";
   import MessageList from "./MessageList.svelte";
   import StatusBar from "./StatusBar.svelte";
-  import SettingsView from "./SettingsView.svelte";
+  import type { Component } from "svelte";
+  import type { SettingsSavePayload } from "./SettingsView.svelte";
   import PairingBanner from "./PairingBanner.svelte";
   import RemoteControlBanner from "./RemoteControlBanner.svelte";
   import ChatPlanFloatingPanel from "./ChatPlanFloatingPanel.svelte";
   import ChatHistoryPanel from "./ChatHistoryPanel.svelte";
   import IntegrationsPanel from "./IntegrationsPanel.svelte";
   import SystemWarningsPanel from "./SystemWarningsPanel.svelte";
-  import IntegrationEmbedModal from "./IntegrationEmbedModal.svelte";
-  import CertificateTrustModal from "./CertificateTrustModal.svelte";
   import {
     closeIntegrationEmbed,
     isIntegrationEmbedAvailable,
     isIntegrationPreviewOpen,
     openIntegrationPreview,
   } from "../services/integration-embed";
-  import SpeechBackgroundVisualizer from "./SpeechBackgroundVisualizer.svelte";
   import SpeechBanner from "./SpeechBanner.svelte";
   import { chatMessages } from "../stores/chat";
   import { settings } from "../stores/settings";
   import { sessionState } from "../stores/session";
   import { connectionStatus } from "../stores/connection";
   import { speechState } from "../stores/speech";
+  import { i18n } from "../i18n";
   import { getTranslateFn } from "../i18n/store";
   import type { MessageKey } from "../i18n/types";
   import { loadSettings, saveSettings } from "../services/settings";
@@ -34,7 +33,10 @@
   import { openExternalUrl } from "../services/open-external-url";
   import { applyMinimizeToTraySetting } from "../services/tray";
   import { applyShowWindowHotkey } from "../services/show-window-hotkey";
-  import { sendChatMessageWithConversation, stopActiveChatRequest } from "../services/chat-outbound";
+  import {
+    sendChatMessageWithConversation,
+    stopActiveChatRequest,
+  } from "../services/chat-outbound";
   import {
     createNewChatConversation,
     loadChatConversation,
@@ -74,10 +76,7 @@
     createSystemMessageAppender,
     handleChatWsMessage,
   } from "../services/chat-ws-inbound";
-  import {
-    connectChatWebSocket,
-    createWebSocketService,
-  } from "../services/chat-ws-connect";
+  import { connectChatWebSocket, createWebSocketService } from "../services/chat-ws-connect";
   import { chatPlanState, isChatPlanPanelVisible } from "../stores/chat-plan";
   import { agentMoodState } from "../stores/agent-mood";
   import type {
@@ -90,6 +89,8 @@
     canSendChat,
     hasAdvertisedChatSessions,
     hasAdvertisedChatMediaEvents,
+    hasAdvertisedChatMediaUpload,
+    canUseChatAttachments,
     hasAdvertisedIntegrationsWebhosts,
     hasAdvertisedPlanUpdates,
     hasAdvertisedRemoteDesktopCapture,
@@ -99,8 +100,25 @@
   } from "../types/protocol";
 
   let pending = $state(false);
+  let SettingsViewLazy = $state<Component | null>(null);
+  let CertificateTrustModalLazy = $state<Component | null>(null);
+  let IntegrationEmbedModalLazy = $state<Component | null>(null);
+  let SpeechBackgroundVisualizerLazy = $state<Component | null>(null);
   let settingsOpen = $state(false);
+  let settingsInitialSection = $state<
+    | "connection"
+    | "device"
+    | "appearance"
+    | "language"
+    | "desktop"
+    | "files"
+    | "speech"
+    | "about"
+    | undefined
+  >(undefined);
   let pairingBusy = $state(false);
+  let pairingFocusRequest = $state(0);
+  let planDismissed = $state(false);
   let remoteOperation = $state("");
   let certModalOpen = $state(false);
   let tlsErrorCode = $state<ClientErrorCode | null>(null);
@@ -121,24 +139,26 @@
   const chatSpeakerEnabled = $derived(resolveChatSpeakerMode($settings));
 
   const chatAllowed = $derived(
-    canSendChat(
-      $sessionState.status,
-      $connectionStatus,
-      $sessionState.sessionId,
-    ) &&
+    canSendChat($sessionState.status, $connectionStatus, $sessionState.sessionId) &&
       !pending &&
       chatConversationReady,
   );
 
   const stopVisible = $derived($chatConversationState.requestInFlight);
 
-  const historyEnabled = $derived(
-    hasAdvertisedChatSessions($sessionState.advertisedCapabilities),
+  const historyEnabled = $derived(hasAdvertisedChatSessions($sessionState.advertisedCapabilities));
+
+  const mediaEnabled = $derived(hasAdvertisedChatMediaEvents($sessionState.advertisedCapabilities));
+
+  const attachmentsEnabled = $derived(
+    hasAdvertisedChatMediaUpload($sessionState.advertisedCapabilities),
   );
 
-  const mediaEnabled = $derived(
-    hasAdvertisedChatMediaEvents($sessionState.advertisedCapabilities),
+  const attachmentsFullyNegotiated = $derived(
+    canUseChatAttachments($sessionState.advertisedCapabilities),
   );
+
+  const attachmentLimits = $derived($sessionState.attachmentLimits);
 
   const integrationsEnabled = $derived(
     hasAdvertisedIntegrationsWebhosts($sessionState.advertisedCapabilities),
@@ -156,9 +176,7 @@
     return $chatMediaState.mediaByConversation.get(conversationId) ?? [];
   });
 
-  const streamingActive = $derived(
-    $chatMessages.some((message) => message.streaming === true),
-  );
+  const streamingActive = $derived($chatMessages.some((message) => message.streaming === true));
 
   const speechAllowed = $derived($settings.speech.enabled);
 
@@ -169,7 +187,22 @@
 
   const chatPlanVisible = $derived(
     hasAdvertisedPlanUpdates($sessionState.advertisedCapabilities) &&
-      isChatPlanPanelVisible($chatPlanState.plan),
+      isChatPlanPanelVisible($chatPlanState.plan) &&
+      !planDismissed,
+  );
+
+  const headerPanelOpen = $derived(
+    $chatConversationState.historyOpen ||
+      $chatMediaState.integrationsOpen ||
+      $chatMediaState.warningsOpen,
+  );
+
+  const bannerStackCompact = $derived(
+    remoteBannerVisible ||
+      $sessionState.status === "awaiting_pairing" ||
+      $sessionState.status === "error" ||
+      $sessionState.status === "pairing" ||
+      chatPlanVisible,
   );
 
   const inputHint = $derived.by(() => {
@@ -192,11 +225,11 @@
     if (pending) {
       return t("chatView.hint.awaitingResponse");
     }
-    if (
-      hasAdvertisedChatSessions($sessionState.advertisedCapabilities) &&
-      !chatConversationReady
-    ) {
+    if (hasAdvertisedChatSessions($sessionState.advertisedCapabilities) && !chatConversationReady) {
       return t("chatView.hint.conversationLoading");
+    }
+    if (attachmentsEnabled && !attachmentsFullyNegotiated) {
+      return t("inputBox.attachments.negotiationPending");
     }
     return "";
   });
@@ -252,14 +285,12 @@
     await handleChatWsMessage(message, createWsInboundContext());
   }
 
-  async function connect(
-    url: string,
-    options?: { pinnedFingerprint?: string },
-  ): Promise<void> {
+  async function connect(url: string, options?: { pinnedFingerprint?: string }): Promise<void> {
     certModalOpen = false;
     tlsErrorCode = null;
     pending = false;
 
+    await wsService.disconnect().catch(() => {});
     wsService = createWebSocketService();
 
     try {
@@ -325,6 +356,75 @@
       }).catch(() => {});
     }
     await connect(next.serverUrl);
+    addSystemMessage("settings.saveSuccess", undefined, "success");
+  }
+
+  function ensureSettingsView(): void {
+    if (SettingsViewLazy) {
+      return;
+    }
+    void import("./SettingsView.svelte").then((mod) => {
+      SettingsViewLazy = mod.default;
+    });
+  }
+
+  function ensureCertificateTrustModal(): void {
+    if (CertificateTrustModalLazy) {
+      return;
+    }
+    void import("./CertificateTrustModal.svelte").then((mod) => {
+      CertificateTrustModalLazy = mod.default;
+    });
+  }
+
+  function ensureIntegrationEmbedModal(): void {
+    if (IntegrationEmbedModalLazy) {
+      return;
+    }
+    void import("./IntegrationEmbedModal.svelte").then((mod) => {
+      IntegrationEmbedModalLazy = mod.default;
+    });
+  }
+
+  function ensureSpeechBackgroundVisualizer(): void {
+    if (SpeechBackgroundVisualizerLazy) {
+      return;
+    }
+    void import("./SpeechBackgroundVisualizer.svelte").then((mod) => {
+      SpeechBackgroundVisualizerLazy = mod.default;
+    });
+  }
+
+  $effect(() => {
+    if (certModalOpen) {
+      ensureCertificateTrustModal();
+    }
+    if (embedModalOpen && !integrationPreviewNative) {
+      ensureIntegrationEmbedModal();
+    }
+    if ($speechState.isActive) {
+      ensureSpeechBackgroundVisualizer();
+    }
+  });
+
+  function openSettings(section?: typeof settingsInitialSection): void {
+    settingsInitialSection = section;
+    ensureSettingsView();
+    settingsOpen = true;
+  }
+
+  function closeAllHeaderPanels(): void {
+    chatConversationState.setHistoryOpen(false);
+    chatMediaState.setIntegrationsOpen(false);
+    chatMediaState.setWarningsOpen(false);
+  }
+
+  function handlePairDevice(): void {
+    if ($sessionState.status === "awaiting_pairing") {
+      pairingFocusRequest += 1;
+      return;
+    }
+    openSettings("device");
   }
 
   async function handleToggleTheme(): Promise<void> {
@@ -358,9 +458,7 @@
     } catch (error) {
       pairingBusy = false;
       await handleSessionError(
-        error instanceof Error
-          ? error.message
-          : getTranslateFn()("chatView.error.pairingFailed"),
+        error instanceof Error ? error.message : getTranslateFn()("chatView.error.pairingFailed"),
       );
     }
   }
@@ -372,9 +470,7 @@
     } catch (error) {
       pairingBusy = false;
       await handleSessionError(
-        error instanceof Error
-          ? error.message
-          : getTranslateFn()("chatView.error.reconnectFailed"),
+        error instanceof Error ? error.message : getTranslateFn()("chatView.error.reconnectFailed"),
       );
     }
   }
@@ -414,11 +510,7 @@
       getDesktopPermissionStatus: async () =>
         (await controlPermissionStatus()) as unknown as Record<string, unknown>,
       sendToAuraGo: async (text) => {
-        await sendChatMessageWithConversation(
-          wsService,
-          $sessionState.sessionId,
-          text,
-        );
+        await sendChatMessageWithConversation(wsService, $sessionState.sessionId, text);
       },
       onStopListening: () => stopSpeechSession(),
       onSystemNotice: (text) => {
@@ -470,11 +562,7 @@
         },
       });
     } catch (error) {
-      addSystemMessage(
-        "chatView.error.speechTranscriptFailed",
-        undefined,
-        "error",
-      );
+      addSystemMessage("chatView.error.speechTranscriptFailed", undefined, "error");
       void error;
     }
   }
@@ -512,9 +600,7 @@
       await setInputApproval(true);
       sessionState.setRemoteControlActive(true);
       sessionState.setRemoteControlPending(false);
-      const hasCapture = hasAdvertisedRemoteDesktopCapture(
-        $sessionState.advertisedCapabilities,
-      );
+      const hasCapture = hasAdvertisedRemoteDesktopCapture($sessionState.advertisedCapabilities);
       addSystemMessage(
         hasCapture
           ? "chatView.remoteControl.approvedWithCapture"
@@ -551,16 +637,12 @@
     });
   }
 
-  async function handleSubmit(text: string): Promise<void> {
+  async function handleSubmit(text: string, files?: File[]): Promise<void> {
     if (!chatAllowed) {
       return;
     }
     try {
-      await sendChatMessageWithConversation(
-        wsService,
-        $sessionState.sessionId,
-        text,
-      );
+      await sendChatMessageWithConversation(wsService, $sessionState.sessionId, text, { files });
       pending = true;
       playUiSound("send");
     } catch (error) {
@@ -646,9 +728,7 @@
     if (!$sessionState.sessionId) {
       return;
     }
-    await wsService.send(
-      buildSystemWarningAcknowledgeMessage($sessionState.sessionId, { id }),
-    );
+    await wsService.send(buildSystemWarningAcknowledgeMessage($sessionState.sessionId, { id }));
   }
 
   async function handleAcknowledgeAllWarnings(): Promise<void> {
@@ -670,7 +750,12 @@
     prevConnection = conn;
   });
 
-  // Quick win: centralized Escape handling (priority: cert modal > settings panel)
+  $effect(() => {
+    void $chatPlanState.requestId;
+    planDismissed = false;
+  });
+
+  // Centralized Escape handling (priority: cert > embed > panels > settings)
   $effect(() => {
     const handleKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
@@ -683,9 +768,13 @@
       } else if (integrationPreviewNative && isIntegrationPreviewOpen()) {
         e.preventDefault();
         void closeIntegrationEmbed();
+      } else if (headerPanelOpen) {
+        e.preventDefault();
+        closeAllHeaderPanels();
       } else if (settingsOpen) {
         e.preventDefault();
         settingsOpen = false;
+        settingsInitialSection = undefined;
       }
     };
     window.addEventListener("keydown", handleKey);
@@ -715,43 +804,63 @@
   />
 
   {#if settingsOpen}
-    <SettingsView
-      serverUrl={$settings.serverUrl}
-      theme={$settings.theme}
-      locale={$settings.locale}
-      speech={$settings.speech}
-      uiSounds={$settings.uiSounds}
-      minimizeToTray={$settings.minimizeToTray}
-      showWindowHotkey={$settings.showWindowHotkey}
-      desktopControlEnabled={$settings.desktopControlEnabled}
-      browserControlEnabled={$settings.browserControlEnabled}
-      fileAccess={$settings.fileAccess}
-      chatTtsMode={$settings.chatTtsMode}
-      connectionStatus={$connectionStatus}
-      sessionStatus={$sessionState.status}
-      sessionId={$sessionState.sessionId}
-      sessionError={$sessionState.errorMessage}
-      advertisedCapabilities={$sessionState.advertisedCapabilities}
-      remoteControlActive={$sessionState.remoteControlActive}
-      appVersion="0.1.0"
-      onBack={() => (settingsOpen = false)}
-      onSave={async (next) => {
-        await handleSaveSettings({ ...get(settings), ...next });
-      }}
-      onReconnect={() => void connect($settings.serverUrl)}
-      onRetryPairing={() => void handleRetryPairing()}
-      onUnpair={() => void handleUnpair()}
-      onOpenTlsTrust={() => {
-        certModalOpen = true;
-      }}
-    />
+    {#if SettingsViewLazy}
+      <SettingsViewLazy
+        initialSection={settingsInitialSection}
+        serverUrl={$settings.serverUrl}
+        theme={$settings.theme}
+        locale={$settings.locale}
+        speech={$settings.speech}
+        uiSounds={$settings.uiSounds}
+        minimizeToTray={$settings.minimizeToTray}
+        showWindowHotkey={$settings.showWindowHotkey}
+        desktopControlEnabled={$settings.desktopControlEnabled}
+        browserControlEnabled={$settings.browserControlEnabled}
+        fileAccess={$settings.fileAccess}
+        chatTtsMode={$settings.chatTtsMode}
+        connectionStatus={$connectionStatus}
+        sessionStatus={$sessionState.status}
+        sessionId={$sessionState.sessionId}
+        sessionError={$sessionState.errorMessage}
+        advertisedCapabilities={$sessionState.advertisedCapabilities}
+        remoteControlActive={$sessionState.remoteControlActive}
+        appVersion="0.1.0"
+        onBack={() => {
+          settingsOpen = false;
+          settingsInitialSection = undefined;
+        }}
+        onSave={async (next: SettingsSavePayload) => {
+          await handleSaveSettings({ ...get(settings), ...next });
+        }}
+        onReconnect={() => void connect($settings.serverUrl)}
+        onRetryPairing={() => void handleRetryPairing()}
+        onUnpair={() => void handleUnpair()}
+        onOpenTlsTrust={() => {
+          certModalOpen = true;
+        }}
+      />
+    {:else}
+      <div class="settings-loading" aria-busy="true">
+        {$i18n("settings.title")}
+      </div>
+    {/if}
   {:else}
     <div class="chat-view">
-      <SpeechBackgroundVisualizer
-        active={$speechState.isActive}
-        status={$speechState.status}
-      />
+      {#if SpeechBackgroundVisualizerLazy}
+        <SpeechBackgroundVisualizerLazy
+          active={$speechState.isActive}
+          status={$speechState.status}
+        />
+      {/if}
       <div class="chat-header-area">
+        {#if headerPanelOpen}
+          <button
+            type="button"
+            class="header-panel-backdrop"
+            aria-label={$i18n("common.close")}
+            onclick={closeAllHeaderPanels}
+          ></button>
+        {/if}
         <StatusBar
           serverUrl={$settings.serverUrl}
           theme={$settings.theme}
@@ -761,15 +870,15 @@
           desktopControlEnabled={$settings.desktopControlEnabled}
           minimizeToTray={$settings.minimizeToTray}
           voiceResponsesEnabled={chatSpeakerEnabled}
-          historyEnabled={historyEnabled}
+          {historyEnabled}
           historyActive={$chatConversationState.historyOpen}
-          integrationsEnabled={integrationsEnabled}
+          {integrationsEnabled}
           integrationsActive={$chatMediaState.integrationsOpen}
           integrationsCount={$chatMediaState.integrationWebhosts.length}
-          warningsEnabled={warningsEnabled}
+          {warningsEnabled}
           warningsActive={$chatMediaState.warningsOpen}
           warningsUnacknowledged={$chatMediaState.warningUnacknowledged}
-          onOpenSettings={() => (settingsOpen = true)}
+          onOpenSettings={() => openSettings()}
           onReconnect={() => void connect($settings.serverUrl)}
           onToggleTheme={() => void handleToggleTheme()}
           onToggleVoiceOutput={() => void handleToggleVoiceOutput()}
@@ -808,13 +917,15 @@
           visible={chatPlanVisible}
           plan={$chatPlanState.plan}
           requestId={$chatPlanState.requestId}
+          onDismiss={() => (planDismissed = true)}
         />
       </div>
 
       <PairingBanner
-        visible={$sessionState.status === "awaiting_pairing" ||
-          $sessionState.status === "error"}
+        visible={$sessionState.status === "awaiting_pairing" || $sessionState.status === "error"}
         busy={pairingBusy}
+        compact={bannerStackCompact}
+        focusRequest={pairingFocusRequest}
         serverUrl={$settings.serverUrl}
         errorMessage={$sessionState.errorMessage}
         onPair={(token) => void handlePair(token)}
@@ -822,7 +933,11 @@
       />
 
       {#if $sessionState.status === "pairing"}
-        <section class="info-banner banner-glass" data-tone="info">
+        <section
+          class="info-banner banner-glass"
+          class:compact={bannerStackCompact}
+          data-tone="info"
+        >
           {getTranslateFn()("chatView.pairing.authenticating")}
         </section>
       {/if}
@@ -836,6 +951,7 @@
         vadLoading={$speechState.vadLoading}
         vadError={$speechState.vadError}
         speechProvider={$speechState.isActive ? $speechState.provider : $settings.speech.provider}
+        compact={bannerStackCompact}
       />
 
       <MessageList
@@ -843,11 +959,11 @@
         sessionStatus={$sessionState.status}
         connectionStatus={$connectionStatus}
         speechActive={$speechState.isActive}
-        mediaEnabled={mediaEnabled}
+        {mediaEnabled}
         mediaItems={activeMediaItems}
         serverUrl={$settings.serverUrl}
         onOpenEmbedded={handleOpenEmbedded}
-        onOpenSettings={() => (settingsOpen = true)}
+        onPairDevice={handlePairDevice}
       />
 
       <InputBox
@@ -856,37 +972,54 @@
         bind:draft={composerDraft}
         speechStatus={$speechState.status}
         speechEnabled={speechAllowed}
-        stopVisible={stopVisible}
+        {stopVisible}
+        showFootnote={$chatMessages.length === 0}
+        {attachmentsEnabled}
+        attachmentLimits={attachmentLimits ?? undefined}
         onSpeechToggle={() => void handleSpeechToggle()}
         onStop={() => void handleStopRequest()}
-        onSubmit={(text) => void handleSubmit(text)}
+        onSubmit={(text, files) => void handleSubmit(text, files)}
       />
     </div>
   {/if}
+
+  {#if CertificateTrustModalLazy}
+    <CertificateTrustModalLazy
+      open={certModalOpen}
+      serverUrl={$settings.serverUrl}
+      errorCode={tlsErrorCode}
+      onClose={() => (certModalOpen = false)}
+      onTrust={(probe: CertificateProbeResult) => void handleTrustCertificate(probe)}
+      onOpenBrowser={handleOpenBrowser}
+    />
+  {/if}
+
+  {#if !integrationPreviewNative && IntegrationEmbedModalLazy}
+    <IntegrationEmbedModalLazy
+      open={embedModalOpen}
+      url={embedModalUrl}
+      title={embedModalTitle}
+      onClose={() => (embedModalOpen = false)}
+    />
+  {/if}
 </div>
 
-<CertificateTrustModal
-  open={certModalOpen}
-  serverUrl={$settings.serverUrl}
-  errorCode={tlsErrorCode}
-  onClose={() => (certModalOpen = false)}
-  onTrust={(probe) => void handleTrustCertificate(probe)}
-  onOpenBrowser={handleOpenBrowser}
-/>
-
-{#if !integrationPreviewNative}
-  <IntegrationEmbedModal
-    open={embedModalOpen}
-    url={embedModalUrl}
-    title={embedModalTitle}
-    onClose={() => (embedModalOpen = false)}
-  />
-{/if}
-
 <style>
+  .settings-loading {
+    display: flex;
+    flex: 1;
+    align-items: center;
+    justify-content: center;
+    min-height: 0;
+    color: var(--color-text-muted);
+    font-size: 0.95rem;
+  }
+
   .app-shell {
     display: flex;
     flex-direction: column;
+    flex: 1;
+    width: 100%;
     height: 100%;
     min-height: 0;
     position: relative;
@@ -899,6 +1032,7 @@
     flex-direction: column;
     flex: 1;
     min-height: 0;
+    height: 100%;
     position: relative;
     overflow: hidden;
   }
@@ -911,6 +1045,18 @@
   .chat-header-area {
     position: relative;
     flex-shrink: 0;
+    z-index: 6;
+  }
+
+  .header-panel-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 4;
+    border: none;
+    padding: 0;
+    margin: 0;
+    background: color-mix(in srgb, var(--color-backdrop) 35%, transparent);
+    cursor: default;
   }
 
   .info-banner {

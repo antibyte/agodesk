@@ -46,14 +46,8 @@ describe("speech-locale", () => {
   });
 
   it("provides localized TTS test phrase", () => {
-    assert.equal(
-      localTtsTestPhraseForAppLocale("de"),
-      "Dies ist ein Test der Sprachausgabe.",
-    );
-    assert.equal(
-      localTtsTestPhraseForAppLocale("en"),
-      "This is a speech output test.",
-    );
+    assert.equal(localTtsTestPhraseForAppLocale("de"), "Dies ist ein Test der Sprachausgabe.");
+    assert.equal(localTtsTestPhraseForAppLocale("en"), "This is a speech output test.");
   });
 
   it("applySpeechLocaleDefaults updates language and voices", () => {

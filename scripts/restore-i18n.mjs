@@ -12,7 +12,20 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const messagesDir = path.join(__dirname, "../src/lib/i18n/messages");
 
 const LOCALES = [
-  "fr", "es", "zh", "ja", "nl", "pt", "pl", "cs", "it", "sv", "no", "da", "el", "hi",
+  "fr",
+  "es",
+  "zh",
+  "ja",
+  "nl",
+  "pt",
+  "pl",
+  "cs",
+  "it",
+  "sv",
+  "no",
+  "da",
+  "el",
+  "hi",
 ];
 
 function readJson(filePath) {
@@ -28,9 +41,7 @@ function readHeadJson(locale) {
 }
 
 function writeJson(filePath, data) {
-  const lines = Object.entries(data).map(
-    ([key, value]) => `  "${key}": ${JSON.stringify(value)}`,
-  );
+  const lines = Object.entries(data).map(([key, value]) => `  "${key}": ${JSON.stringify(value)}`);
   const content = `{\n${lines.join(",\n")}\n}\n`;
   fs.writeFileSync(filePath, content, "utf8");
 }

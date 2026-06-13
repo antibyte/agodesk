@@ -11,7 +11,8 @@ const source = join(tauriDir, "target", profile, sourceName);
 
 let triple = process.env.CARGO_BUILD_TARGET;
 if (!triple) {
-  const arch = process.arch === 'x64' ? 'x86_64' : (process.arch === 'arm64' ? 'aarch64' : process.arch);
+  const arch =
+    process.arch === "x64" ? "x86_64" : process.arch === "arm64" ? "aarch64" : process.arch;
   if (isWindows) {
     triple = `${arch}-pc-windows-msvc`;
   } else {
@@ -19,19 +20,19 @@ if (!triple) {
   }
 }
 const destDir = join(tauriDir, "bin");
-const destName = isWindows
-  ? `agodesk-worker-${triple}.exe`
-  : `agodesk-worker-${triple}`;
+const destName = isWindows ? `agodesk-worker-${triple}.exe` : `agodesk-worker-${triple}`;
 const dest = join(destDir, destName);
 
 mkdirSync(destDir, { recursive: true });
 
-if (process.argv.includes('--ensure-dummy')) {
+if (process.argv.includes("--ensure-dummy")) {
   if (!existsSync(dest)) {
     // Create a small placeholder so tauri-build's externalBin existence check (during `cargo build --bin agodesk-worker`)
     // passes on clean checkouts / first `build:sidecar`. The real binary will overwrite it right after the cargo step.
-    writeFileSync(dest, '');
-    console.log(`Ensured dummy sidecar placeholder at ${dest} (will be overwritten after cargo build)`);
+    writeFileSync(dest, "");
+    console.log(
+      `Ensured dummy sidecar placeholder at ${dest} (will be overwritten after cargo build)`,
+    );
   }
   process.exit(0);
 }

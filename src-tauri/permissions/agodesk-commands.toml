@@ -50,6 +50,7 @@ commands.allow = [
   "update_tray_labels",
   "show_main_window",
   "fetch_server_asset",
+  "upload_chat_attachment",
   "integration_embed_open",
   "integration_embed_set_bounds",
   "integration_embed_close"

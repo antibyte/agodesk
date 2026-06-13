@@ -67,11 +67,7 @@ function isActiveContext(requestId: string, conversationId: string): boolean {
   if (state.stoppedRequestIds.includes(requestId)) {
     return false;
   }
-  if (
-    state.requestInFlight &&
-    state.activeRequestId &&
-    state.activeRequestId !== requestId
-  ) {
+  if (state.requestInFlight && state.activeRequestId && state.activeRequestId !== requestId) {
     warnChatAudio("request-superseded", {
       activeRequestId: state.activeRequestId,
       requestId,
