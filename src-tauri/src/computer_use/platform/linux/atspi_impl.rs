@@ -3,12 +3,12 @@ use std::collections::HashMap;
 use std::future::Future;
 use std::sync::OnceLock;
 
-use atspi::connection::P2P;
-use atspi::proxies::accessible::AccessibleProxy;
-use atspi::proxies::action::ActionProxy;
-use atspi::proxies::component::ComponentProxy;
-use atspi::proxies::editable_text::EditableTextProxy;
-use atspi::{AccessibilityConnection, CoordType, Interface, ObjectRef, ObjectRefOwned, Role, State};
+use atspi::proxy::accessible::{AccessibleProxy, ObjectRefExt};
+use atspi::proxy::action::ActionProxy;
+use atspi::proxy::component::ComponentProxy;
+use atspi::proxy::editable_text::EditableTextProxy;
+use atspi::{AccessibilityConnection, CoordType, Interface, Role, State};
+use zbus::proxy::ProxyImpl;
 use sha2::{Digest, Sha256};
 use tokio::runtime::Runtime;
 use zbus::names::UniqueName;
@@ -103,10 +103,10 @@ async fn connect() -> Result<AccessibilityConnection, String> {
         .map_err(|error| format!("DESKTOP_UI_UNAVAILABLE: AT-SPI connection failed: {error}"))
 }
 
-async fn resolve_window_root(
-    conn: &AccessibilityConnection,
+async fn resolve_window_root<'a>(
+    conn: &'a AccessibilityConnection,
     window_id: Option<&str>,
-) -> Result<(AccessibleProxy<'_>, String), String> {
+) -> Result<(AccessibleProxy<'a>, String), String> {
     let title = resolve_window_title(window_id)?;
     let registry = conn
         .root_accessible_on_registry()
@@ -118,8 +118,8 @@ async fn resolve_window_root(
         if app_ref.is_null() {
             continue;
         }
-        let app = conn
-            .object_as_accessible(&owned_ref(app_ref))
+        let app = app_ref
+            .as_accessible_proxy(conn.connection())
             .await
             .map_err(map_atspi_error)?;
         if let Some(window) = find_window_by_title(conn, &app, &title, 0).await? {
@@ -135,12 +135,12 @@ async fn resolve_window_root(
     ))
 }
 
-async fn find_window_by_title(
-    conn: &AccessibilityConnection,
-    accessible: &AccessibleProxy<'_>,
+async fn find_window_by_title<'a>(
+    conn: &'a AccessibilityConnection,
+    accessible: &AccessibleProxy<'a>,
     title: &str,
     depth: u32,
-) -> Result<Option<AccessibleProxy<'_>>, String> {
+) -> Result<Option<AccessibleProxy<'a>>, String> {
     let name = accessible.name().await.unwrap_or_default();
     let role = accessible.get_role().await.unwrap_or(Role::Invalid);
     if title_matches(&name, title) && is_window_like_role(role) {
@@ -155,8 +155,8 @@ async fn find_window_by_title(
         if child_ref.is_null() {
             continue;
         }
-        let child = conn
-            .object_as_accessible(&owned_ref(child_ref))
+        let child = child_ref
+            .as_accessible_proxy(conn.connection())
             .await
             .map_err(map_atspi_error)?;
         if let Some(found) = Box::pin(find_window_by_title(conn, &child, title, depth + 1)).await? {
@@ -177,7 +177,7 @@ fn resolve_window_title(window_id: Option<&str>) -> Result<String, String> {
             let windows = xcap::Window::all().map_err(|error| error.to_string())?;
             windows
                 .get(index)
-                .map(|window| window.title())
+                .map(|window| window.title().to_string())
                 .filter(|title| !title.trim().is_empty())
                 .ok_or_else(|| format!("Unknown window_id: {id}"))
         }
@@ -215,9 +215,9 @@ fn is_window_like_role(role: Role) -> bool {
     )
 }
 
-async fn build_node(
-    conn: &AccessibilityConnection,
-    accessible: &AccessibleProxy<'_>,
+async fn build_node<'a>(
+    conn: &'a AccessibilityConnection,
+    accessible: &AccessibleProxy<'a>,
     window_id: &str,
     path: &str,
     depth: u32,
@@ -268,8 +268,8 @@ async fn build_node(
             if child_ref.is_null() {
                 continue;
             }
-            let child = conn
-                .object_as_accessible(&owned_ref(child_ref))
+            let child = child_ref
+                .as_accessible_proxy(conn.connection())
                 .await
                 .map_err(map_atspi_error)?;
             let child_path = format!("{path}.{index}");
@@ -302,9 +302,9 @@ async fn build_node(
     })
 }
 
-async fn read_bounds(
-    conn: &AccessibilityConnection,
-    accessible: &AccessibleProxy<'_>,
+async fn read_bounds<'a>(
+    conn: &'a AccessibilityConnection,
+    accessible: &AccessibleProxy<'a>,
 ) -> Result<Bounds, String> {
     let component = component_proxy(conn, accessible).await?;
     let (x, y, width, height) = component
@@ -319,9 +319,9 @@ async fn read_bounds(
     })
 }
 
-async fn is_interactive(
-    conn: &AccessibilityConnection,
-    accessible: &AccessibleProxy<'_>,
+async fn is_interactive<'a>(
+    conn: &'a AccessibilityConnection,
+    accessible: &AccessibleProxy<'a>,
     role: &str,
 ) -> bool {
     if matches!(
@@ -349,9 +349,9 @@ async fn is_interactive(
         || component_proxy(conn, accessible).await.is_ok()
 }
 
-async fn invoke_default_action(
-    conn: &AccessibilityConnection,
-    accessible: &AccessibleProxy<'_>,
+async fn invoke_default_action<'a>(
+    conn: &'a AccessibilityConnection,
+    accessible: &AccessibleProxy<'a>,
 ) -> Result<(), String> {
     let action = action_proxy(conn, accessible).await?;
     let count = action.nactions().await.map_err(map_atspi_error)?;
@@ -365,10 +365,10 @@ async fn invoke_default_action(
     Ok(())
 }
 
-async fn accessible_from_handle(
-    conn: &AccessibilityConnection,
+async fn accessible_from_handle<'a>(
+    conn: &'a AccessibilityConnection,
     handle: &AtspiHandle,
-) -> Result<AccessibleProxy<'_>, String> {
+) -> Result<AccessibleProxy<'a>, String> {
     let destination = UniqueName::try_from(handle.destination.as_str()).map_err(map_zbus_error)?;
     let path = ObjectPath::try_from(handle.path.as_str()).map_err(map_zbus_error)?;
     AccessibleProxy::builder(conn.connection())
@@ -383,31 +383,31 @@ async fn accessible_from_handle(
 
 async fn action_proxy<'a>(
     conn: &'a AccessibilityConnection,
-    accessible: &'a AccessibleProxy<'_>,
+    accessible: &'a AccessibleProxy<'a>,
 ) -> Result<ActionProxy<'a>, String> {
     proxy_from_accessible(conn, accessible).await
 }
 
 async fn component_proxy<'a>(
     conn: &'a AccessibilityConnection,
-    accessible: &'a AccessibleProxy<'_>,
+    accessible: &'a AccessibleProxy<'a>,
 ) -> Result<ComponentProxy<'a>, String> {
     proxy_from_accessible(conn, accessible).await
 }
 
 async fn editable_text_proxy<'a>(
     conn: &'a AccessibilityConnection,
-    accessible: &'a AccessibleProxy<'_>,
+    accessible: &'a AccessibleProxy<'a>,
 ) -> Result<EditableTextProxy<'a>, String> {
     proxy_from_accessible(conn, accessible).await
 }
 
 async fn proxy_from_accessible<'a, P>(
     conn: &'a AccessibilityConnection,
-    accessible: &'a AccessibleProxy<'_>,
+    accessible: &'a AccessibleProxy<'a>,
 ) -> Result<P, String>
 where
-    P: zbus::proxy::Defaults,
+    P: ProxyImpl<'a>,
 {
     let inner = accessible.inner();
     let destination = inner.destination().to_owned();
@@ -420,10 +420,6 @@ where
         .build()
         .await
         .map_err(map_atspi_error)
-}
-
-fn owned_ref(object_ref: ObjectRef<'_>) -> ObjectRefOwned {
-    ObjectRefOwned::new(object_ref.into_owned())
 }
 
 fn store_handle(id: &str, accessible: &AccessibleProxy<'_>) {
