@@ -5,8 +5,12 @@ import type {
 } from "../types/protocol";
 import {
   inferAttachmentKindFromMime,
+  normalizeChatAttachmentAcceptedPayload,
   normalizeChatAttachmentPreparedPayload,
 } from "../types/protocol";
+import { registerSignedAttachmentPaths } from "./chat-attachment-paths";
+import { chatMessages } from "../stores/chat";
+import { buildAttachmentMediaPath } from "./chat-attachment-paths";
 
 const PREPARE_TIMEOUT_MS = 30_000;
 
@@ -54,6 +58,16 @@ export function rejectAttachmentPrepareByRequestId(
     return false;
   }
   rejectPendingAttachmentPrepare(requestId, new Error(message));
+  return true;
+}
+
+export function rejectAnyPendingAttachmentPrepare(error: Error): boolean {
+  if (prepareWaiters.size === 0) {
+    return false;
+  }
+  for (const prepareId of [...prepareWaiters.keys()]) {
+    rejectPendingAttachmentPrepare(prepareId, error);
+  }
   return true;
 }
 
@@ -113,14 +127,31 @@ export function toChatAttachmentItem(
   filename: string,
   mimeType: string,
   sizeBytes?: number,
+  fallbackAttachmentId?: string,
 ): ChatAttachmentItem {
+  const attachment_id = upload.attachment_id?.trim() || fallbackAttachmentId?.trim() || "";
+  if (!attachment_id) {
+    throw new Error("attachment_id is required");
+  }
   const resolvedMime = upload.mime_type || mimeType;
+  const path = upload.path?.trim() || buildAttachmentMediaPath(attachment_id, filename);
   return {
-    attachment_id: upload.attachment_id,
+    attachment_id,
     filename,
     mime_type: resolvedMime,
     ...((upload.size_bytes ?? sizeBytes) ? { size_bytes: upload.size_bytes ?? sizeBytes } : {}),
-    ...(upload.path ? { path: upload.path } : {}),
+    ...(path ? { path } : {}),
     kind: inferAttachmentKindFromMime(resolvedMime),
   };
+}
+
+export function handleChatAttachmentAcceptedMessage(payload: unknown): boolean {
+  const normalized = normalizeChatAttachmentAcceptedPayload(payload);
+  if (!normalized) {
+    return false;
+  }
+
+  registerSignedAttachmentPaths(normalized.attachments);
+  chatMessages.updateMessageAttachments(normalized.request_id, normalized.attachments);
+  return true;
 }

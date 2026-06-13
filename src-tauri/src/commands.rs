@@ -241,6 +241,31 @@ pub fn open_external_url(url: String) -> Result<(), String> {
 }
 
 #[tauri::command]
+pub fn open_temp_file(filename: String, bytes: Vec<u8>) -> Result<(), String> {
+    let safe: String = filename
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '.' || c == '-' || c == '_' {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect();
+    let safe = if safe.is_empty() {
+        "attachment.bin".to_string()
+    } else {
+        safe
+    };
+
+    let dir = std::env::temp_dir().join("agodesk-media");
+    std::fs::create_dir_all(&dir).map_err(|error| error.to_string())?;
+    let path = dir.join(format!("{}-{}", uuid::Uuid::new_v4(), safe));
+    std::fs::write(&path, bytes).map_err(|error| error.to_string())?;
+    open::that(&path).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
 pub fn get_active_window() -> Result<ActiveWindowInfo, String> {
     computer_use_active_window()
 }

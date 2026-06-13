@@ -1,5 +1,5 @@
 import { writable } from "svelte/store";
-import type { ChatMessage } from "../types/protocol";
+import type { ChatMediaKind, ChatMessage } from "../types/protocol";
 
 /** Maximum chat messages kept in memory (older entries are dropped). */
 export const MAX_CHAT_MESSAGES = 500;
@@ -130,6 +130,40 @@ function createChatStore() {
       seenIds.clear();
       streamingByRequestId.clear();
       set([]);
+    },
+    updateMessageAttachments(
+      messageId: string,
+      accepted: Array<{
+        attachment_id: string;
+        path?: string;
+        agent_path?: string;
+        kind?: string;
+        status?: string;
+        metadata?: { storage_filename?: string };
+      }>,
+    ): void {
+      update((messages) =>
+        messages.map((message) => {
+          if (message.id !== messageId || !message.attachments?.length) {
+            return message;
+          }
+          const nextAttachments = message.attachments.map((attachment) => {
+            const match = accepted.find((entry) => entry.attachment_id === attachment.attachment_id);
+            if (!match) {
+              return attachment;
+            }
+            const path = match.path ?? match.agent_path;
+            const storageFilename = match.metadata?.storage_filename;
+            return {
+              ...attachment,
+              ...(path ? { path } : {}),
+              ...(storageFilename ? { storage_filename: storageFilename } : {}),
+              ...(match.kind ? { kind: match.kind as ChatMediaKind } : {}),
+            };
+          });
+          return { ...message, attachments: nextAttachments };
+        }),
+      );
     },
   };
 }

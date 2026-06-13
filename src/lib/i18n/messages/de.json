@@ -320,6 +320,7 @@
   "inputBox.attachments.negotiationPending": "Anhänge noch nicht vollständig verhandelt (AuraGo muss chat.attachments in session.accepted senden). Neu verbinden.",
   "chatAttachments.list.ariaLabel": "Nachrichten-Anhänge",
   "chatAttachments.open": "Öffnen",
+  "chatAttachments.openFailed": "Anhang konnte nicht geöffnet werden.",
 
   "pairing.step1": "Token in AuraGo erstellen",
   "pairing.step2": "Hier einfügen & koppeln",

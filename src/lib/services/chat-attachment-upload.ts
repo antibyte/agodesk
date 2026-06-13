@@ -14,6 +14,55 @@ export interface UploadedChatAttachmentResponse {
   size_bytes?: number;
 }
 
+function readUploadString(record: Record<string, unknown>, ...keys: string[]): string | undefined {
+  for (const key of keys) {
+    const value = record[key];
+    if (typeof value === "string" && value.trim()) {
+      return value.trim();
+    }
+  }
+  return undefined;
+}
+
+function readUploadNumber(record: Record<string, unknown>, ...keys: string[]): number | undefined {
+  for (const key of keys) {
+    const value = record[key];
+    if (typeof value === "number" && Number.isFinite(value)) {
+      return value;
+    }
+  }
+  return undefined;
+}
+
+/** Tauri invoke and some AuraGo responses use camelCase field names. */
+export function normalizeUploadedAttachmentResponse(
+  raw: unknown,
+  fallbackAttachmentId: string,
+): UploadedChatAttachmentResponse {
+  const fallback = fallbackAttachmentId.trim();
+  if (!raw || typeof raw !== "object") {
+    if (!fallback) {
+      throw new Error("Upload response missing attachment_id.");
+    }
+    return { attachment_id: fallback, status: "ready" };
+  }
+
+  const record = raw as Record<string, unknown>;
+  const attachment_id =
+    readUploadString(record, "attachment_id", "attachmentId", "id") ?? fallback;
+  if (!attachment_id) {
+    throw new Error("Upload response missing attachment_id.");
+  }
+
+  return {
+    attachment_id,
+    status: readUploadString(record, "status"),
+    path: readUploadString(record, "path", "media_path", "mediaPath", "agent_path", "agentPath"),
+    mime_type: readUploadString(record, "mime_type", "mimeType"),
+    size_bytes: readUploadNumber(record, "size_bytes", "sizeBytes"),
+  };
+}
+
 function isTauriRuntime(): boolean {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 }
@@ -64,13 +113,13 @@ async function uploadViaTauri(
   serverUrl: string,
   prepared: ChatAttachmentPreparedPayload,
   file: File,
-): Promise<UploadedChatAttachmentResponse> {
+): Promise<unknown> {
   const uploadUrl = resolveUploadUrl(serverUrl, prepared.upload_url);
   const pinnedFingerprint = await resolvePinnedFingerprint(uploadUrl, serverUrl);
   const bytes = new Uint8Array(await file.arrayBuffer());
   const { deviceId, sessionId } = get(sessionState);
   const { invoke } = await import("@tauri-apps/api/core");
-  return invoke<UploadedChatAttachmentResponse>("upload_chat_attachment", {
+  return invoke<unknown>("upload_chat_attachment", {
     serverUrl,
     uploadUrl,
     filename: file.name,
@@ -87,7 +136,7 @@ async function uploadViaFetch(
   serverUrl: string,
   prepared: ChatAttachmentPreparedPayload,
   file: File,
-): Promise<UploadedChatAttachmentResponse> {
+): Promise<unknown> {
   const uploadUrl = resolveUploadUrl(serverUrl, prepared.upload_url);
   const form = new FormData();
   form.append(prepared.upload_field, file, file.name);
@@ -100,14 +149,7 @@ async function uploadViaFetch(
   }
   const contentType = response.headers.get("content-type") ?? "";
   if (contentType.includes("application/json")) {
-    const json = (await response.json()) as UploadedChatAttachmentResponse;
-    return {
-      attachment_id: json.attachment_id ?? prepared.attachment_id,
-      path: json.path,
-      mime_type: json.mime_type ?? file.type,
-      size_bytes: json.size_bytes ?? file.size,
-      status: json.status,
-    };
+    return await response.json();
   }
   return {
     attachment_id: prepared.attachment_id,
@@ -127,10 +169,10 @@ export async function uploadChatAttachmentFile(
   }
 
   try {
-    if (isTauriRuntime()) {
-      return await uploadViaTauri(serverUrl, prepared, file);
-    }
-    return await uploadViaFetch(serverUrl, prepared, file);
+    const raw = isTauriRuntime()
+      ? await uploadViaTauri(serverUrl, prepared, file)
+      : await uploadViaFetch(serverUrl, prepared, file);
+    return normalizeUploadedAttachmentResponse(raw, prepared.attachment_id);
   } catch (error) {
     throw new Error(formatInvokeError(error, "Attachment upload failed"));
   }

@@ -105,6 +105,7 @@ pub fn fetch_server_asset_impl(
     let mime = resolve_asset_mime(
         current_url.path(),
         response.content_type.as_deref(),
+        &response.body,
     );
     let encoded = STANDARD.encode(&response.body);
     Ok(FetchedAsset {
@@ -225,7 +226,29 @@ fn validate_image_magic(body: &[u8]) -> Result<(), String> {
     Err("Asset response is not a recognized image file.".to_string())
 }
 
-fn resolve_asset_mime(path: &str, content_type: Option<&str>) -> &'static str {
+fn sniff_image_mime(body: &[u8]) -> Option<&'static str> {
+    if body.starts_with(&[0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]) {
+        return Some("image/png");
+    }
+    if body.len() >= 3 && body[0] == 0xff && body[1] == 0xd8 && body[2] == 0xff {
+        return Some("image/jpeg");
+    }
+    if body.starts_with(b"GIF87a") || body.starts_with(b"GIF89a") {
+        return Some("image/gif");
+    }
+    if body.starts_with(b"RIFF") && body.len() >= 12 && body[8..12] == *b"WEBP" {
+        return Some("image/webp");
+    }
+    if body.starts_with(b"<svg") || body.starts_with(b"<?xml") {
+        return Some("image/svg+xml");
+    }
+    if body.len() >= 4 && body[0..4] == [0x00, 0x00, 0x01, 0x00] {
+        return Some("image/x-icon");
+    }
+    None
+}
+
+fn resolve_asset_mime(path: &str, content_type: Option<&str>, body: &[u8]) -> &'static str {
     if let Some(content_type) = content_type {
         let lower = content_type.to_ascii_lowercase();
         if lower.starts_with("audio/") || lower.starts_with("image/") {
@@ -244,7 +267,13 @@ fn resolve_asset_mime(path: &str, content_type: Option<&str>) -> &'static str {
             };
         }
     }
-    guess_mime(path)
+    let guessed = guess_mime(path);
+    if guessed == "application/octet-stream" {
+        if let Some(image_mime) = sniff_image_mime(body) {
+            return image_mime;
+        }
+    }
+    guessed
 }
 
 fn guess_mime(path: &str) -> &'static str {

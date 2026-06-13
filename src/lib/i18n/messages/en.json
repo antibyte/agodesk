@@ -320,6 +320,7 @@
   "inputBox.attachments.negotiationPending": "Attachments not fully negotiated yet (AuraGo must send chat.attachments in session.accepted). Reconnect.",
   "chatAttachments.list.ariaLabel": "Message attachments",
   "chatAttachments.open": "Open",
+  "chatAttachments.openFailed": "Could not open attachment.",
 
   "pairing.step1": "Create token in AuraGo",
   "pairing.step2": "Paste here & pair",

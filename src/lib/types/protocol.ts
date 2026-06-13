@@ -198,6 +198,7 @@ export interface ChatAttachmentItem {
   mime_type: string;
   size_bytes?: number;
   path?: string;
+  storage_filename?: string;
   kind?: ChatMediaKind;
 }
 
@@ -231,6 +232,10 @@ export interface ChatAttachmentAcceptedPayload {
     status: "accepted" | "rejected" | string;
     kind?: ChatMediaKind;
     path?: string;
+    agent_path?: string;
+    metadata?: {
+      storage_filename?: string;
+    };
   }>;
 }
 
@@ -325,14 +330,17 @@ export interface ChatMediaItem {
   id: string;
   conversation_id: string;
   request_id?: string;
+  attachment_id?: string;
   kind: ChatMediaKind;
   path?: string;
+  agent_path?: string;
   preview_url?: string;
   url?: string;
   embed_url?: string;
   title?: string;
   caption?: string;
   filename?: string;
+  storage_filename?: string;
   description?: string;
   mime_type?: string;
   timestamp?: string;
@@ -993,6 +1001,34 @@ export function normalizeChatAudioPayload(payload: unknown): ChatAudioPayload | 
   };
 }
 
+function readAgodeskMediaLocation(record: Record<string, unknown>): {
+  path?: string;
+  agentPath?: string;
+  storageFilename?: string;
+} {
+  const metadata =
+    record.metadata && typeof record.metadata === "object"
+      ? (record.metadata as Record<string, unknown>)
+      : undefined;
+
+  const agentPath =
+    readString(record, "agent_path", "agentPath") ??
+    (metadata ? readString(metadata, "agent_path", "agentPath") : undefined);
+  const path =
+    readString(record, "path", "web_path", "webPath", "media_path", "mediaPath") ??
+    agentPath ??
+    (metadata ? readString(metadata, "path", "media_path", "mediaPath") : undefined);
+  const storageFilename =
+    readString(record, "storage_filename", "storageFilename") ??
+    (metadata ? readString(metadata, "storage_filename", "storageFilename") : undefined);
+
+  return {
+    ...(path ? { path } : {}),
+    ...(agentPath ? { agentPath } : {}),
+    ...(storageFilename ? { storageFilename } : {}),
+  };
+}
+
 function normalizeChatMediaKind(value: unknown): ChatMediaKind | null {
   if (typeof value !== "string" || !value.trim()) {
     return null;
@@ -1019,7 +1055,8 @@ function normalizeChatMediaItem(
   const conversationId =
     readString(record, "conversation_id", "conversationId") ?? fallbackConversationId;
   const requestId = readString(record, "request_id", "requestId") ?? fallbackRequestId;
-  const path = readString(record, "path", "web_path", "webPath");
+  const attachmentId = readString(record, "attachment_id", "attachmentId");
+  const mediaLocation = readAgodeskMediaLocation(record);
   const previewUrl = readString(record, "preview_url", "previewUrl");
   const url = readString(record, "url");
   const embedUrl = readString(record, "embed_url", "embedUrl");
@@ -1035,7 +1072,10 @@ function normalizeChatMediaItem(
     conversation_id: conversationId,
     kind,
     ...(requestId ? { request_id: requestId } : {}),
-    ...(path ? { path } : {}),
+    ...(attachmentId ? { attachment_id: attachmentId } : {}),
+    ...(mediaLocation.path ? { path: mediaLocation.path } : {}),
+    ...(mediaLocation.agentPath ? { agent_path: mediaLocation.agentPath } : {}),
+    ...(mediaLocation.storageFilename ? { storage_filename: mediaLocation.storageFilename } : {}),
     ...(previewUrl ? { preview_url: previewUrl } : {}),
     ...(url ? { url } : {}),
     ...(embedUrl ? { embed_url: embedUrl } : {}),
@@ -1160,7 +1200,8 @@ export function normalizeChatAttachmentItem(raw: unknown): ChatAttachmentItem | 
     return null;
   }
   const sizeBytes = readOptionalFiniteNumber(record.size_bytes ?? record.sizeBytes);
-  const path = readString(record, "path");
+  const mediaLocation = readAgodeskMediaLocation(record);
+  const path = mediaLocation.path;
   const kindRaw = readString(record, "kind");
   const kind = kindRaw ? normalizeChatMediaKind(kindRaw) : inferAttachmentKindFromMime(mimeType);
   return {
@@ -1169,6 +1210,7 @@ export function normalizeChatAttachmentItem(raw: unknown): ChatAttachmentItem | 
     mime_type: mimeType,
     ...(sizeBytes !== undefined ? { size_bytes: sizeBytes } : {}),
     ...(path ? { path } : {}),
+    ...(mediaLocation.storageFilename ? { storage_filename: mediaLocation.storageFilename } : {}),
     ...(kind ? { kind } : {}),
   };
 }
@@ -1212,6 +1254,60 @@ export function normalizeChatAttachmentPreparedPayload(
     upload_field: uploadField,
     expires_at: expiresAt,
     max_bytes: maxBytes,
+  };
+}
+
+export function normalizeChatAttachmentAcceptedPayload(
+  payload: unknown,
+): ChatAttachmentAcceptedPayload | null {
+  if (!payload || typeof payload !== "object") {
+    return null;
+  }
+  const record = payload as Record<string, unknown>;
+  const sessionId = readString(record, "session_id", "sessionId");
+  const conversationId = readString(record, "conversation_id", "conversationId");
+  const requestId = readString(record, "request_id", "requestId");
+  const attachmentsRaw = record.attachments;
+  if (!sessionId || !conversationId || !requestId || !Array.isArray(attachmentsRaw)) {
+    return null;
+  }
+
+  const attachments = attachmentsRaw
+    .map((entry) => {
+      if (!entry || typeof entry !== "object") {
+        return null;
+      }
+      const item = entry as Record<string, unknown>;
+      const attachmentId = readString(item, "attachment_id", "attachmentId");
+      const status = readString(item, "status") ?? "accepted";
+      if (!attachmentId) {
+        return null;
+      }
+      const kindRaw = readString(item, "kind");
+      const mediaLocation = readAgodeskMediaLocation(item);
+      const path = mediaLocation.path;
+      return {
+        attachment_id: attachmentId,
+        status,
+        ...(kindRaw ? { kind: kindRaw as ChatMediaKind } : {}),
+        ...(path ? { path } : {}),
+        ...(mediaLocation.agentPath ? { agent_path: mediaLocation.agentPath } : {}),
+        ...(mediaLocation.storageFilename
+          ? { metadata: { storage_filename: mediaLocation.storageFilename } }
+          : {}),
+      };
+    })
+    .filter((entry): entry is ChatAttachmentAcceptedPayload["attachments"][number] => entry !== null);
+
+  if (!attachments.length) {
+    return null;
+  }
+
+  return {
+    session_id: sessionId,
+    conversation_id: conversationId,
+    request_id: requestId,
+    attachments,
   };
 }
 
@@ -2452,6 +2548,20 @@ export function isChatAttachmentNegotiationError(payload: ChatErrorPayload): boo
     message.includes("chat.attachments") ||
     message.includes("attachments requires")
   );
+}
+
+export function resolveChatAttachmentErrorDisplay(
+  payload: ChatErrorPayload,
+  capabilities: readonly string[],
+): { text: string; messageKey?: "chatView.error.attachmentsNotSupported" } {
+  if (!isChatAttachmentNegotiationError(payload)) {
+    return { text: payload.message };
+  }
+  if (!canUseChatAttachments(capabilities)) {
+    return { text: "", messageKey: "chatView.error.attachmentsNotSupported" };
+  }
+  const serverText = payload.message.trim() || payload.code;
+  return { text: serverText };
 }
 
 export function hasAdvertisedIntegrationsWebhosts(capabilities: readonly string[]): boolean {

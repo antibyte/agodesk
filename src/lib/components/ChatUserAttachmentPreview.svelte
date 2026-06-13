@@ -1,9 +1,15 @@
 <script lang="ts">
-  import { onDestroy } from "svelte";
+  import { get } from "svelte/store";
   import { i18n } from "../i18n";
   import type { ChatAttachmentItem } from "../types/protocol";
-  import { resolveAuraGoChatMediaUrl } from "../services/server-asset-fetch";
-  import { fetchFirstChatMediaItemAssetDataUrl } from "../services/server-asset-fetch";
+  import { inferAttachmentKindFromMime } from "../types/protocol";
+  import {
+    getLocalAttachmentPreview,
+    signedAttachmentPathsVersion,
+  } from "../services/chat-attachment-paths";
+  import { fetchFirstChatMediaItemAssetDataUrl, resolveAuraGoChatMediaUrl } from "../services/server-asset-fetch";
+  import { isInlineImageSrc, resolveInlineImageFallback } from "../services/chat-media-inline";
+  import { chatMessages } from "../stores/chat";
 
   interface Props {
     attachments: ChatAttachmentItem[];
@@ -14,47 +20,102 @@
 
   let previewUrls = $state<Record<string, string>>({});
 
+  function isImageAttachment(item: ChatAttachmentItem): boolean {
+    if (item.kind === "image") {
+      return true;
+    }
+    if (item.mime_type?.startsWith("image/")) {
+      return true;
+    }
+    return inferAttachmentKindFromMime(item.mime_type ?? "") === "image";
+  }
+
   $effect(() => {
-    void loadPreviews(attachments, serverUrl);
+    let cancelled = false;
+
+    const run = async (): Promise<void> => {
+      const next = await buildPreviewMap(attachments, serverUrl);
+      if (!cancelled) {
+        previewUrls = next;
+      }
+    };
+
+    void run();
+    const unsubscribe = signedAttachmentPathsVersion.subscribe(() => {
+      if (!cancelled) {
+        void run();
+      }
+    });
+
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
   });
 
-  async function loadPreviews(items: ChatAttachmentItem[], url: string): Promise<void> {
+  async function buildPreviewMap(
+    items: ChatAttachmentItem[],
+    url: string,
+  ): Promise<Record<string, string>> {
+    const messages = get(chatMessages);
     const next: Record<string, string> = {};
     for (const item of items) {
-      if (item.kind !== "image" || !item.path || !url) {
+      if (!isImageAttachment(item)) {
         continue;
       }
+
+      const localPreview = getLocalAttachmentPreview(item.attachment_id);
+      if (localPreview && isInlineImageSrc(localPreview)) {
+        next[item.attachment_id] = localPreview;
+        continue;
+      }
+
+      if (!url) {
+        continue;
+      }
+
       try {
-        const fetched = await fetchFirstChatMediaItemAssetDataUrl(url, {
-          path: item.path,
-          filename: item.filename,
-        });
-        if (fetched?.dataUrl) {
+        const fetched = await fetchFirstChatMediaItemAssetDataUrl(
+          url,
+          {
+            attachment_id: item.attachment_id,
+            path: item.path,
+            filename: item.filename,
+          },
+          {
+            mediaItem: {
+              id: item.attachment_id,
+              attachment_id: item.attachment_id,
+              filename: item.filename,
+              path: item.path,
+            },
+            messages,
+          },
+        );
+        if (fetched?.dataUrl && isInlineImageSrc(fetched.dataUrl)) {
           next[item.attachment_id] = fetched.dataUrl;
+          continue;
+        }
+
+        const fallback = resolveInlineImageFallback(url, item.path);
+        if (isInlineImageSrc(fallback)) {
+          next[item.attachment_id] = fallback;
         }
       } catch {
         // Preview optional for history rehydration.
       }
     }
-    previewUrls = next;
+    return next;
   }
-
-  onDestroy(() => {
-    previewUrls = {};
-  });
 </script>
 
 {#if attachments.length > 0}
   <ul class="attachment-list" aria-label={$i18n("chatAttachments.list.ariaLabel")}>
     {#each attachments as attachment (attachment.attachment_id)}
+      {@const previewUrl = previewUrls[attachment.attachment_id]}
       <li class="attachment-chip">
-        {#if previewUrls[attachment.attachment_id]}
-          <img
-            src={previewUrls[attachment.attachment_id]}
-            alt={attachment.filename}
-            class="thumb"
-            loading="lazy"
-          />
+        {#if previewUrl}
+          <img src={previewUrl} alt={attachment.filename} class="thumb" loading="lazy" />
         {:else}
           <span class="file-icon" aria-hidden="true">📎</span>
         {/if}
@@ -64,7 +125,7 @@
             <span class="mime">{attachment.mime_type}</span>
           {/if}
         </span>
-        {#if attachment.path && serverUrl}
+        {#if serverUrl && attachment.path}
           <a
             class="open-link"
             href={resolveAuraGoChatMediaUrl(serverUrl, attachment.path)}

@@ -9,6 +9,7 @@ import {
   resolveAuraGoMediaUrl,
   resolveAuraGoChatMediaUrl,
 } from "./server-asset-fetch.ts";
+import { registerSignedAttachmentPaths } from "./chat-attachment-paths.ts";
 
 test("buildMediaUrlCandidates nutzt /api/agodesk/tts fuer reine Dateinamen", () => {
   const candidates = buildMediaUrlCandidates(
@@ -114,12 +115,49 @@ test("resolveAuraGoChatMediaUrl nutzt signierte Media-URLs", () => {
   );
 });
 
-test("resolveAuraGoChatMediaUrl laesst AuraGo-Media-Pfade unveraendert", () => {
+test("buildChatMediaUrlCandidatesFromRefs synthetisiert Media-Pfad aus attachment_id", () => {
+  const candidates = buildChatMediaUrlCandidatesFromRefs(
+    "wss://aurago.example.com/api/agodesk/ws",
+    {
+      attachment_id: "att-abc",
+      filename: "maja.jpg",
+    },
+  );
+  assert.deepEqual(candidates, [
+    "https://aurago.example.com/api/agodesk/media/att-abc/maja.jpg",
+  ]);
+});
+
+test("buildChatMediaUrlCandidatesFromRefs ignoriert Persona-Pfade bei attachment_id", () => {
+  const candidates = buildChatMediaUrlCandidatesFromRefs(
+    "wss://aurago.example.com/api/agodesk/ws",
+    {
+      attachment_id: "att-abc",
+      filename: "maja.jpg",
+      path: "/img/personas/punk.png",
+    },
+  );
+  assert.deepEqual(candidates, [
+    "https://aurago.example.com/api/agodesk/media/att-abc/maja.jpg",
+  ]);
+});
+
+test("buildChatMediaUrlCandidatesFromRefs bevorzugt signierten Cache-Pfad", () => {
+  registerSignedAttachmentPaths([
+    {
+      attachment_id: "att-abc",
+      path: "/api/agodesk/media/att-abc/maja.jpg?agodesk_exp=1&agodesk_sig=x",
+    },
+  ]);
+  const candidates = buildChatMediaUrlCandidatesFromRefs(
+    "wss://aurago.example.com/api/agodesk/ws",
+    {
+      attachment_id: "att-abc",
+      filename: "maja.jpg",
+    },
+  );
   assert.equal(
-    resolveAuraGoChatMediaUrl(
-      "wss://aurago.example.com/api/agodesk/ws",
-      "/api/agodesk/media/generated_images/chart.png?agodesk_exp=1&agodesk_sig=x",
-    ),
-    "https://aurago.example.com/api/agodesk/media/generated_images/chart.png?agodesk_exp=1&agodesk_sig=x",
+    candidates[0],
+    "https://aurago.example.com/api/agodesk/media/att-abc/maja.jpg?agodesk_exp=1&agodesk_sig=x",
   );
 });

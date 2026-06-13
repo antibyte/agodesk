@@ -26,6 +26,7 @@ commands.allow = [
   "browser_action",
   "browser_disconnect",
   "open_external_url",
+  "open_temp_file",
   "probe_server_certificate",
   "save_trusted_certificate",
   "get_trusted_certificates",

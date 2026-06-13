@@ -489,6 +489,7 @@
   "inputBox.attachments.error.mimeNotAllowed": "File type not allowed: {mime}",
   "chatAttachments.list.ariaLabel": "Message attachments",
   "chatAttachments.open": "Open",
+  "chatAttachments.openFailed": "Could not open attachment.",
   "chatOutbound.error.attachmentsNotSupported": "Attachments are not available with this server. AuraGo must send chat.attachments (in addition to chat.media_upload) in session.accepted. Reconnect after the server has been updated.",
   "chatView.error.attachmentsNotSupported": "Attachments are not available with this server. AuraGo must send chat.attachments (in addition to chat.media_upload) in session.accepted. Reconnect after the server has been updated.",
   "inputBox.attachments.negotiationPending": "Attachments not fully negotiated yet (AuraGo must send chat.attachments in session.accepted). Reconnect."

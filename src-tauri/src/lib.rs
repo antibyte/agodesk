@@ -92,6 +92,7 @@ pub fn run() {
             commands::browser_action,
             commands::browser_disconnect,
             commands::open_external_url,
+            commands::open_temp_file,
             files::ops::file_list,
             files::ops::file_read,
             files::ops::file_write,

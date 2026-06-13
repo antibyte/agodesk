@@ -36,12 +36,14 @@ import {
   AGODESK_SYSTEM_WARNINGS_CAPABILITY,
   normalizeChatVoiceOutputStatusPayload,
   normalizeChatMediaPayload,
+  normalizeChatAttachmentAcceptedPayload,
   normalizeIntegrationsWebhostsPayload,
   normalizeSystemWarningsPayload,
   hasAdvertisedChatMediaEvents,
   hasAdvertisedChatMediaUpload,
   canUseChatAttachments,
   isChatAttachmentNegotiationError,
+  resolveChatAttachmentErrorDisplay,
   hasAdvertisedIntegrationsWebhosts,
   normalizeChatAttachmentItem,
   normalizeChatAttachmentPreparedPayload,
@@ -776,6 +778,43 @@ test("normalizeChatMediaPayload parst flaches und verschachteltes Item", () => {
   assert.equal(flat?.item.url, "https://example.com");
 });
 
+test("normalizeChatMediaPayload mappt agent_path auf path", () => {
+  const payload = normalizeChatMediaPayload({
+    session_id: "agodesk:dev-1",
+    conversation_id: "sess-abc",
+    request_id: "req-1",
+    item: {
+      id: "media-jpg",
+      kind: "image",
+      filename: "maja.jpg",
+      agent_path:
+        "/api/agodesk/media/attachments/agodesk/sess-abc/converted-hash?agodesk_exp=1&agodesk_sig=x",
+      title: "maja.jpg – konvertiert aus maja.png",
+    },
+  });
+  assert.equal(payload?.item.path, "/api/agodesk/media/attachments/agodesk/sess-abc/converted-hash?agodesk_exp=1&agodesk_sig=x");
+  assert.equal(payload?.item.agent_path, "/api/agodesk/media/attachments/agodesk/sess-abc/converted-hash?agodesk_exp=1&agodesk_sig=x");
+});
+
+test("normalizeChatAttachmentAcceptedPayload parst metadata.storage_filename", () => {
+  const payload = normalizeChatAttachmentAcceptedPayload({
+    session_id: "agodesk:dev-1",
+    conversation_id: "sess-abc",
+    request_id: "msg-1",
+    attachments: [
+      {
+        attachment_id: "att-1",
+        status: "accepted",
+        path: "/api/agodesk/media/attachments/agodesk/sess-abc/hash",
+        metadata: {
+          storage_filename: "20260604_maja.png",
+        },
+      },
+    ],
+  });
+  assert.equal(payload?.attachments[0]?.metadata?.storage_filename, "20260604_maja.png");
+});
+
 test("normalizeIntegrationsWebhostsPayload parst Webhost-Liste", () => {
   const payload = normalizeIntegrationsWebhostsPayload({
     session_id: "agodesk:dev-1",
@@ -867,6 +906,27 @@ test("isChatAttachmentNegotiationError erkennt Attachments-Fehler", () => {
     }),
     true,
   );
+});
+
+test("resolveChatAttachmentErrorDisplay unterscheidet fehlende Caps und Serverfehler", () => {
+  const missing = resolveChatAttachmentErrorDisplay(
+    {
+      code: "INVALID",
+      message: "chat.message attachments requires chat.attachments",
+    },
+    ["chat.media_upload"],
+  );
+  assert.equal(missing.messageKey, "chatView.error.attachmentsNotSupported");
+
+  const serverReject = resolveChatAttachmentErrorDisplay(
+    {
+      code: "INVALID",
+      message: "chat.message attachments requires chat.attachments",
+    },
+    ["chat.media_upload", "chat.attachments"],
+  );
+  assert.equal(serverReject.messageKey, undefined);
+  assert.equal(serverReject.text, "chat.message attachments requires chat.attachments");
 });
 
 test("normalizeLoadedConversationMessage erlaubt reine Attachment-Nachrichten", () => {

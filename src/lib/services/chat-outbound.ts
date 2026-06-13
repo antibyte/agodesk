@@ -8,7 +8,6 @@ import type { ChatAttachmentItem, ChatMessagePayload, WsMessage } from "../types
 import {
   hasAdvertisedChatCancel,
   hasAdvertisedChatSessions,
-  canUseChatAttachments,
 } from "../types/protocol";
 import { shouldSendVoiceOutputForSettings } from "./chat-tts-policy";
 import {
@@ -21,6 +20,7 @@ import { stopChatMediaPlayback } from "./chat-media-playback";
 import { interruptLocalSpeechPlayback } from "./local-speech-tts";
 import type { NativeWebSocketService } from "./websocket";
 import { prepareChatAttachment, toChatAttachmentItem } from "./chat-attachment-flow";
+import { setLocalAttachmentPreview, registerSignedAttachmentPaths } from "./chat-attachment-paths";
 import { uploadChatAttachmentFile } from "./chat-attachment-upload";
 
 export interface BuildChatMessageOptions {
@@ -119,10 +119,6 @@ export async function sendChatMessageWithConversation(
   let attachments = messageOptions.attachments;
 
   if (files.length > 0) {
-    const caps = get(sessionState).advertisedCapabilities;
-    if (!canUseChatAttachments(caps)) {
-      throw new Error(getTranslateFn()("chatOutbound.error.attachmentsNotSupported"));
-    }
     if (!conversationId) {
       throw new Error(getTranslateFn()("chatOutbound.error.conversationNotReady"));
     }
@@ -136,11 +132,35 @@ export async function sendChatMessageWithConversation(
         sizeBytes: file.size,
       });
       const result = await uploadChatAttachmentFile(get(settings).serverUrl, prepared, file);
+      setLocalAttachmentPreview(prepared.attachment_id, file);
       uploaded.push(
-        toChatAttachmentItem(result, file.name, file.type || "application/octet-stream", file.size),
+        toChatAttachmentItem(
+          result,
+          file.name,
+          file.type || "application/octet-stream",
+          file.size,
+          prepared.attachment_id,
+        ),
       );
+      registerSignedAttachmentPaths([
+        {
+          attachment_id: prepared.attachment_id,
+          path: result.path,
+        },
+      ]);
     }
     attachments = uploaded;
+    if (import.meta.env.DEV) {
+      console.info(
+        "[agodesk:chat-outbound] attachments prepared",
+        uploaded.map((entry) => ({
+          attachment_id: entry.attachment_id,
+          filename: entry.filename,
+          path: entry.path,
+          kind: entry.kind,
+        })),
+      );
+    }
   }
 
   return sendChatMessage((message) => ws.send(message), sessionId, text, {

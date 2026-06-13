@@ -1,16 +1,26 @@
 <script lang="ts">
-  import { onDestroy, onMount } from "svelte";
+  import { onDestroy } from "svelte";
+  import { get } from "svelte/store";
   import { i18n } from "../i18n";
   import ChatMessageBody from "./ChatMessageBody.svelte";
   import type { ChatMediaItem } from "../types/protocol";
   import { resolvePersonaAssetUrl } from "../types/protocol";
-  import { fetchFirstChatMediaItemAssetDataUrl } from "../services/server-asset-fetch";
-  import { resolveAuraGoChatMediaUrl } from "../services/server-asset-fetch";
+  import { fetchFirstChatMediaItemAssetDataUrl, resolveAuraGoChatMediaUrl } from "../services/server-asset-fetch";
   import { openExternalUrl } from "../services/open-external-url";
+  import { formatInvokeError } from "../services/errors";
+  import {
+    findUserAttachmentsForRequest,
+    getLocalAttachmentPreview,
+    getLocalAttachmentPreviewForRequest,
+    resolveAttachmentIdForMedia,
+    signedAttachmentPathsVersion,
+  } from "../services/chat-attachment-paths";
+  import { chatMessages } from "../stores/chat";
   import {
     enqueueChatMediaAudio,
     registerActiveChatMediaElement,
   } from "../services/chat-media-playback";
+  import { isInlineImageSrc, resolveInlineImageFallback } from "../services/chat-media-inline";
 
   interface Props {
     item: ChatMediaItem;
@@ -23,11 +33,17 @@
   let assetDataUrl = $state<string | null>(null);
   let previewDataUrl = $state<string | null>(null);
   let loadError = $state(false);
+  let openError = $state<string | null>(null);
+  let openingExternal = $state(false);
   let youtubeEmbedBlocked = $state(false);
   let unregisterMedia: (() => void) | null = null;
 
   const displayTitle = $derived(item.title || item.filename || item.kind);
-  const resolvedPath = $derived(item.path ? resolveAuraGoChatMediaUrl(serverUrl, item.path) : "");
+  const resolvedPath = $derived(
+    item.path || item.agent_path
+      ? resolveAuraGoChatMediaUrl(serverUrl, item.path ?? item.agent_path ?? "")
+      : "",
+  );
   const resolvedUrl = $derived(
     item.url ? resolvePersonaAssetUrl(serverUrl, item.url) : resolvedPath,
   );
@@ -41,44 +57,137 @@
     return "";
   });
 
-  async function loadInlineAsset(refs: {
-    path?: string;
-    preview_url?: string;
-    url?: string;
-    filename?: string;
-  }): Promise<string | null> {
-    const fetched = await fetchFirstChatMediaItemAssetDataUrl(serverUrl, refs);
+  async function loadInlineAsset(mediaItem: ChatMediaItem): Promise<string | null> {
+    const messages = get(chatMessages);
+    const userAttachments = findUserAttachmentsForRequest(mediaItem.request_id, messages);
+    const localPreview = getLocalAttachmentPreviewForRequest(
+      mediaItem.request_id,
+      messages,
+      mediaItem.filename ?? mediaItem.title,
+    );
+    if (localPreview) {
+      return localPreview;
+    }
+
+    const attachmentId = resolveAttachmentIdForMedia(mediaItem, userAttachments, messages);
+    if (attachmentId) {
+      const cachedLocal = getLocalAttachmentPreview(attachmentId);
+      if (cachedLocal) {
+        return cachedLocal;
+      }
+    }
+
+    const fetched = await fetchFirstChatMediaItemAssetDataUrl(
+      serverUrl,
+      {
+        attachment_id: attachmentId,
+        path: mediaItem.path,
+        agent_path: mediaItem.agent_path,
+        preview_url: mediaItem.preview_url,
+        url: mediaItem.url,
+        filename: mediaItem.filename,
+        storage_filename: mediaItem.storage_filename,
+      },
+      {
+        mediaItem,
+        messages,
+        userAttachments,
+      },
+    );
     return fetched?.dataUrl ?? null;
   }
 
-  onMount(async () => {
-    try {
-      if (item.kind === "image" && (item.path || item.preview_url || item.url || item.filename)) {
-        assetDataUrl = await loadInlineAsset({
-          path: item.path,
-          preview_url: item.preview_url,
-          url: item.url,
-          filename: item.filename,
-        });
-      } else if (item.kind === "document" && (item.preview_url || item.path)) {
-        previewDataUrl = await loadInlineAsset({
-          preview_url: item.preview_url,
-          path: item.path,
-        });
+  $effect(() => {
+    const mediaItem = item;
+    let cancelled = false;
+
+    const run = async (): Promise<void> => {
+      assetDataUrl = null;
+      previewDataUrl = null;
+      loadError = false;
+
+      if (
+        mediaItem.kind !== "image" &&
+        !(mediaItem.kind === "document" && (mediaItem.preview_url || mediaItem.path))
+      ) {
+        return;
       }
-      loadError = !assetDataUrl && !previewDataUrl && item.kind === "image";
-    } catch {
-      loadError = true;
-    }
+
+      try {
+        if (mediaItem.kind === "image") {
+          const loaded = await loadInlineAsset(mediaItem);
+          if (cancelled) {
+            return;
+          }
+          if (isInlineImageSrc(loaded)) {
+            assetDataUrl = loaded;
+            loadError = false;
+          } else {
+            const fallback = resolveInlineImageFallback(
+              serverUrl,
+              mediaItem.path,
+              mediaItem.agent_path,
+            );
+            if (isInlineImageSrc(fallback)) {
+              assetDataUrl = fallback;
+              loadError = false;
+            } else {
+              assetDataUrl = null;
+              loadError = true;
+            }
+          }
+        } else if (mediaItem.kind === "document" && (mediaItem.preview_url || mediaItem.path)) {
+          const loaded = await loadInlineAsset({
+            ...mediaItem,
+            kind: "image",
+          });
+          if (cancelled) {
+            return;
+          }
+          previewDataUrl = isInlineImageSrc(loaded)
+            ? loaded
+            : resolveInlineImageFallback(serverUrl, mediaItem.path, mediaItem.agent_path);
+        }
+      } catch {
+        if (!cancelled) {
+          loadError = mediaItem.kind === "image";
+        }
+      }
+    };
+
+    void run();
+    const unsubscribe = signedAttachmentPathsVersion.subscribe(() => {
+      if (!cancelled) {
+        void run();
+      }
+    });
+
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
   });
 
   onDestroy(() => {
     unregisterMedia?.();
   });
 
-  function handleOpenExternal(): void {
-    if (resolvedUrl) {
-      void openExternalUrl(resolvedUrl);
+  async function handleOpenExternal(): Promise<void> {
+    if (openingExternal) {
+      return;
+    }
+
+    openError = null;
+    openingExternal = true;
+
+    try {
+      if (resolvedUrl) {
+        await openExternalUrl(resolvedUrl);
+      }
+    } catch (error) {
+      openError = formatInvokeError(error, get(i18n)("chatAttachments.openFailed"));
+    } finally {
+      openingExternal = false;
     }
   }
 
@@ -190,9 +299,17 @@
 
   {#if resolvedUrl && item.kind !== "link"}
     <div class="media-actions">
-      <button type="button" class="ui-btn ui-btn-secondary ui-btn-sm" onclick={handleOpenExternal}>
+      <button
+        type="button"
+        class="ui-btn ui-btn-secondary ui-btn-sm"
+        disabled={openingExternal}
+        onclick={() => void handleOpenExternal()}
+      >
         {$i18n("chatMedia.openExternal")}
       </button>
+      {#if openError}
+        <p class="media-open-error" role="alert">{openError}</p>
+      {/if}
       {#if onOpenEmbedded && (item.kind === "link" || item.kind === "document")}
         <button
           type="button"
@@ -256,10 +373,16 @@
   }
 
   .media-fallback,
-  .media-loading {
+  .media-loading,
+  .media-open-error {
     margin: 0;
     font-size: 0.8125rem;
     color: var(--color-muted);
+  }
+
+  .media-open-error {
+    color: var(--color-danger, #c0392b);
+    flex-basis: 100%;
   }
 
   .link-btn {

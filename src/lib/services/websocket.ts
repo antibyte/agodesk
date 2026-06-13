@@ -251,6 +251,12 @@ export function isChatAttachmentPrepared(
   return message.type === "chat.attachment.prepared";
 }
 
+export function isChatAttachmentAccepted(
+  message: WsMessage,
+): message is WsMessage<import("../types/protocol").ChatAttachmentAcceptedPayload> {
+  return message.type === "chat.attachment.accepted";
+}
+
 export function isDesktopCommand(
   message: WsMessage,
 ): message is WsMessage<import("../types/protocol").DesktopCommandPayload> {

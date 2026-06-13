@@ -8,6 +8,14 @@ import { formatInvokeError } from "./errors";
 
 import { sessionState } from "../stores/session";
 
+import {
+  buildAttachmentMediaPath,
+  extractAttachmentIdFromMediaPath,
+  getAttachmentStorageFilename,
+  getSignedAttachmentPath,
+  resolveAttachmentIdForMedia,
+} from "./chat-attachment-paths";
+import type { ChatAttachmentItem, ChatMediaItem, ChatMessage } from "../types/protocol";
 import { getPinnedFingerprint, getPinnedFingerprintForHttpUrl } from "./tls";
 
 export interface FetchedServerAsset {
@@ -16,11 +24,16 @@ export interface FetchedServerAsset {
 }
 
 export interface ChatMediaAssetRefs {
+  attachment_id?: string;
   path?: string;
+  agent_path?: string;
   url?: string;
   preview_url?: string;
   filename?: string;
+  storage_filename?: string;
 }
+
+export { buildAttachmentMediaPath };
 
 function audioBasename(path: string): string {
   const withoutQuery = path.split("?")[0] ?? path;
@@ -45,6 +58,17 @@ export function isSignedAgodeskMediaPath(path: string): boolean {
   return params.has("agodesk_exp") && params.has("agodesk_sig");
 }
 
+export function isFetchableChatMediaRef(ref: string): boolean {
+  const trimmed = ref.trim();
+  if (!trimmed) {
+    return false;
+  }
+  if (isSignedAgodeskMediaPath(trimmed)) {
+    return true;
+  }
+  return pathWithoutQuery(trimmed).includes("/api/agodesk/media/");
+}
+
 export function collectChatMediaAssetRefs(refs: ChatMediaAssetRefs): string[] {
   const values: string[] = [];
   const seen = new Set<string>();
@@ -58,8 +82,10 @@ export function collectChatMediaAssetRefs(refs: ChatMediaAssetRefs): string[] {
 
   // Server-provided signed paths first; `url` is often an unsigned `/files/...` Web-UI path.
   add(refs.path);
+  add(refs.agent_path);
   add(refs.preview_url);
   add(refs.url);
+  add(refs.storage_filename);
   add(refs.filename);
 
   return values;
@@ -129,13 +155,13 @@ export function buildChatMediaUrlCandidates(serverUrl: string, path: string): st
   return ordered;
 }
 
-export function buildChatMediaUrlCandidatesFromRefs(
+function appendUniqueCandidates(
+  ordered: string[],
+  seen: Set<string>,
   serverUrl: string,
-  refs: ChatMediaAssetRefs,
-): string[] {
-  const ordered: string[] = [];
-  const seen = new Set<string>();
-  for (const ref of collectChatMediaAssetRefs(refs)) {
+  refs: string[],
+): void {
+  for (const ref of refs) {
     for (const candidate of buildChatMediaUrlCandidates(serverUrl, ref)) {
       if (!seen.has(candidate)) {
         seen.add(candidate);
@@ -143,6 +169,50 @@ export function buildChatMediaUrlCandidatesFromRefs(
       }
     }
   }
+}
+
+export function buildChatMediaUrlCandidatesFromRefs(
+  serverUrl: string,
+  refs: ChatMediaAssetRefs,
+): string[] {
+  const ordered: string[] = [];
+  const seen = new Set<string>();
+  const attachmentId =
+    refs.attachment_id?.trim() ||
+    extractAttachmentIdFromMediaPath(refs.path) ||
+    extractAttachmentIdFromMediaPath(refs.preview_url) ||
+    extractAttachmentIdFromMediaPath(refs.url);
+
+  if (attachmentId) {
+    const signed = getSignedAttachmentPath(attachmentId);
+    if (signed) {
+      appendUniqueCandidates(ordered, seen, serverUrl, [signed]);
+    }
+
+    const attachmentRefs = collectChatMediaAssetRefs(refs).filter(isFetchableChatMediaRef);
+    appendUniqueCandidates(ordered, seen, serverUrl, attachmentRefs);
+
+    const filename =
+      refs.storage_filename?.trim() ||
+      getAttachmentStorageFilename(attachmentId) ||
+      refs.filename?.trim();
+    if (filename) {
+      appendUniqueCandidates(ordered, seen, serverUrl, [
+        buildAttachmentMediaPath(attachmentId, filename),
+      ]);
+    }
+
+    const pathLabel = refs.path?.trim() || refs.agent_path?.trim();
+    if (pathLabel && !pathLabel.includes("/")) {
+      appendUniqueCandidates(ordered, seen, serverUrl, [
+        buildAttachmentMediaPath(attachmentId, pathLabel),
+      ]);
+    }
+
+    return ordered;
+  }
+
+  appendUniqueCandidates(ordered, seen, serverUrl, collectChatMediaAssetRefs(refs));
   return ordered;
 }
 
@@ -213,13 +283,15 @@ async function fetchFirstServerAssetFromCandidates(
   serverUrl: string,
   path: string,
   candidates: string[],
+  debugRefs?: ChatMediaAssetRefs,
 ): Promise<{ dataUrl: string; mime: string; assetUrl: string } | null> {
   let lastError: unknown = null;
 
   if (candidates.length === 0) {
     console.warn("[agodesk:server-asset] Keine fetchbaren Media-URLs", {
-      refs: path,
-      hint: "Erwarte signiertes path/preview_url (/api/agodesk/media/...?agodesk_exp=&agodesk_sig=)",
+      label: path,
+      refs: debugRefs,
+      hint: "Erwarte signiertes path/preview_url (/api/agodesk/media/...?agodesk_exp=&agodesk_sig=) oder attachment_id + filename",
     });
     return null;
   }
@@ -281,15 +353,60 @@ export async function fetchFirstChatMediaAssetDataUrl(
   );
 }
 
+export function enrichChatMediaAssetRefs(
+  refs: ChatMediaAssetRefs,
+  context: {
+    mediaItem?: Pick<
+      ChatMediaItem,
+      "id" | "request_id" | "filename" | "title" | "path" | "attachment_id"
+    >;
+    messages?: ChatMessage[];
+    userAttachments?: ChatAttachmentItem[];
+  } = {},
+): ChatMediaAssetRefs {
+  const attachmentId =
+    refs.attachment_id?.trim() ||
+    (context.mediaItem
+      ? resolveAttachmentIdForMedia(
+          context.mediaItem,
+          context.userAttachments,
+          context.messages ?? [],
+        )
+      : undefined) ||
+    extractAttachmentIdFromMediaPath(refs.path) ||
+    extractAttachmentIdFromMediaPath(refs.preview_url) ||
+    extractAttachmentIdFromMediaPath(refs.url);
+
+  if (!attachmentId || attachmentId === refs.attachment_id) {
+    return refs;
+  }
+
+  return {
+    ...refs,
+    attachment_id: attachmentId,
+  };
+}
+
 export async function fetchFirstChatMediaItemAssetDataUrl(
   serverUrl: string,
   refs: ChatMediaAssetRefs,
+  context: {
+    mediaItem?: Pick<
+      ChatMediaItem,
+      "id" | "request_id" | "filename" | "title" | "path" | "attachment_id"
+    >;
+    messages?: ChatMessage[];
+    userAttachments?: ChatAttachmentItem[];
+  } = {},
 ): Promise<{ dataUrl: string; mime: string; assetUrl: string } | null> {
-  const label = refs.path ?? refs.preview_url ?? refs.url ?? refs.filename ?? "";
+  const enriched = enrichChatMediaAssetRefs(refs, context);
+  const label =
+    enriched.path ?? enriched.preview_url ?? enriched.url ?? enriched.filename ?? "";
   return fetchFirstServerAssetFromCandidates(
     serverUrl,
     label,
-    buildChatMediaUrlCandidatesFromRefs(serverUrl, refs),
+    buildChatMediaUrlCandidatesFromRefs(serverUrl, enriched),
+    import.meta.env.DEV ? enriched : undefined,
   );
 }
 

@@ -3,6 +3,7 @@ import { chatConversationState } from "../stores/chat-conversation";
 import { chatMediaState } from "../stores/chat-media-state";
 import type { ChatMediaItem, ChatMediaPayload } from "../types/protocol";
 import { normalizeChatMediaPayload } from "../types/protocol";
+import { registerSignedAttachmentPaths } from "./chat-attachment-paths";
 
 export function handleChatMediaMessage(
   payload: unknown,
@@ -26,6 +27,18 @@ export function handleChatMediaMessage(
   }
 
   chatMediaState.appendMediaItem(normalized.conversation_id, normalized.item);
+  const mediaItem = normalized.item;
+  if (mediaItem.attachment_id && (mediaItem.path || mediaItem.agent_path)) {
+    registerSignedAttachmentPaths([
+      {
+        attachment_id: mediaItem.attachment_id,
+        path: mediaItem.path ?? mediaItem.agent_path,
+        ...(mediaItem.storage_filename
+          ? { metadata: { storage_filename: mediaItem.storage_filename } }
+          : {}),
+      },
+    ]);
+  }
   return normalized;
 }
 

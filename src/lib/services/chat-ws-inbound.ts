@@ -29,9 +29,12 @@ import { enqueueChatAudio } from "./chat-audio";
 import { handleChatMediaMessage } from "./chat-media-flow";
 import { enqueueChatMediaAudio } from "./chat-media-playback";
 import {
+  handleChatAttachmentAcceptedMessage,
   handleChatAttachmentPreparedMessage,
   rejectAttachmentPrepareByRequestId,
+  rejectAnyPendingAttachmentPrepare,
 } from "./chat-attachment-flow";
+import { clearAttachmentPathCache } from "./chat-attachment-paths";
 import { bootstrapAgodeskFeatures } from "./agodesk-features-bootstrap";
 import { handleIntegrationsWebhostsMessage } from "./integrations-flow";
 import { handleSystemWarningsMessage } from "./system-warnings-flow";
@@ -44,6 +47,7 @@ import {
   isChatCancelled,
   isChatError,
   isChatAttachmentPrepared,
+  isChatAttachmentAccepted,
   isChatMedia,
   isChatPlanUpdate,
   isChatResponse,
@@ -70,6 +74,7 @@ import {
   normalizeChatResponsePayload,
   normalizeChatVoiceOutputStatusPayload,
   isChatAttachmentNegotiationError,
+  resolveChatAttachmentErrorDisplay,
 } from "../types/protocol";
 import { resolveChatSpeakerMode } from "./chat-voice-output-status";
 
@@ -182,6 +187,7 @@ export async function handleChatWsMessage(
     ctx.setPairingBusy(true);
     sessionState.reset();
     chatMediaState.reset();
+    clearAttachmentPathCache();
     ctx.resetPlanAndMoodState();
     clearPersonaAssets();
     try {
@@ -279,6 +285,11 @@ export async function handleChatWsMessage(
     return;
   }
 
+  if (isChatAttachmentAccepted(message)) {
+    handleChatAttachmentAcceptedMessage(message.payload);
+    return;
+  }
+
   if (isIntegrationsWebhosts(message)) {
     handleIntegrationsWebhostsMessage(message.payload);
     return;
@@ -359,7 +370,17 @@ export async function handleChatWsMessage(
     ctx.setPairingBusy(false);
     finishRequest(message.payload.request_id);
 
-    if (rejectAttachmentPrepareByRequestId(message.payload.request_id, message.payload.message)) {
+    const attachmentErrorText =
+      message.payload.message.trim() || message.payload.code || "Attachment error";
+
+    if (rejectAttachmentPrepareByRequestId(message.payload.request_id, attachmentErrorText)) {
+      return;
+    }
+
+    if (
+      isChatAttachmentNegotiationError(message.payload) &&
+      rejectAnyPendingAttachmentPrepare(new Error(attachmentErrorText))
+    ) {
       return;
     }
 
@@ -380,18 +401,28 @@ export async function handleChatWsMessage(
       await handleSessionError(message.payload.message);
     }
 
+    const caps = get(sessionState).advertisedCapabilities;
+    const attachmentDisplay = resolveChatAttachmentErrorDisplay(message.payload, caps);
+    if (import.meta.env.DEV && isChatAttachmentNegotiationError(message.payload)) {
+      console.warn("[agodesk:chat.error] attachment", {
+        code: message.payload.code,
+        message: message.payload.message,
+        request_id: message.payload.request_id,
+        caps,
+        attachments_ready: caps.includes("chat.media_upload") && caps.includes("chat.attachments"),
+      });
+    }
+
     chatMessages.addMessage({
       id: message.id,
       role: "system",
-      text: isChatAttachmentNegotiationError(message.payload)
-        ? getTranslateFn()("chatView.error.attachmentsNotSupported")
-        : message.payload.message,
+      text: attachmentDisplay.messageKey
+        ? getTranslateFn()(attachmentDisplay.messageKey)
+        : attachmentDisplay.text,
       timestamp: message.timestamp,
       requestId: message.payload.request_id,
       tone: "error",
-      ...(isChatAttachmentNegotiationError(message.payload)
-        ? { messageKey: "chatView.error.attachmentsNotSupported" as const }
-        : {}),
+      ...(attachmentDisplay.messageKey ? { messageKey: attachmentDisplay.messageKey } : {}),
     });
     return;
   }
