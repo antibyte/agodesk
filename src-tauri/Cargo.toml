@@ -83,7 +83,7 @@ windows = { version = "0.58", features = [
   "Win32_System_Ole",
   "Win32_System_Variant",
 ] }
-uiautomation = { version = "0.22", default-features = false, features = ["input", "control"] }
+uiautomation = { version = "0.25", default-features = false, features = ["input", "control"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 xcap = "0.0.14"
