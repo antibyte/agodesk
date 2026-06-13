@@ -70,6 +70,12 @@ jobs:
         with:
           workspaces: src-tauri
 
+      - name: Ensure dummy sidecar placeholders
+        run: |
+          mkdir -p src-tauri/bin
+          touch src-tauri/bin/agodesk-worker-x86_64-unknown-linux-gnu
+          touch src-tauri/bin/agodesk-speech-x86_64-unknown-linux-gnu
+
       - name: Cargo check
         run: cargo check
         working-directory: src-tauri
