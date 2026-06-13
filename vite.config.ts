@@ -73,8 +73,16 @@ function vadAssetsPlugin(): Plugin {
 export default defineConfig({
   plugins: [vadAssetsPlugin(), svelte()],
   clearScreen: false,
+  // WebView2 / modern desktop runtimes; esbuild 0.28 cannot downlevel Svelte 5 / vad-web destructuring.
+  esbuild: {
+    target: "es2022",
+  },
+  optimizeDeps: {
+    esbuildOptions: {
+      target: "es2022",
+    },
+  },
   build: {
-    // WebView2 / modern desktop runtimes; avoids esbuild 0.28 downlevel of destructuring in vad-web.
     target: "es2022",
     chunkSizeWarningLimit: 900,
     rollupOptions: {
