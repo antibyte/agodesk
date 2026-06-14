@@ -22,7 +22,7 @@
   IntCmp $PassiveMode 1 auto_start
   IntCmp $UpdateMode 1 auto_start
 
-  MessageBox MB_YESNO|MB_ICONQUESTION "$(autoStartQuestion)" IDYES write_autostart IDNO done_autostart
+  MessageBox MB_YESNO|MB_ICONQUESTION "Do you want agodesk to start automatically when Windows starts?$\n$\nSoll agodesk automatisch beim Windows-Start gestartet werden?" IDYES write_autostart IDNO done_autostart
   Goto done_autostart
 
   auto_start:
@@ -39,14 +39,3 @@
 !macro NSIS_HOOK_POSTUNINSTALL
   ; After removal (e.g. extra cleanup).
 !macroend
-
-; --- Custom strings for our installer options (used in POSTINSTALL hook) ---
-; These will be used by the MessageBox for offering auto-start.
-; We define for English and German (primary languages). For other languages NSIS will
-; fall back to the English string.
-
-LangString autoStartQuestion ${LANG_ENGLISH} "Do you want agodesk to start automatically when Windows starts?"
-LangString autoStartQuestion ${LANG_GERMAN} "Möchten Sie, dass agodesk automatisch beim Start von Windows gestartet wird?"
-
-; For other languages in our list, fallback will use English definition above.
-; (If you want full translations, add proper LangString for LANG_FRENCH etc.)

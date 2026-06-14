@@ -42,6 +42,9 @@
       "bin/agodesk-worker",
       "bin/agodesk-speech"
     ],
+    "resources": {
+      "bin/*.dll": "./"
+    },
     "windows": {
       "nsis": {
         "installMode": "both",
