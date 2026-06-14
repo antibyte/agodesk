@@ -64,30 +64,49 @@ jobs:
       - name: Install deps
         run: npm ci
 
+      - name: Start virtual display (linuxdeploy / AppImage)
+        run: |
+          Xvfb :99 -screen 0 1280x720x24 &
+          echo "DISPLAY=:99" >> "$GITHUB_ENV"
+
       - name: Build frontend + sidecar + Linux bundles (deb/appimage/rpm)
         env:
           APPIMAGE_EXTRACT_AND_RUN: "1"
         run: npm run build:linux
 
+      - name: Collect Linux release assets
+        run: |
+          mkdir -p release-assets/linux
+          shopt -s nullglob
+          for f in src-tauri/target/release/bundle/deb/*.deb; do
+            cp "$f" release-assets/linux/
+          done
+          for f in src-tauri/target/release/bundle/rpm/*.rpm; do
+            cp "$f" release-assets/linux/
+          done
+          for f in src-tauri/target/release/bundle/appimage/*.AppImage; do
+            cp "$f" release-assets/linux/
+          done
+          if [ -z "$(ls -A release-assets/linux)" ]; then
+            echo "No Linux packages were produced."
+            exit 1
+          fi
+          ls -la release-assets/linux/
+
       - name: Upload Linux packages artifact
         uses: actions/upload-artifact@v4
         with:
           name: agodesk-linux
-          path: |
-            src-tauri/target/release/bundle/deb/*.deb
-            src-tauri/target/release/bundle/appimage/*.AppImage
-            src-tauri/target/release/bundle/rpm/*.rpm
+          path: release-assets/linux/*
           retention-days: 30
 
       - name: Create Release (on tag)
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: |
-            src-tauri/target/release/bundle/deb/*.deb
-            src-tauri/target/release/bundle/appimage/*.AppImage
-            src-tauri/target/release/bundle/rpm/*.rpm
+          files: release-assets/linux/*
           draft: true
           generate_release_notes: true
+          overwrite_files: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

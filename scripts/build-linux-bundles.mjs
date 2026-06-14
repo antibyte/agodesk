@@ -3,7 +3,6 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
-
 const speechEnvScript = join(root, "scripts", "run-with-speech-env.mjs");
 
 const baseArgs = [
@@ -20,7 +19,7 @@ const env = {
   APPIMAGE_EXTRACT_AND_RUN: "1",
 };
 
-function run(command, args) {
+function run(command, args, { optional = false } = {}) {
   const result = spawnSync(command, args, {
     cwd: root,
     env,
@@ -28,11 +27,18 @@ function run(command, args) {
     shell: false,
   });
   if (result.status !== 0) {
+    if (optional) {
+      console.warn(
+        `[agodesk:linux-bundles] Optional bundle step failed (${command} ${args.join(" ")}), continuing.`,
+      );
+      return false;
+    }
     process.exit(result.status ?? 1);
   }
+  return true;
 }
 
-function runTauriBuild(bundles) {
+function runTauriBuild(bundles, { optional = false } = {}) {
   const nodeArgs = [...baseArgs, "--bundles", bundles];
   const needsXvfb =
     process.platform === "linux" &&
@@ -40,12 +46,14 @@ function runTauriBuild(bundles) {
     (process.env.CI === "true" || !process.env.DISPLAY);
 
   if (needsXvfb) {
-    run("xvfb-run", ["-a", "node", ...nodeArgs]);
-    return;
+    return run("xvfb-run", ["-a", "node", ...nodeArgs], { optional });
   }
-  run("node", nodeArgs);
+  return run("node", nodeArgs, { optional });
 }
 
-// deb/rpm do not use linuxdeploy; AppImage does and needs xvfb on CI.
-runTauriBuild("deb,rpm");
-runTauriBuild("appimage");
+// deb + rpm are required for CI releases; AppImage/linuxdeploy is best-effort on headless runners.
+if (!runTauriBuild("deb,rpm")) {
+  process.exit(1);
+}
+
+runTauriBuild("appimage", { optional: true });
