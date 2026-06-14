@@ -4,8 +4,10 @@ import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 
+const speechEnvScript = join(root, "scripts", "run-with-speech-env.mjs");
+
 const baseArgs = [
-  "run-with-speech-env.mjs",
+  speechEnvScript,
   "npx",
   "tauri",
   "build",
