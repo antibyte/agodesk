@@ -18,18 +18,18 @@
 
   ; Offer to create autostart entry (run at Windows startup).
   ; Skip the interactive question in silent/passive/update mode (default to create the entry).
-  ${If} $PassiveMode <> 1
-  ${AndIf} ${Silent} <> 1
-  ${AndIf} $UpdateMode <> 1
-    MessageBox MB_YESNO|MB_ICONQUESTION "$(autoStartQuestion)" IDYES doAutoStart
-      Goto endAutoStart
-    doAutoStart:
-      WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "${PRODUCTNAME}" "$INSTDIR\${MAINBINARYNAME}.exe"
-    endAutoStart:
-  ${Else}
-    ; In silent/passive mode, create the autostart entry by default
+  IfSilent auto_start
+  IntCmp $PassiveMode 1 auto_start
+  IntCmp $UpdateMode 1 auto_start
+
+  MessageBox MB_YESNO|MB_ICONQUESTION "$(autoStartQuestion)" IDYES write_autostart IDNO done_autostart
+  Goto done_autostart
+
+  auto_start:
+  write_autostart:
     WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "${PRODUCTNAME}" "$INSTDIR\${MAINBINARYNAME}.exe"
-  ${EndIf}
+
+  done_autostart:
 !macroend
 
 !macro NSIS_HOOK_PREUNINSTALL

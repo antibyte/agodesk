@@ -1273,7 +1273,7 @@ export function normalizeChatAttachmentAcceptedPayload(
   }
 
   const attachments = attachmentsRaw
-    .map((entry) => {
+    .map((entry): ChatAttachmentAcceptedPayload["attachments"][number] | null => {
       if (!entry || typeof entry !== "object") {
         return null;
       }
