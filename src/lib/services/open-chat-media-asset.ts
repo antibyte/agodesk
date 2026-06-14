@@ -1,8 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import {
-  fetchFirstChatMediaItemAssetDataUrl,
-  type ChatMediaAssetRefs,
-} from "./server-asset-fetch";
+import { fetchFirstChatMediaItemAssetDataUrl, type ChatMediaAssetRefs } from "./server-asset-fetch";
 import { getLocalAttachmentPreview } from "./chat-attachment-paths";
 import { isDesktopShell } from "./window-controls";
 import type { ChatAttachmentItem, ChatMediaItem, ChatMessage } from "../types/protocol";

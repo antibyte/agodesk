@@ -5,7 +5,10 @@
   import ChatMessageBody from "./ChatMessageBody.svelte";
   import type { ChatMediaItem } from "../types/protocol";
   import { resolvePersonaAssetUrl } from "../types/protocol";
-  import { fetchFirstChatMediaItemAssetDataUrl, resolveAuraGoChatMediaUrl } from "../services/server-asset-fetch";
+  import {
+    fetchFirstChatMediaItemAssetDataUrl,
+    resolveAuraGoChatMediaUrl,
+  } from "../services/server-asset-fetch";
   import { openExternalUrl } from "../services/open-external-url";
   import { formatInvokeError } from "../services/errors";
   import {

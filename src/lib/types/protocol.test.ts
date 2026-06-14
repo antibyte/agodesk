@@ -792,8 +792,14 @@ test("normalizeChatMediaPayload mappt agent_path auf path", () => {
       title: "maja.jpg – konvertiert aus maja.png",
     },
   });
-  assert.equal(payload?.item.path, "/api/agodesk/media/attachments/agodesk/sess-abc/converted-hash?agodesk_exp=1&agodesk_sig=x");
-  assert.equal(payload?.item.agent_path, "/api/agodesk/media/attachments/agodesk/sess-abc/converted-hash?agodesk_exp=1&agodesk_sig=x");
+  assert.equal(
+    payload?.item.path,
+    "/api/agodesk/media/attachments/agodesk/sess-abc/converted-hash?agodesk_exp=1&agodesk_sig=x",
+  );
+  assert.equal(
+    payload?.item.agent_path,
+    "/api/agodesk/media/attachments/agodesk/sess-abc/converted-hash?agodesk_exp=1&agodesk_sig=x",
+  );
 });
 
 test("normalizeChatAttachmentAcceptedPayload parst metadata.storage_filename", () => {

@@ -400,8 +400,7 @@ export async function fetchFirstChatMediaItemAssetDataUrl(
   } = {},
 ): Promise<{ dataUrl: string; mime: string; assetUrl: string } | null> {
   const enriched = enrichChatMediaAssetRefs(refs, context);
-  const label =
-    enriched.path ?? enriched.preview_url ?? enriched.url ?? enriched.filename ?? "";
+  const label = enriched.path ?? enriched.preview_url ?? enriched.url ?? enriched.filename ?? "";
   return fetchFirstServerAssetFromCandidates(
     serverUrl,
     label,

@@ -7,7 +7,10 @@
     getLocalAttachmentPreview,
     signedAttachmentPathsVersion,
   } from "../services/chat-attachment-paths";
-  import { fetchFirstChatMediaItemAssetDataUrl, resolveAuraGoChatMediaUrl } from "../services/server-asset-fetch";
+  import {
+    fetchFirstChatMediaItemAssetDataUrl,
+    resolveAuraGoChatMediaUrl,
+  } from "../services/server-asset-fetch";
   import { isInlineImageSrc, resolveInlineImageFallback } from "../services/chat-media-inline";
   import { chatMessages } from "../stores/chat";
 

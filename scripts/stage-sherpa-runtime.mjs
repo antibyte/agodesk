@@ -11,10 +11,14 @@ function ensureSherpaLibs() {
   if (isSherpaReady()) {
     return;
   }
-  const result = spawnSync(process.execPath, [join(root, "scripts", "ensure-sherpa-onnx-libs.mjs")], {
-    stdio: "inherit",
-    cwd: root,
-  });
+  const result = spawnSync(
+    process.execPath,
+    [join(root, "scripts", "ensure-sherpa-onnx-libs.mjs")],
+    {
+      stdio: "inherit",
+      cwd: root,
+    },
+  );
   if (result.status !== 0) {
     process.exit(result.status ?? 1);
   }

@@ -17,9 +17,7 @@ function looksLikeAttachmentId(value: string): boolean {
   if (trimmed.startsWith("att-")) {
     return true;
   }
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
-    trimmed,
-  );
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(trimmed);
 }
 
 export function extractAttachmentIdFromMediaPath(path?: string): string | undefined {
@@ -46,9 +44,7 @@ export function findUserAttachmentsForRequest(
   if (!requestId?.trim()) {
     return undefined;
   }
-  const message = messages.find(
-    (entry) => entry.id === requestId.trim() && entry.role === "user",
-  );
+  const message = messages.find((entry) => entry.id === requestId.trim() && entry.role === "user");
   return message?.attachments?.length ? message.attachments : undefined;
 }
 
@@ -84,7 +80,7 @@ export function getLocalAttachmentPreviewForRequest(
   }
   const label = filename?.trim();
   const attachment = label
-    ? attachments.find((entry) => entry.filename === label) ?? attachments[0]
+    ? (attachments.find((entry) => entry.filename === label) ?? attachments[0])
     : attachments[0];
   if (!attachment?.attachment_id) {
     return undefined;

@@ -123,9 +123,7 @@ test("buildChatMediaUrlCandidatesFromRefs synthetisiert Media-Pfad aus attachmen
       filename: "maja.jpg",
     },
   );
-  assert.deepEqual(candidates, [
-    "https://aurago.example.com/api/agodesk/media/att-abc/maja.jpg",
-  ]);
+  assert.deepEqual(candidates, ["https://aurago.example.com/api/agodesk/media/att-abc/maja.jpg"]);
 });
 
 test("buildChatMediaUrlCandidatesFromRefs ignoriert Persona-Pfade bei attachment_id", () => {
@@ -137,9 +135,7 @@ test("buildChatMediaUrlCandidatesFromRefs ignoriert Persona-Pfade bei attachment
       path: "/img/personas/punk.png",
     },
   );
-  assert.deepEqual(candidates, [
-    "https://aurago.example.com/api/agodesk/media/att-abc/maja.jpg",
-  ]);
+  assert.deepEqual(candidates, ["https://aurago.example.com/api/agodesk/media/att-abc/maja.jpg"]);
 });
 
 test("buildChatMediaUrlCandidatesFromRefs bevorzugt signierten Cache-Pfad", () => {

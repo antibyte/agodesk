@@ -8,10 +8,7 @@ import {
 } from "./chat-attachment-paths";
 
 test("extractAttachmentIdFromMediaPath liest attachment_id aus Media-Pfad", () => {
-  assert.equal(
-    extractAttachmentIdFromMediaPath("/api/agodesk/media/att-abc/maja.png"),
-    "att-abc",
-  );
+  assert.equal(extractAttachmentIdFromMediaPath("/api/agodesk/media/att-abc/maja.png"), "att-abc");
   assert.equal(
     extractAttachmentIdFromMediaPath("/api/agodesk/media/upload/att-upload"),
     "att-upload",

@@ -5,10 +5,7 @@ import { sessionState } from "../stores/session";
 import { settings } from "../stores/settings";
 import { getTranslateFn } from "../i18n/store";
 import type { ChatAttachmentItem, ChatMessagePayload, WsMessage } from "../types/protocol";
-import {
-  hasAdvertisedChatCancel,
-  hasAdvertisedChatSessions,
-} from "../types/protocol";
+import { hasAdvertisedChatCancel, hasAdvertisedChatSessions } from "../types/protocol";
 import { shouldSendVoiceOutputForSettings } from "./chat-tts-policy";
 import {
   buildChatCancelMessage,

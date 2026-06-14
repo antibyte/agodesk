@@ -1297,7 +1297,9 @@ export function normalizeChatAttachmentAcceptedPayload(
           : {}),
       };
     })
-    .filter((entry): entry is ChatAttachmentAcceptedPayload["attachments"][number] => entry !== null);
+    .filter(
+      (entry): entry is ChatAttachmentAcceptedPayload["attachments"][number] => entry !== null,
+    );
 
   if (!attachments.length) {
     return null;

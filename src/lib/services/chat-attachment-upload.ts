@@ -48,8 +48,7 @@ export function normalizeUploadedAttachmentResponse(
   }
 
   const record = raw as Record<string, unknown>;
-  const attachment_id =
-    readUploadString(record, "attachment_id", "attachmentId", "id") ?? fallback;
+  const attachment_id = readUploadString(record, "attachment_id", "attachmentId", "id") ?? fallback;
   if (!attachment_id) {
     throw new Error("Upload response missing attachment_id.");
   }

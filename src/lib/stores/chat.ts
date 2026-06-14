@@ -148,7 +148,9 @@ function createChatStore() {
             return message;
           }
           const nextAttachments = message.attachments.map((attachment) => {
-            const match = accepted.find((entry) => entry.attachment_id === attachment.attachment_id);
+            const match = accepted.find(
+              (entry) => entry.attachment_id === attachment.attachment_id,
+            );
             if (!match) {
               return attachment;
             }

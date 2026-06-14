@@ -16,8 +16,7 @@ export function isInlineImageSrc(src: string | null | undefined): src is string 
   }
   if (value.startsWith("http://") || value.startsWith("https://")) {
     return (
-      value.includes("/api/agodesk/media/") ||
-      /\.(png|jpe?g|gif|webp|svg|ico)(\?|$)/i.test(value)
+      value.includes("/api/agodesk/media/") || /\.(png|jpe?g|gif|webp|svg|ico)(\?|$)/i.test(value)
     );
   }
   return false;
