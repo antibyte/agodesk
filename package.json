@@ -29,8 +29,8 @@
     "build:speech-sidecar": "node scripts/ensure-sherpa-onnx-libs.mjs && node scripts/copy-speech-sidecar.mjs --ensure-dummy && node scripts/run-with-speech-env.mjs cargo build --release --manifest-path src-tauri/Cargo.toml --bin agodesk-speech --features speech-sidecar && node scripts/copy-speech-sidecar.mjs",
     "build:win": "npm run build && npm run build:sidecar && node scripts/stage-sherpa-runtime.mjs && npm run tauri -- build --bundles nsis --features computer-use-sidecar,speech-sidecar",
     "build:win-installer": "npm run build:win",
-    "build:linux": "npm run build && npm run build:sidecar && npm run tauri -- build --bundles \"deb,appimage,rpm\" --features computer-use-sidecar,speech-sidecar",
-    "build:linux-installer": "npm run build:linux",
+    "build:linux": "npm run build && npm run build:sidecar && node scripts/build-linux-bundles.mjs",
+    "icons:generate": "npm run tauri -- icon src-tauri/icons/app-icon.svg -o src-tauri/icons",
     "test": "node --import tsx --test src/lib/**/*.test.ts",
     "test:mock-attachments": "node scripts/test-mock-attachment-flow.mjs"
   },

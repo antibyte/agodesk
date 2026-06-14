@@ -48,7 +48,11 @@ jobs:
             libayatana-appindicator3-dev \
             librsvg2-dev \
             libgdk-pixbuf2.0-dev \
+            libglib2.0-dev \
+            libdbus-1-dev \
             libfuse2 \
+            pkg-config \
+            xvfb \
             patchelf \
             build-essential \
             libssl-dev \
@@ -61,6 +65,8 @@ jobs:
         run: npm ci
 
       - name: Build frontend + sidecar + Linux bundles (deb/appimage/rpm)
+        env:
+          APPIMAGE_EXTRACT_AND_RUN: "1"
         run: npm run build:linux
 
       - name: Upload Linux packages artifact

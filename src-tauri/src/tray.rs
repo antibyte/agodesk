@@ -10,6 +10,18 @@ const DEFAULT_TRAY_QUIT: &str = "Quit";
 const DEFAULT_TRAY_TOOLTIP: &str = "agodesk";
 const TRAY_ID: &str = "main-tray";
 
+fn load_tray_icon() -> tauri::Result<tauri::image::Image<'static>> {
+    let decoded = image::load_from_memory(include_bytes!("../icons/32x32.png"))
+        .map_err(|error| tauri::Error::Io(std::io::Error::other(error.to_string())))?;
+    let rgba = decoded.to_rgba8();
+    let (width, height) = rgba.dimensions();
+    Ok(tauri::image::Image::new_owned(
+        rgba.into_raw(),
+        width,
+        height,
+    ))
+}
+
 struct TrayMenuItems {
     show: MenuItem<tauri::Wry>,
     quit: MenuItem<tauri::Wry>,
@@ -114,10 +126,7 @@ pub fn setup_tray(app: &AppHandle, state: &TrayState) -> tauri::Result<()> {
     let quit_item = MenuItem::with_id(app, "tray-quit", DEFAULT_TRAY_QUIT, true, None::<&str>)?;
     let menu = Menu::with_items(app, &[&show_item, &quit_item])?;
 
-    let icon = app
-        .default_window_icon()
-        .ok_or_else(|| tauri::Error::Io(std::io::Error::other("Missing default window icon.")))?
-        .clone();
+    let icon = load_tray_icon()?;
 
     let tray = TrayIconBuilder::with_id(TRAY_ID)
         .icon(icon)
