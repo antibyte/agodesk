@@ -4,7 +4,9 @@ export interface PersonaState {
   persona: string;
   iconKey: string;
   avatarUrl: string;
+  avatarFallbackUrl: string;
   iconUrl: string;
+  iconFallbackUrl: string;
   personaPrompt: string;
   assetVersion: string;
   loading: boolean;
@@ -14,7 +16,9 @@ const initialState: PersonaState = {
   persona: "",
   iconKey: "",
   avatarUrl: "",
+  avatarFallbackUrl: "",
   iconUrl: "",
+  iconFallbackUrl: "",
   personaPrompt: "",
   assetVersion: "",
   loading: false,

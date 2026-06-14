@@ -6,6 +6,7 @@
   import { formatMessageTime, messageGroupMeta } from "../services/chat-format";
   import { chatMessages } from "../stores/chat";
   import { personaState } from "../stores/persona";
+  import { resolvePersonaChatImage } from "../services/persona-display";
 
   interface Props {
     message: ChatMessage;
@@ -19,7 +20,7 @@
   const showAssistantAvatar = $derived(message.role === "assistant" && !group.groupWithPrevious);
   const showUserAvatar = $derived(message.role === "user" && !group.groupWithPrevious);
   const showTime = $derived(!group.groupWithNext);
-  const personaImageUrl = $derived($personaState.iconUrl || $personaState.avatarUrl);
+  const chatPersonaImage = $derived(resolvePersonaChatImage($personaState));
 </script>
 
 <div
@@ -53,9 +54,11 @@
   {:else}
     {#if showAssistantAvatar}
       <PersonaAvatar
-        imageUrl={personaImageUrl}
+        imageUrl={chatPersonaImage.imageUrl}
+        fallbackImageUrl={chatPersonaImage.fallbackImageUrl}
         label={$personaState.persona}
         size="sm"
+        imageFit="contain"
         loading={$personaState.loading}
       />
     {:else if message.role === "assistant"}

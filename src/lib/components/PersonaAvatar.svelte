@@ -3,23 +3,51 @@
 
   interface Props {
     imageUrl?: string;
+    fallbackImageUrl?: string;
     label?: string;
     size?: "sm" | "md" | "lg";
+    imageFit?: "cover" | "contain";
     tone?: "assistant" | "system" | "user";
     loading?: boolean;
   }
 
-  let { imageUrl = "", label, size = "sm", tone = "assistant", loading = false }: Props = $props();
+  let {
+    imageUrl = "",
+    fallbackImageUrl = "",
+    label,
+    size = "sm",
+    imageFit = "cover",
+    tone = "assistant",
+    loading = false,
+  }: Props = $props();
 
   let imageFailed = $state(false);
+  let useFallback = $state(false);
 
   const displayLabel = $derived(label ?? $i18n("personaAvatar.defaultLabel"));
-  const showImage = $derived(Boolean(imageUrl) && !imageFailed);
+  const activeImageUrl = $derived(
+    useFallback && fallbackImageUrl.trim()
+      ? fallbackImageUrl
+      : imageUrl.trim() || fallbackImageUrl.trim(),
+  );
+  const showImage = $derived(Boolean(activeImageUrl) && !imageFailed);
 
   $effect(() => {
     void imageUrl;
+    void fallbackImageUrl;
     imageFailed = false;
+    useFallback = false;
   });
+
+  function handleImageError(): void {
+    const primary = imageUrl.trim();
+    const fallback = fallbackImageUrl.trim();
+    if (!useFallback && primary && fallback && fallback !== primary) {
+      useFallback = true;
+      return;
+    }
+    imageFailed = true;
+  }
 </script>
 
 <span class="persona-avatar" class:loading data-size={size} data-tone={tone} aria-hidden="true">
@@ -32,11 +60,12 @@
     </svg>
   {:else if showImage}
     <img
-      src={imageUrl}
+      src={activeImageUrl}
       alt=""
       loading="eager"
       decoding="async"
-      onerror={() => (imageFailed = true)}
+      style:object-fit={imageFit}
+      onerror={handleImageError}
     />
   {:else}
     {displayLabel}

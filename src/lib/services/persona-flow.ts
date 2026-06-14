@@ -35,16 +35,27 @@ export async function applyPersonaAssets(payload: unknown, serverUrl: string): P
   const avatarRemoteUrl = resolvePersonaAssetUrl(serverUrl, normalized.avatar_image_url);
   const iconRemoteUrl = resolvePersonaAssetUrl(serverUrl, normalized.icon_url);
 
-  const [avatarUrl, iconUrl] = await Promise.all([
-    fetchPersonaAssetDisplayUrl(serverUrl, avatarRemoteUrl),
-    fetchPersonaAssetDisplayUrl(serverUrl, iconRemoteUrl),
-  ]);
+  let avatarFetched: string;
+  let iconFetched: string;
+
+  if (avatarRemoteUrl === iconRemoteUrl) {
+    const fetched = await fetchPersonaAssetDisplayUrl(serverUrl, avatarRemoteUrl);
+    avatarFetched = fetched;
+    iconFetched = fetched;
+  } else {
+    [avatarFetched, iconFetched] = await Promise.all([
+      fetchPersonaAssetDisplayUrl(serverUrl, avatarRemoteUrl),
+      fetchPersonaAssetDisplayUrl(serverUrl, iconRemoteUrl),
+    ]);
+  }
 
   personaState.setAssets({
     persona: normalized.persona,
     iconKey: normalized.icon_key,
-    avatarUrl,
-    iconUrl,
+    avatarUrl: avatarFetched || iconFetched,
+    avatarFallbackUrl: avatarRemoteUrl || iconRemoteUrl,
+    iconUrl: iconFetched || avatarFetched,
+    iconFallbackUrl: iconRemoteUrl || avatarRemoteUrl,
     personaPrompt: normalized.persona_prompt ?? "",
     assetVersion: normalized.asset_version,
   });

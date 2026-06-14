@@ -13,7 +13,9 @@ describe("speech-tools persona forwarding", () => {
       persona: "Aura",
       iconKey: "aura",
       avatarUrl: "",
+      avatarFallbackUrl: "",
       iconUrl: "",
+      iconFallbackUrl: "",
       personaPrompt: "Du bist Aura, freundlich und präzise.",
       assetVersion: "v1",
     });
@@ -35,7 +37,9 @@ describe("speech-tools persona forwarding", () => {
       persona: "Aura",
       iconKey: "aura",
       avatarUrl: "",
+      avatarFallbackUrl: "",
       iconUrl: "",
+      iconFallbackUrl: "",
       personaPrompt: "Sprich als Aura mit kurzen, klaren Sätzen.",
       assetVersion: "v1",
     });
@@ -54,7 +58,9 @@ describe("speech-tools persona forwarding", () => {
       persona: "Aura",
       iconKey: "aura",
       avatarUrl: "",
+      avatarFallbackUrl: "",
       iconUrl: "",
+      iconFallbackUrl: "",
       personaPrompt: "Du bist Aura.",
       assetVersion: "v1",
     });

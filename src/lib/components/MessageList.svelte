@@ -7,6 +7,7 @@
   import PersonaAvatar from "./PersonaAvatar.svelte";
   import { chatMessages } from "../stores/chat";
   import { personaState } from "../stores/persona";
+  import { resolvePersonaWelcomeImage } from "../services/persona-display";
   import { formatDayLabel } from "../services/chat-format";
   import type { ChatMediaItem, ConnectionStatus, SessionStatus } from "../types/protocol";
 
@@ -41,6 +42,8 @@
   const newMessageCount = $derived(Math.max(0, $chatMessages.length - lastSeenCount));
 
   const showScrollFab = $derived(!shouldStickToBottom && $chatMessages.length > 0);
+
+  const welcomePersonaImage = $derived(resolvePersonaWelcomeImage($personaState));
 
   const scrollFabTitle = $derived(
     newMessageCount > 0
@@ -103,7 +106,8 @@
       <div class="empty">
         <div class="empty-avatar" class:pulse={speechActive}>
           <PersonaAvatar
-            imageUrl={$personaState.avatarUrl || $personaState.iconUrl}
+            imageUrl={welcomePersonaImage.imageUrl}
+            fallbackImageUrl={welcomePersonaImage.fallbackImageUrl}
             label={$personaState.persona}
             size="lg"
             loading={$personaState.loading}

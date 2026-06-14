@@ -1,9 +1,15 @@
 import { formatInvokeError } from "./errors";
-import { getPinnedFingerprint } from "./tls";
+import { fetchServerAssetDataUrl } from "./server-asset-fetch";
 
-interface FetchedAsset {
-  dataUrl: string;
-  mime: string;
+function normalizePersonaFetchUrl(assetUrl: string): string {
+  const trimmed = assetUrl.trim();
+  if (trimmed.startsWith("ws://")) {
+    return `http://${trimmed.slice("ws://".length)}`;
+  }
+  if (trimmed.startsWith("wss://")) {
+    return `https://${trimmed.slice("wss://".length)}`;
+  }
+  return trimmed;
 }
 
 export async function fetchPersonaAssetDisplayUrl(
@@ -19,29 +25,17 @@ export async function fetchPersonaAssetDisplayUrl(
     return trimmed;
   }
 
-  let fetchUrl = trimmed;
-  if (fetchUrl.startsWith("ws://")) {
-    fetchUrl = `http://${fetchUrl.slice("ws://".length)}`;
-  } else if (fetchUrl.startsWith("wss://")) {
-    fetchUrl = `https://${fetchUrl.slice("wss://".length)}`;
-  }
+  const fetchUrl = normalizePersonaFetchUrl(trimmed);
 
   try {
-    const pinnedFingerprint = await getPinnedFingerprint(serverUrl).catch(() => null);
-    const { invoke } = await import("@tauri-apps/api/core");
-    const result = await invoke<FetchedAsset>("fetch_server_asset", {
-      serverUrl,
-      assetUrl: fetchUrl,
-      ...(pinnedFingerprint ? { pinnedFingerprint } : {}),
-    });
+    const result = await fetchServerAssetDataUrl(serverUrl, fetchUrl);
     return result.dataUrl;
   } catch (error) {
-    if (import.meta.env.DEV) {
-      console.warn(
-        formatInvokeError(error, "Persona-Asset konnte nicht geladen werden."),
-        fetchUrl,
-      );
-    }
+    console.warn(
+      "[agodesk:persona-asset]",
+      formatInvokeError(error, "Persona-Asset konnte nicht geladen werden."),
+      fetchUrl,
+    );
     return "";
   }
 }
