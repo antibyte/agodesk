@@ -72,6 +72,28 @@ function createChatMediaStore() {
         warningUnacknowledged: unacknowledged,
       }));
     },
+    acknowledgeWarningById(id: string): void {
+      update((state) => {
+        const systemWarnings = state.systemWarnings.map((warning) =>
+          warning.id === id ? { ...warning, acknowledged: true } : warning,
+        );
+        return {
+          ...state,
+          systemWarnings,
+          warningUnacknowledged: systemWarnings.filter((warning) => !warning.acknowledged).length,
+        };
+      });
+    },
+    acknowledgeAllWarnings(): void {
+      update((state) => ({
+        ...state,
+        systemWarnings: state.systemWarnings.map((warning) => ({
+          ...warning,
+          acknowledged: true,
+        })),
+        warningUnacknowledged: 0,
+      }));
+    },
     setIntegrationsOpen(open: boolean): void {
       update((state) => ({ ...state, integrationsOpen: open }));
     },

@@ -58,7 +58,12 @@
     refreshIntegrationsWebhosts,
     refreshSystemWarnings,
   } from "../services/agodesk-features-bootstrap";
-  import { buildSystemWarningAcknowledgeMessage } from "../services/system-warnings-flow";
+  import {
+    buildSystemWarningAcknowledgeMessage,
+    initSystemWarningsPersist,
+    recordAllSystemWarningAcknowledgements,
+    recordSystemWarningAcknowledgement,
+  } from "../services/system-warnings-flow";
   import { deliverSpeechTranscript } from "../services/speech-delivery";
   import { stopSpeechSession, toggleSpeechSession } from "../services/speech-flow";
   import { interruptLocalSpeechPlayback } from "../services/local-speech-tts";
@@ -350,6 +355,7 @@
 
   async function init(): Promise<void> {
     appVersion = await getAppVersion();
+    await initSystemWarningsPersist();
     void checkForUpdates({ silent: true });
 
     const loaded = await loadSettings();
@@ -801,6 +807,7 @@
     if (!$sessionState.sessionId) {
       return;
     }
+    await recordSystemWarningAcknowledgement($settings.serverUrl, id);
     await wsService.send(buildSystemWarningAcknowledgeMessage($sessionState.sessionId, { id }));
   }
 
@@ -808,6 +815,8 @@
     if (!$sessionState.sessionId) {
       return;
     }
+    const ids = $chatMediaState.systemWarnings.map((warning) => warning.id);
+    await recordAllSystemWarningAcknowledgements($settings.serverUrl, ids);
     await wsService.send(
       buildSystemWarningAcknowledgeMessage($sessionState.sessionId, { all: true }),
     );
