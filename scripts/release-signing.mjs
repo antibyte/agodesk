@@ -122,21 +122,31 @@ function writeGithubEnv(keyPath) {
   );
 }
 
-function materializeSigningKey(privateKey) {
+export function toTauriKeyFileContent(rawSecret, normalizedPrivateKey) {
+  const trimmed = rawSecret.trim();
+  if (!trimmed.includes("untrusted comment")) {
+    return trimmed;
+  }
+  return Buffer.from(`${normalizedPrivateKey}\n`, "utf8").toString("base64");
+}
+
+function materializeSigningKey(rawSecret, normalizedPrivateKey) {
   const keyPath = path.join(
     process.env.RUNNER_TEMP || os.tmpdir(),
     "tauri-signing.key",
   );
-  fs.writeFileSync(keyPath, `${privateKey}\n`, { mode: 0o600 });
+  const fileContent = toTauriKeyFileContent(rawSecret, normalizedPrivateKey);
+  fs.writeFileSync(keyPath, `${fileContent}\n`, { mode: 0o600 });
   return keyPath;
 }
 
 function configure() {
-  const privateKey = normalizePrivateKey(readPrivateKeyRaw());
+  const rawSecret = readPrivateKeyRaw();
+  const privateKey = normalizePrivateKey(rawSecret);
   const validation = validateTauriSigningKey(privateKey);
 
   if (validation.ok) {
-    const keyPath = materializeSigningKey(privateKey);
+    const keyPath = materializeSigningKey(rawSecret, privateKey);
     setUpdaterArtifacts(true);
     writeGithubOutput(true, "", keyPath);
     writeGithubEnv(keyPath);

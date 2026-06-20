@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { normalizePrivateKey, validateTauriSigningKey } from "./release-signing.mjs";
+import { normalizePrivateKey, toTauriKeyFileContent, validateTauriSigningKey } from "./release-signing.mjs";
 
 const sampleKey = [
   "untrusted comment: minisign private key: ABCD1234",
@@ -50,4 +50,22 @@ test("normalizePrivateKey repairs single-line secret with space separator", () =
   ].join("\n");
   const flattened = decoded.replace("\n", " ");
   assert.equal(normalizePrivateKey(flattened), decoded);
+});
+
+test("toTauriKeyFileContent keeps base64 key file secret unchanged", () => {
+  const encoded = Buffer.from(
+    "untrusted comment: rsign encrypted secret key\nRWQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQ\n",
+    "utf8",
+  ).toString("base64");
+  const decoded = normalizePrivateKey(encoded);
+  assert.equal(toTauriKeyFileContent(encoded, decoded), encoded);
+});
+
+test("toTauriKeyFileContent encodes decoded multiline secrets for Tauri", () => {
+  const decoded = [
+    "untrusted comment: rsign encrypted secret key",
+    "RWQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQ",
+  ].join("\n");
+  const expected = Buffer.from(`${decoded}\n`, "utf8").toString("base64");
+  assert.equal(toTauriKeyFileContent(decoded, decoded), expected);
 });

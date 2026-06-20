@@ -2397,7 +2397,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
 
 export const PROTOCOL_VERSION = "agodesk.v1";
 
-export const AGODESK_CLIENT_VERSION = "0.1.10";
+export const AGODESK_CLIENT_VERSION = "0.1.11";
 
 export const AGODESK_AGENT_METADATA_CAPABILITY = "chat.agent_metadata";
 export const AGODESK_PLAN_UPDATES_CAPABILITY = "chat.plan_updates";
