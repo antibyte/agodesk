@@ -216,9 +216,9 @@ pub fn parse_ipc_endpoint(endpoint: &str) -> Result<ParsedEndpoint, OpenPetsClie
                 message: "Discovery endpoint filename is not an OpenPets socket.".to_string(),
             });
         }
-        return Ok(ParsedEndpoint::Path {
+        Ok(ParsedEndpoint::Path {
             path: endpoint.to_string(),
-        });
+        })
     }
 
     #[cfg(not(any(windows, unix)))]

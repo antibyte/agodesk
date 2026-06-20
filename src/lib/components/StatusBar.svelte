@@ -486,7 +486,9 @@
     color: white;
     flex-shrink: 0;
     transition: box-shadow var(--motion-companion);
-    box-shadow: var(--accent-glow), 0 0 0 2px var(--color-companion-ring);
+    box-shadow:
+      var(--accent-glow),
+      0 0 0 2px var(--color-companion-ring);
   }
 
   @media (prefers-reduced-motion: no-preference) {
@@ -498,10 +500,14 @@
   @keyframes status-ring-pulse {
     0%,
     100% {
-      box-shadow: var(--accent-glow), 0 0 0 2px color-mix(in srgb, var(--color-companion-ring) 55%, transparent);
+      box-shadow:
+        var(--accent-glow),
+        0 0 0 2px color-mix(in srgb, var(--color-companion-ring) 55%, transparent);
     }
     50% {
-      box-shadow: var(--accent-glow), 0 0 0 4px color-mix(in srgb, var(--color-companion-ring) 90%, transparent);
+      box-shadow:
+        var(--accent-glow),
+        0 0 0 4px color-mix(in srgb, var(--color-companion-ring) 90%, transparent);
     }
   }
 
