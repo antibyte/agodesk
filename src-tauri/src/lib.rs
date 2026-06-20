@@ -4,6 +4,7 @@ mod desktop;
 mod files;
 mod integration_embed;
 pub mod speech;
+mod shell;
 mod tray;
 mod window_effects;
 mod ws;
@@ -19,6 +20,8 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
         .manage(WsTransportState::default())
         .manage(TrayState::default())
         .manage(computer_use::browser::BrowserState::default())
@@ -101,6 +104,7 @@ pub fn run() {
             files::search::ops::file_search_rescan,
             files::ops::pick_folder_path,
             files::ops::canonicalize_folder_path,
+            shell::exec::shell_exec,
             tray::set_minimize_to_tray,
             tray::update_tray_labels,
             tray::show_main_window,

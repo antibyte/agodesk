@@ -19,6 +19,8 @@
     "core:window:allow-is-visible",
     "core:window:allow-is-minimized",
     "global-shortcut:default",
+    "updater:default",
+    "process:allow-restart",
     "core:window:allow-set-shadow",
     {
       "identifier": "core:event:allow-listen",

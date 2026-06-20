@@ -23,6 +23,7 @@
 
   let imageFailed = $state(false);
   let useFallback = $state(false);
+  let imageLoaded = $state(false);
 
   const displayLabel = $derived(label ?? $i18n("personaAvatar.defaultLabel"));
   const activeImageUrl = $derived(
@@ -31,12 +32,14 @@
       : imageUrl.trim() || fallbackImageUrl.trim(),
   );
   const showImage = $derived(Boolean(activeImageUrl) && !imageFailed);
+  const imageKey = $derived(activeImageUrl);
 
   $effect(() => {
     void imageUrl;
     void fallbackImageUrl;
     imageFailed = false;
     useFallback = false;
+    imageLoaded = false;
   });
 
   function handleImageError(): void {
@@ -44,9 +47,14 @@
     const fallback = fallbackImageUrl.trim();
     if (!useFallback && primary && fallback && fallback !== primary) {
       useFallback = true;
+      imageLoaded = false;
       return;
     }
     imageFailed = true;
+  }
+
+  function handleImageLoad(): void {
+    imageLoaded = true;
   }
 </script>
 
@@ -59,14 +67,18 @@
       <path d="M4 20c0-4 3.6-6 8-6s8 2 8 6" fill="currentColor" stroke="none" />
     </svg>
   {:else if showImage}
-    <img
-      src={activeImageUrl}
-      alt=""
-      loading="eager"
-      decoding="async"
-      style:object-fit={imageFit}
-      onerror={handleImageError}
-    />
+    {#key imageKey}
+      <img
+        src={activeImageUrl}
+        alt=""
+        loading="eager"
+        decoding="async"
+        class:loaded={imageLoaded}
+        style:object-fit={imageFit}
+        onload={handleImageLoad}
+        onerror={handleImageError}
+      />
+    {/key}
   {:else}
     {displayLabel}
   {/if}
@@ -74,6 +86,10 @@
 
 <style>
   .persona-avatar {
+    --avatar-size-sm: 2.125rem;
+    --avatar-size-md: 3rem;
+    --avatar-size-lg: 5rem;
+
     border-radius: var(--radius-full);
     display: grid;
     place-items: center;
@@ -84,21 +100,21 @@
   }
 
   .persona-avatar[data-size="sm"] {
-    width: 2.125rem;
-    height: 2.125rem;
-    font-size: 0.625rem;
+    width: var(--avatar-size-sm);
+    height: var(--avatar-size-sm);
+    font-size: var(--font-size-xs);
   }
 
   .persona-avatar[data-size="md"] {
-    width: 3rem;
-    height: 3rem;
-    font-size: 0.75rem;
+    width: var(--avatar-size-md);
+    height: var(--avatar-size-md);
+    font-size: var(--font-size-sm);
   }
 
   .persona-avatar[data-size="lg"] {
-    width: 5rem;
-    height: 5rem;
-    font-size: 1.125rem;
+    width: var(--avatar-size-lg);
+    height: var(--avatar-size-lg);
+    font-size: var(--font-size-xl);
   }
 
   .persona-avatar img {
@@ -106,6 +122,12 @@
     height: 100%;
     object-fit: cover;
     display: block;
+    opacity: 0;
+    transition: opacity 200ms ease;
+  }
+
+  .persona-avatar img.loaded {
+    opacity: 1;
   }
 
   .persona-avatar[data-tone="assistant"] {
@@ -149,5 +171,12 @@
     width: 100%;
     height: 100%;
     border-radius: inherit;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .persona-avatar img {
+      transition: none;
+      opacity: 1;
+    }
   }
 </style>

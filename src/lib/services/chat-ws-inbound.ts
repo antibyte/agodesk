@@ -435,7 +435,12 @@ export async function handleChatWsMessage(
       sessionId: get(sessionState).sessionId,
       deviceId: get(sessionState).deviceId,
       onRemoteControlPrompt: () => {
-        ctx.addSystemMessage("chatView.remoteControl.prompt", undefined, "info");
+        const operation = String((message.payload as { operation?: string })?.operation ?? "");
+        if (operation === "shell_exec") {
+          ctx.addSystemMessage("chatView.shellApproval.prompt", undefined, "info");
+        } else {
+          ctx.addSystemMessage("chatView.remoteControl.prompt", undefined, "info");
+        }
       },
       wsSend: async (resultMessage) => {
         try {

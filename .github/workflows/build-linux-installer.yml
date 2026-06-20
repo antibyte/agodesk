@@ -1,9 +1,6 @@
 name: Build Linux Installer (deb / AppImage / rpm)
 
 on:
-  push:
-    tags:
-      - 'v*'
   workflow_dispatch:
     inputs:
       features:
@@ -72,6 +69,8 @@ jobs:
       - name: Build frontend + sidecar + Linux bundles (deb/appimage/rpm)
         env:
           APPIMAGE_EXTRACT_AND_RUN: "1"
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: npm run build:linux
 
       - name: Collect Linux release assets
@@ -87,6 +86,9 @@ jobs:
           for f in src-tauri/target/release/bundle/appimage/*.AppImage; do
             cp "$f" release-assets/linux/
           done
+          for f in src-tauri/target/release/bundle/appimage/*.AppImage.sig; do
+            cp "$f" release-assets/linux/
+          done
           if [ -z "$(ls -A release-assets/linux)" ]; then
             echo "No Linux packages were produced."
             exit 1
@@ -99,14 +101,3 @@ jobs:
           name: agodesk-linux
           path: release-assets/linux/*
           retention-days: 30
-
-      - name: Create Release (on tag)
-        if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v2
-        with:
-          files: release-assets/linux/*
-          draft: true
-          generate_release_notes: true
-          overwrite_files: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -5,6 +5,8 @@
   import type { MessageKey } from "../i18n/types";
   import { playUiSound } from "../services/ui-sounds";
   import WindowControls from "./WindowControls.svelte";
+  import Icon from "./Icon.svelte";
+  import { returnFocusToTrigger, setFocusTrigger } from "../actions/focusTrap";
 
   interface Props {
     serverUrl?: string;
@@ -79,8 +81,15 @@
     desktopControlEnabled && hasAdvertisedRemoteDesktopCapture(advertisedCapabilities),
   );
 
+  const themeIcon = $derived(
+    theme === "light" ? "sun" : theme === "dark" ? "moon" : ("system" as const),
+  );
+
   let overflowOpen = $state(false);
   let overflowWrapEl = $state<HTMLDivElement | undefined>();
+  let overflowToggleEl = $state<HTMLButtonElement | undefined>();
+  let overflowMenuEl = $state<HTMLDivElement | undefined>();
+  let overflowFocusIndex = $state(0);
 
   function handleReconnect(): void {
     playUiSound("notice");
@@ -89,12 +98,60 @@
   }
 
   function toggleOverflow(): void {
+    if (!overflowOpen && overflowToggleEl) {
+      setFocusTrigger(overflowToggleEl);
+    }
     overflowOpen = !overflowOpen;
+    if (overflowOpen) {
+      overflowFocusIndex = 0;
+    }
   }
 
   function runOverflowAction(action: () => void): void {
     action();
     overflowOpen = false;
+    returnFocusToTrigger();
+  }
+
+  function overflowItems(): HTMLButtonElement[] {
+    if (!overflowMenuEl) {
+      return [];
+    }
+    return [...overflowMenuEl.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')];
+  }
+
+  function focusOverflowItem(index: number): void {
+    const items = overflowItems();
+    if (items.length === 0) {
+      return;
+    }
+    const next = Math.max(0, Math.min(index, items.length - 1));
+    overflowFocusIndex = next;
+    items[next]?.focus();
+  }
+
+  function handleOverflowKeydown(event: KeyboardEvent): void {
+    const items = overflowItems();
+    if (items.length === 0) {
+      return;
+    }
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      focusOverflowItem((overflowFocusIndex + 1) % items.length);
+    } else if (event.key === "ArrowUp") {
+      event.preventDefault();
+      focusOverflowItem((overflowFocusIndex - 1 + items.length) % items.length);
+    } else if (event.key === "Home") {
+      event.preventDefault();
+      focusOverflowItem(0);
+    } else if (event.key === "End") {
+      event.preventDefault();
+      focusOverflowItem(items.length - 1);
+    } else if (event.key === "Escape") {
+      event.preventDefault();
+      overflowOpen = false;
+      returnFocusToTrigger();
+    }
   }
 
   $effect(() => {
@@ -108,16 +165,10 @@
       }
       overflowOpen = false;
     };
-    const handleKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        overflowOpen = false;
-      }
-    };
     document.addEventListener("mousedown", handlePointerDown);
-    document.addEventListener("keydown", handleKey);
+    queueMicrotask(() => focusOverflowItem(0));
     return () => {
       document.removeEventListener("mousedown", handlePointerDown);
-      document.removeEventListener("keydown", handleKey);
     };
   });
 </script>
@@ -129,7 +180,9 @@
     title={$i18n("statusBar.openSettings.title")}
     onclick={() => onOpenSettings?.()}
   >
-    <span class="brand-mark" aria-hidden="true">A</span>
+    <span class="brand-mark" aria-hidden="true">
+      <Icon name="brand" size={18} />
+    </span>
     <span class="status-copy">
       <span class="status-line">
         <span
@@ -177,21 +230,7 @@
         aria-pressed={historyActive}
         onclick={() => onToggleHistory?.()}
       >
-        <svg
-          width="15"
-          height="15"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2.2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          aria-hidden="true"
-        >
-          <path d="M3 12a9 9 0 1 0 3-6.7"></path>
-          <polyline points="3 3 3 9 9 9"></polyline>
-          <path d="M12 7v5l3 2"></path>
-        </svg>
+        <Icon name="history" size={15} />
       </button>
     {/if}
 
@@ -205,23 +244,7 @@
         aria-pressed={integrationsActive}
         onclick={() => onToggleIntegrations?.()}
       >
-        <svg
-          width="15"
-          height="15"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2.2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          aria-hidden="true"
-        >
-          <rect x="3" y="3" width="7" height="7" rx="1"></rect>
-          <rect x="14" y="3" width="7" height="7" rx="1"></rect>
-          <rect x="3" y="14" width="7" height="7" rx="1"></rect>
-          <path d="M14 17h7"></path>
-          <path d="M17.5 14v6"></path>
-        </svg>
+        <Icon name="integrations" size={15} />
         {#if integrationsCount > 0}
           <span class="action-badge">{integrationsCount > 9 ? "9+" : integrationsCount}</span>
         {/if}
@@ -240,23 +263,7 @@
         aria-pressed={warningsActive}
         onclick={() => onToggleWarnings?.()}
       >
-        <svg
-          width="15"
-          height="15"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2.2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          aria-hidden="true"
-        >
-          <path
-            d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"
-          ></path>
-          <line x1="12" y1="9" x2="12" y2="13"></line>
-          <line x1="12" y1="17" x2="12.01" y2="17"></line>
-        </svg>
+        <Icon name="bell" size={15} />
         {#if warningsUnacknowledged > 0}
           <span class="action-badge warning"
             >{warningsUnacknowledged > 9 ? "9+" : warningsUnacknowledged}</span
@@ -276,39 +283,7 @@
       aria-pressed={voiceResponsesEnabled}
       onclick={() => onToggleVoiceOutput?.()}
     >
-      {#if voiceResponsesEnabled}
-        <svg
-          width="15"
-          height="15"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2.2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          class="icon-voice"
-        >
-          <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
-          <path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>
-          <path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path>
-        </svg>
-      {:else}
-        <svg
-          width="15"
-          height="15"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2.2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          class="icon-voice"
-        >
-          <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
-          <line x1="22" x2="16" y1="9" y2="15"></line>
-          <line x1="16" x2="22" y1="9" y2="15"></line>
-        </svg>
-      {/if}
+      <Icon name={voiceResponsesEnabled ? "voice-on" : "voice-off"} size={15} class="icon-voice" />
     </button>
 
     <button
@@ -320,53 +295,7 @@
       })}
       onclick={() => onToggleTheme?.()}
     >
-      {#if theme === "light"}
-        <svg
-          width="15"
-          height="15"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2.2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          class="icon-theme"
-        >
-          <circle cx="12" cy="12" r="4"></circle>
-          <path
-            d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"
-          ></path>
-        </svg>
-      {:else if theme === "dark"}
-        <svg
-          width="15"
-          height="15"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2.2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          class="icon-theme"
-        >
-          <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"></path>
-        </svg>
-      {:else}
-        <svg
-          width="15"
-          height="15"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2.2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          class="icon-theme"
-        >
-          <circle cx="12" cy="12" r="10"></circle>
-          <path d="M12 2v20M12 2a10 10 0 0 1 0 20Z" fill="currentColor"></path>
-        </svg>
-      {/if}
+      <Icon name={themeIcon} size={15} class="icon-theme" />
     </button>
 
     {#if connectionStatus === "disconnected" || connectionStatus === "error"}
@@ -377,6 +306,7 @@
 
     <div class="overflow-wrap compact-only" bind:this={overflowWrapEl}>
       <button
+        bind:this={overflowToggleEl}
         class="ui-btn ui-btn-secondary ui-btn-icon"
         type="button"
         title={$i18n("statusBar.overflow.title")}
@@ -385,14 +315,16 @@
         aria-haspopup="menu"
         onclick={toggleOverflow}
       >
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-          <circle cx="5" cy="12" r="1.8"></circle>
-          <circle cx="12" cy="12" r="1.8"></circle>
-          <circle cx="19" cy="12" r="1.8"></circle>
-        </svg>
+        <Icon name="overflow" size={15} />
       </button>
       {#if overflowOpen}
-        <div class="overflow-menu glass-panel" role="menu">
+        <div
+          bind:this={overflowMenuEl}
+          class="overflow-menu glass-panel"
+          role="menu"
+          tabindex="-1"
+          onkeydown={handleOverflowKeydown}
+        >
           {#if historyEnabled}
             <button
               type="button"
@@ -471,22 +403,7 @@
       aria-label={$i18n("statusBar.settings.ariaLabel")}
       onclick={() => onOpenSettings?.()}
     >
-      <svg
-        width="15"
-        height="15"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="2.2"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-        class="icon-settings"
-      >
-        <path
-          d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.1a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"
-        ></path>
-        <circle cx="12" cy="12" r="3"></circle>
-      </svg>
+      <Icon name="settings" size={15} class="icon-settings" />
     </button>
 
     <WindowControls {minimizeToTray} />
@@ -503,7 +420,7 @@
     border-bottom: 1px solid var(--color-border-subtle);
     border-radius: 0;
     flex-shrink: 0;
-    z-index: 2;
+    z-index: var(--z-status);
   }
 
   .titlebar-drag {
@@ -554,8 +471,6 @@
     border-radius: var(--radius-md);
     background: var(--color-accent);
     color: white;
-    font-weight: 800;
-    font-size: 0.875rem;
     flex-shrink: 0;
     box-shadow: var(--accent-glow);
   }
@@ -571,7 +486,7 @@
     align-items: center;
     gap: var(--space-2);
     flex-wrap: wrap;
-    font-size: 0.875rem;
+    font-size: var(--font-size-md);
     font-weight: 500;
   }
 
@@ -581,17 +496,17 @@
 
   .session-sep {
     color: var(--color-muted);
-    opacity: 0.6;
+    opacity: 0.7;
   }
 
   .session {
-    font-size: 0.8125rem;
+    font-size: var(--font-size-sm);
     color: var(--color-accent);
   }
 
   .url {
     color: var(--color-muted);
-    font-size: 0.75rem;
+    font-size: var(--font-size-xs);
     max-width: 14rem;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -630,34 +545,28 @@
     box-shadow: 0 0 8px color-mix(in srgb, var(--color-danger) 55%, transparent);
   }
 
-  .icon-settings {
+  :global(.icon-settings) {
     transition: transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
   }
 
-  .btn-settings:hover .icon-settings {
+  .btn-settings:hover :global(.icon-settings) {
     transform: rotate(45deg);
   }
 
-  .icon-theme {
+  :global(.icon-theme),
+  :global(.icon-voice) {
     transition: transform var(--transition-fast);
   }
 
-  .ui-btn-icon:hover .icon-theme {
-    transform: scale(1.08);
+  .ui-btn-icon:hover :global(.icon-theme),
+  .ui-btn-icon:hover :global(.icon-voice) {
+    transform: scale(1.04);
   }
 
   .ui-btn-icon.is-active {
     color: var(--color-accent);
     border-color: color-mix(in srgb, var(--color-accent) 35%, var(--color-border));
     box-shadow: var(--accent-glow);
-  }
-
-  .icon-voice {
-    transition: transform var(--transition-fast);
-  }
-
-  .ui-btn-icon:hover .icon-voice {
-    transform: scale(1.08);
   }
 
   .ui-btn-icon {
@@ -696,7 +605,7 @@
     min-width: 11rem;
     padding: var(--space-2);
     border-radius: var(--radius-lg);
-    z-index: 30;
+    z-index: var(--z-panel);
     display: grid;
     gap: var(--space-1);
   }
@@ -713,14 +622,17 @@
     color: inherit;
     padding: var(--space-2) var(--space-3);
     font: inherit;
-    font-size: 0.8125rem;
+    font-size: var(--font-size-sm);
     text-align: left;
     cursor: pointer;
   }
 
   .overflow-item:hover,
-  .overflow-item.is-active {
+  .overflow-item.is-active,
+  .overflow-item:focus-visible {
     background: color-mix(in srgb, var(--color-accent) 10%, transparent);
+    outline: none;
+    box-shadow: var(--focus-ring);
   }
 
   .overflow-badge {

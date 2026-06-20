@@ -98,7 +98,7 @@
     border-left: none;
     border-right: none;
     border-top: none;
-    z-index: 20;
+    z-index: var(--z-banner);
   }
 
   .op {

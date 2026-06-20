@@ -8,6 +8,8 @@
   import type { SettingsSavePayload } from "./SettingsView.svelte";
   import PairingBanner from "./PairingBanner.svelte";
   import RemoteControlBanner from "./RemoteControlBanner.svelte";
+  import ShellApprovalBanner from "./ShellApprovalBanner.svelte";
+  import UpdateBanner from "./UpdateBanner.svelte";
   import ChatPlanFloatingPanel from "./ChatPlanFloatingPanel.svelte";
   import ChatHistoryPanel from "./ChatHistoryPanel.svelte";
   import IntegrationsPanel from "./IntegrationsPanel.svelte";
@@ -27,6 +29,15 @@
   import { i18n } from "../i18n";
   import { getTranslateFn } from "../i18n/store";
   import type { MessageKey } from "../i18n/types";
+  import { toastService } from "../services/toast";
+  import { getAppVersion } from "../services/get-app-version";
+  import {
+    checkForUpdates,
+    dismissUpdate,
+    installUpdate,
+    isUpdateBannerVisible,
+    updateState,
+  } from "../services/update-flow";
   import { loadSettings, saveSettings } from "../services/settings";
   import { cycleTheme, destroyThemeListener } from "../services/theme";
   import { saveTrustedCertificate } from "../services/tls";
@@ -69,6 +80,11 @@
     flushPendingInputCommands,
     rejectPendingInputCommands,
   } from "../services/desktop-flow";
+  import {
+    approvePendingShellCommand,
+    denyPendingShellCommands,
+    shellApprovalState,
+  } from "../services/shell-flow";
   import { controlPermissionStatus, setInputApproval } from "../services/desktop";
   import { playUiSound } from "../services/ui-sounds";
   import {
@@ -126,6 +142,7 @@
   let embedModalOpen = $state(false);
   let embedModalUrl = $state("");
   let embedModalTitle = $state("");
+  let appVersion = $state("0.1.0");
   const integrationPreviewNative = isIntegrationEmbedAvailable();
   let wsService = createWebSocketService();
   let prevConnection: typeof $connectionStatus | null = null;
@@ -185,6 +202,10 @@
       ($sessionState.remoteControlPending || $sessionState.remoteControlActive),
   );
 
+  const shellBannerVisible = $derived($shellApprovalState.pending && $shellApprovalState.request !== null);
+
+  const updateBannerVisible = $derived(isUpdateBannerVisible($updateState));
+
   const chatPlanVisible = $derived(
     hasAdvertisedPlanUpdates($sessionState.advertisedCapabilities) &&
       isChatPlanPanelVisible($chatPlanState.plan) &&
@@ -199,6 +220,7 @@
 
   const bannerStackCompact = $derived(
     remoteBannerVisible ||
+      shellBannerVisible ||
       $sessionState.status === "awaiting_pairing" ||
       $sessionState.status === "error" ||
       $sessionState.status === "pairing" ||
@@ -315,7 +337,21 @@
     }
   }
 
+  async function handleInstallUpdate(): Promise<void> {
+    try {
+      await installUpdate();
+    } catch {
+      toastService.show({
+        type: "error",
+        message: getTranslateFn()("update.toast.failed"),
+      });
+    }
+  }
+
   async function init(): Promise<void> {
+    appVersion = await getAppVersion();
+    void checkForUpdates({ silent: true });
+
     const loaded = await loadSettings();
     await applyMinimizeToTraySetting(loaded.minimizeToTray);
     await applyShowWindowHotkey(loaded.showWindowHotkey);
@@ -336,7 +372,10 @@
     await applyMinimizeToTraySetting(next.minimizeToTray);
     const hotkeyResult = await applyShowWindowHotkey(next.showWindowHotkey);
     if (!hotkeyResult.ok) {
-      addSystemMessage("chatView.error.showWindowHotkey", undefined, "error");
+      toastService.show({
+        type: "error",
+        message: getTranslateFn()("chatView.error.showWindowHotkey"),
+      });
     }
 
     if (previousSpeakerMode !== nextSpeakerMode) {
@@ -355,8 +394,13 @@
         deviceId: $sessionState.deviceId,
       }).catch(() => {});
     }
+    if (!next.shellAccess.enabled || next.shellAccess.allowedCwds.length === 0) {
+      await denyPendingShellCommands(createDesktopResultSender(), {
+        sessionId: $sessionState.sessionId,
+        deviceId: $sessionState.deviceId,
+      }).catch(() => {});
+    }
     await connect(next.serverUrl);
-    addSystemMessage("settings.saveSuccess", undefined, "success");
   }
 
   function ensureSettingsView(): void {
@@ -562,7 +606,10 @@
         },
       });
     } catch (error) {
-      addSystemMessage("chatView.error.speechTranscriptFailed", undefined, "error");
+      toastService.show({
+        type: "error",
+        message: getTranslateFn()("chatView.error.speechTranscriptFailed"),
+      });
       void error;
     }
   }
@@ -635,6 +682,32 @@
       sessionId: $sessionState.sessionId,
       deviceId: $sessionState.deviceId,
     });
+  }
+
+  async function handleApproveShell(): Promise<void> {
+    try {
+      await approvePendingShellCommand();
+      addSystemMessage("chatView.shellApproval.approved", undefined, "success");
+    } catch {
+      addSystemMessage("chatView.error.shellApprovalFailed", undefined, "error");
+    }
+  }
+
+  async function handleDenyShell(): Promise<void> {
+    await denyPendingShellCommands(createDesktopResultSender(), {
+      sessionId: $sessionState.sessionId,
+      deviceId: $sessionState.deviceId,
+    });
+    addSystemMessage("chatView.shellApproval.denied", undefined, "info");
+  }
+
+  async function handleStopSessionFromShell(): Promise<void> {
+    await denyPendingShellCommands(createDesktopResultSender(), {
+      sessionId: $sessionState.sessionId,
+      deviceId: $sessionState.deviceId,
+    });
+    await wsService.disconnect();
+    addSystemMessage("chatView.shellApproval.sessionStopped", undefined, "info");
   }
 
   async function handleSubmit(text: string, files?: File[]): Promise<void> {
@@ -745,7 +818,10 @@
     const prev = prevConnection;
     if (prev === "connected" && conn !== "connected" && pending) {
       pending = false;
-      addSystemMessage("chatView.connectionLost", undefined, "error");
+      toastService.show({
+        type: "error",
+        message: getTranslateFn()("chatView.connectionLost"),
+      });
     }
     prevConnection = conn;
   });
@@ -803,6 +879,27 @@
     onStop={() => void handleStopRemote()}
   />
 
+  <ShellApprovalBanner
+    visible={shellBannerVisible}
+    command={$shellApprovalState.request?.command ?? ""}
+    cwdLabel={$shellApprovalState.request?.cwdLabel ?? ""}
+    cwdDisplay={$shellApprovalState.request?.cwdDisplay ?? ""}
+    timeoutMs={$shellApprovalState.request?.timeoutMs ?? 0}
+    onApprove={() => void handleApproveShell()}
+    onDeny={() => void handleDenyShell()}
+    onStopSession={() => void handleStopSessionFromShell()}
+  />
+
+  <UpdateBanner
+    visible={updateBannerVisible}
+    version={$updateState.version ?? ""}
+    notes={$updateState.notes ?? ""}
+    status={$updateState.status}
+    progress={$updateState.progress ?? 0}
+    onInstall={() => void handleInstallUpdate()}
+    onDismiss={() => dismissUpdate()}
+  />
+
   {#if settingsOpen}
     {#if SettingsViewLazy}
       <SettingsViewLazy
@@ -817,6 +914,7 @@
         desktopControlEnabled={$settings.desktopControlEnabled}
         browserControlEnabled={$settings.browserControlEnabled}
         fileAccess={$settings.fileAccess}
+        shellAccess={$settings.shellAccess}
         chatTtsMode={$settings.chatTtsMode}
         connectionStatus={$connectionStatus}
         sessionStatus={$sessionState.status}
@@ -824,7 +922,7 @@
         sessionError={$sessionState.errorMessage}
         advertisedCapabilities={$sessionState.advertisedCapabilities}
         remoteControlActive={$sessionState.remoteControlActive}
-        appVersion="0.1.0"
+        appVersion={appVersion}
         onBack={() => {
           settingsOpen = false;
           settingsInitialSection = undefined;

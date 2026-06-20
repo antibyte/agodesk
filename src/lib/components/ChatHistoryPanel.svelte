@@ -3,6 +3,8 @@
   import type { ChatSessionSummary } from "../types/protocol";
   import { formatDayLabel } from "../i18n/format";
   import { activeLocale } from "../i18n/store";
+  import { focusTrap } from "../actions/focusTrap";
+  import Icon from "./Icon.svelte";
 
   import { filterVisibleChatSessions } from "../types/protocol";
 
@@ -39,7 +41,11 @@
 </script>
 
 {#if visible}
-  <aside class="chat-history-panel glass-panel" aria-label={$i18n("chatView.history.title")}>
+  <aside
+    class="chat-history-panel glass-panel"
+    aria-label={$i18n("chatView.history.title")}
+    use:focusTrap
+  >
     <header class="panel-header">
       <h2>{$i18n("chatView.history.title")}</h2>
       <div class="header-actions">
@@ -56,7 +62,7 @@
           aria-label={$i18n("common.close")}
           onclick={() => onClose?.()}
         >
-          ×
+          <Icon name="close" size={14} />
         </button>
       </div>
     </header>
@@ -95,7 +101,7 @@
     max-height: min(24rem, 50vh);
     display: flex;
     flex-direction: column;
-    z-index: 5;
+    z-index: var(--z-panel);
     overflow: hidden;
   }
 

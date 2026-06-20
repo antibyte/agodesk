@@ -2,6 +2,7 @@
   import { i18n } from "../i18n";
 
   import SpeechControl from "./SpeechControl.svelte";
+  import Icon from "./Icon.svelte";
 
   import type { SpeechStatus } from "../types/speech";
 
@@ -71,7 +72,23 @@
 
   let dragActive = $state(false);
 
+  let dragDepth = $state(0);
+
+  let focusedPillIndex = $state<number | null>(null);
+
   const canSend = $derived(!disabled && (draft.trim().length > 0 || pendingFiles.length > 0));
+
+  const attachmentHint = $derived.by(() => {
+    if (!attachmentsEnabled || pendingFiles.length === 0) {
+      return "";
+    }
+    return $i18n("inputBox.attachments.countHint", {
+      count: String(pendingFiles.length),
+      max: String(attachmentLimits.max_files_per_message),
+    });
+  });
+
+  const composerHint = $derived(hint || attachmentHint);
 
   function resizeTextarea(): void {
     if (!textareaEl) {
@@ -184,11 +201,47 @@
   }
 
   function handleKeydown(event: KeyboardEvent): void {
+    if (
+      event.key === "Enter" &&
+      (event.metaKey || event.ctrlKey) &&
+      !event.shiftKey &&
+      !event.altKey
+    ) {
+      event.preventDefault();
+      submit();
+      return;
+    }
+
     if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
 
       submit();
+      return;
     }
+
+    if (
+      (event.key === "Backspace" || event.key === "Delete") &&
+      pendingFiles.length > 0 &&
+      draft.trim().length === 0
+    ) {
+      const index =
+        focusedPillIndex ?? (event.key === "Backspace" ? pendingFiles.length - 1 : 0);
+      if (index >= 0 && index < pendingFiles.length) {
+        event.preventDefault();
+        removePendingFile(index);
+        focusedPillIndex =
+          pendingFiles.length > 0 ? Math.min(index, pendingFiles.length - 1) : null;
+      }
+    }
+  }
+
+  function handlePillKeydown(event: KeyboardEvent, index: number): void {
+    if (event.key === "Backspace" || event.key === "Delete") {
+      event.preventDefault();
+      removePendingFile(index);
+      return;
+    }
+    focusedPillIndex = index;
   }
 
   function openFilePicker(): void {
@@ -201,19 +254,32 @@
     }
 
     event.preventDefault();
+  }
 
-    dragActive = true;
+  function handleDragEnter(event: DragEvent): void {
+    if (!attachmentsEnabled || disabled) {
+      return;
+    }
+
+    event.preventDefault();
+    dragDepth += 1;
+    dragActive = dragDepth > 0;
   }
 
   function handleDragLeave(event: DragEvent): void {
-    event.preventDefault();
+    if (!attachmentsEnabled || disabled) {
+      return;
+    }
 
-    dragActive = false;
+    event.preventDefault();
+    dragDepth = Math.max(0, dragDepth - 1);
+    dragActive = dragDepth > 0;
   }
 
   function handleDrop(event: DragEvent): void {
     event.preventDefault();
 
+    dragDepth = 0;
     dragActive = false;
 
     addFiles(event.dataTransfer?.files);
@@ -228,26 +294,29 @@
     submit();
   }}
   ondragover={handleDragOver}
+  ondragenter={handleDragEnter}
   ondragleave={handleDragLeave}
   ondrop={handleDrop}
 >
-  {#if hint}
-    <p class="hint">{hint}</p>
+  {#if composerHint}
+    <p class="hint">{composerHint}</p>
   {/if}
 
   {#if pendingFiles.length > 0}
     <ul class="pending-list" aria-label={$i18n("inputBox.attachments.pending.ariaLabel")}>
       {#each pendingFiles as file, index (file.name + file.size)}
-        <li class="pending-chip">
+        <li class="pending-chip" class:focused={focusedPillIndex === index}>
           <span class="pending-name">{file.name}</span>
 
           <button
             type="button"
             class="remove-btn ui-btn ui-btn-icon"
             aria-label={$i18n("inputBox.attachments.remove.ariaLabel", { name: file.name })}
+            onfocus={() => (focusedPillIndex = index)}
+            onkeydown={(event) => handlePillKeydown(event, index)}
             onclick={() => removePendingFile(index)}
           >
-            ×
+            <Icon name="close" size={12} />
           </button>
         </li>
       {/each}
@@ -285,21 +354,7 @@
           title={$i18n("inputBox.attachments.add.title")}
           onclick={openFilePicker}
         >
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            aria-hidden="true"
-          >
-            <path
-              d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"
-            ></path>
-          </svg>
+          <Icon name="attach" size={16} />
         </button>
       {/if}
 
@@ -328,7 +383,7 @@
           title={$i18n("chatView.stop.title")}
           onclick={() => onStop?.()}
         >
-          <span class="stop-icon" aria-hidden="true"></span>
+          <Icon name="stop" size={14} />
         </button>
       {/if}
 
@@ -341,21 +396,7 @@
           : $i18n("inputBox.send.ariaLabel")}
         title={$i18n("inputBox.send.title")}
       >
-        <svg
-          width="14"
-          height="14"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2.5"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          aria-hidden="true"
-        >
-          <line x1="12" y1="19" x2="12" y2="5"></line>
-
-          <polyline points="5 12 12 5 19 12"></polyline>
-        </svg>
+        <Icon name="send" size={14} />
       </button>
     </div>
   </div>
@@ -385,7 +426,7 @@
 
     margin-top: auto;
 
-    z-index: 2;
+    z-index: var(--z-status);
 
     overflow: hidden;
   }
@@ -448,6 +489,11 @@
     white-space: nowrap;
 
     max-width: 14rem;
+  }
+
+  .pending-chip.focused {
+    outline: 2px solid color-mix(in srgb, var(--color-accent) 45%, transparent);
+    outline-offset: 1px;
   }
 
   .remove-btn {
@@ -565,6 +611,8 @@
 
     background: color-mix(in srgb, var(--color-danger) 12%, transparent);
 
+    color: var(--color-danger);
+
     flex-shrink: 0;
   }
 
@@ -572,18 +620,6 @@
     background: color-mix(in srgb, var(--color-danger) 22%, transparent);
 
     border-color: var(--color-danger);
-  }
-
-  .stop-icon {
-    display: block;
-
-    width: 0.875rem;
-
-    height: 0.875rem;
-
-    border-radius: 2px;
-
-    background: var(--color-danger);
   }
 
   .send-btn {
@@ -612,7 +648,7 @@
   }
 
   .send-btn:not(:disabled):hover {
-    transform: scale(1.06) translateY(-1px);
+    transform: scale(1.04) translateY(-1px);
   }
 
   .send-btn:not(:disabled):active {

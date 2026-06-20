@@ -33,6 +33,8 @@ tauri-build = { version = "2", features = [] }
 tauri = { version = "2", features = ["tray-icon"] }
 tauri-plugin-store = "2"
 tauri-plugin-global-shortcut = "2"
+tauri-plugin-updater = "2"
+tauri-plugin-process = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 keyring = "3"
@@ -84,6 +86,9 @@ windows = { version = "0.58", features = [
   "Win32_System_Variant",
 ] }
 uiautomation = { version = "0.25", default-features = false, features = ["input", "control"] }
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
 
 [target.'cfg(target_os = "linux")'.dependencies]
 xcap = "0.0.14"

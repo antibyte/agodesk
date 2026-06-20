@@ -5,6 +5,8 @@
   import { resolvePersonaAssetUrl } from "../types/protocol";
   import { openExternalUrl } from "../services/open-external-url";
   import IntegrationIcon from "./IntegrationIcon.svelte";
+  import { focusTrap } from "../actions/focusTrap";
+  import Icon from "./Icon.svelte";
 
   interface Props {
     visible?: boolean;
@@ -48,7 +50,7 @@
 </script>
 
 {#if visible}
-  <aside class="integrations-panel glass-panel" aria-label={$i18n("integrations.title")}>
+  <aside class="integrations-panel glass-panel" aria-label={$i18n("integrations.title")} use:focusTrap>
     <header class="panel-header">
       <h2>{$i18n("integrations.title")}</h2>
       <button
@@ -57,7 +59,7 @@
         aria-label={$i18n("common.close")}
         onclick={() => onClose?.()}
       >
-        ×
+        <Icon name="close" size={14} />
       </button>
     </header>
 
@@ -99,7 +101,7 @@
     width: min(22rem, calc(100vw - 2rem));
     max-height: min(24rem, 50vh);
     overflow: auto;
-    z-index: 5;
+    z-index: var(--z-panel);
     border-radius: var(--radius-xl);
     padding: var(--space-3);
   }

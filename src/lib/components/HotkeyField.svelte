@@ -82,7 +82,7 @@
 <svelte:window onkeydown={handleKeydown} />
 
 <div class="hotkey-field" class:recording class:disabled>
-  <div class="hotkey-display" aria-live="polite">
+  <div class="hotkey-display" aria-live={recording ? "assertive" : "polite"}>
     {#if displayLabel}
       {displayLabel}
     {:else}

@@ -9,8 +9,10 @@
   --color-surface-solid: #ffffff;
   --color-input-bg: rgba(243, 246, 248, 0.92);
   --color-text: #14181c;
+  --color-text-strong: #0a0d10;
   --color-muted: #5c6670;
   --color-text-muted: #6b7580;
+  --color-footnote: #4a5560;
   --color-border: rgba(20, 24, 28, 0.1);
   --color-border-subtle: rgba(20, 24, 28, 0.05);
   --color-accent: #0d7a77;
@@ -69,6 +71,25 @@
   --focus-ring:
     0 0 0 2px color-mix(in srgb, var(--color-bg) 82%, transparent),
     0 0 0 4px color-mix(in srgb, var(--color-accent) 55%, transparent);
+
+  --z-base: 0;
+  --z-banner: 10;
+  --z-status: 20;
+  --z-panel: 30;
+  --z-modal: 40;
+  --z-toast: 50;
+
+  --font-size-xs: 0.75rem;
+  --font-size-sm: 0.8125rem;
+  --font-size-md: 0.875rem;
+  --font-size-lg: 1rem;
+  --font-size-xl: 1.125rem;
+  --font-size-2xl: 1.25rem;
+  --line-height-tight: 1.25;
+  --line-height-normal: 1.55;
+  --line-height-loose: 1.75;
+
+  --ui-btn-icon-size: 2.25rem;
 }
 
 @media (prefers-color-scheme: light) {
@@ -117,8 +138,10 @@
   --color-surface-solid: #12171c;
   --color-input-bg: rgba(10, 14, 17, 0.82);
   --color-text: #eef2f5;
+  --color-text-strong: #ffffff;
   --color-muted: #9aa5b1;
   --color-text-muted: #84909c;
+  --color-footnote: #a8b4c0;
   --color-border: rgba(238, 242, 245, 0.08);
   --color-border-subtle: rgba(238, 242, 245, 0.04);
   --color-accent: #62c9c5;
@@ -177,6 +200,25 @@
   --focus-ring:
     0 0 0 2px color-mix(in srgb, var(--color-bg) 82%, transparent),
     0 0 0 4px color-mix(in srgb, var(--color-accent) 55%, transparent);
+
+  --z-base: 0;
+  --z-banner: 10;
+  --z-status: 20;
+  --z-panel: 30;
+  --z-modal: 40;
+  --z-toast: 50;
+
+  --font-size-xs: 0.75rem;
+  --font-size-sm: 0.8125rem;
+  --font-size-md: 0.875rem;
+  --font-size-lg: 1rem;
+  --font-size-xl: 1.125rem;
+  --font-size-2xl: 1.25rem;
+  --line-height-tight: 1.25;
+  --line-height-normal: 1.55;
+  --line-height-loose: 1.75;
+
+  --ui-btn-icon-size: 2.25rem;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -371,10 +413,10 @@ select {
 }
 
 .ui-btn-icon {
-  width: 2.25rem;
-  height: 2.25rem;
+  width: var(--ui-btn-icon-size);
+  height: var(--ui-btn-icon-size);
   padding: 0;
-  min-width: 2.25rem;
+  min-width: var(--ui-btn-icon-size);
   border-radius: var(--radius-md);
 }
 
@@ -455,6 +497,8 @@ select {
 
 /* ── Banner tones ── */
 .banner-glass {
+  position: relative;
+  z-index: var(--z-banner);
   margin: 0 var(--space-5) var(--space-2);
   padding: var(--space-3) var(--space-4);
   border-radius: var(--radius-lg);

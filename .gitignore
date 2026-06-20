@@ -28,6 +28,7 @@ Thumbs.db
 .env.*
 *.pem
 *.key
+.tauri/
 
 # Test / coverage
 coverage/

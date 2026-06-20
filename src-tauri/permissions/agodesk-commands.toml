@@ -47,6 +47,7 @@ commands.allow = [
   "file_search_rescan",
   "pick_folder_path",
   "canonicalize_folder_path",
+  "shell_exec",
   "set_minimize_to_tray",
   "update_tray_labels",
   "show_main_window",

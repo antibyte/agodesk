@@ -2,6 +2,7 @@
   import { i18n } from "../i18n";
   import { getWsOrigin } from "../types/protocol";
   import { loadPairingToken, savePairingToken } from "../services/credentials";
+  import Icon from "./Icon.svelte";
 
   interface Props {
     visible?: boolean;
@@ -109,7 +110,7 @@
           title={showToken ? $i18n("pairing.token.hide.title") : $i18n("pairing.token.show.title")}
           onclick={() => (showToken = !showToken)}
         >
-          {showToken ? "◉" : "◎"}
+          <Icon name={showToken ? "eye-open" : "eye-closed"} size={15} />
         </button>
       </div>
       <button

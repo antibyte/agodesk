@@ -86,6 +86,7 @@ export interface SessionStartCommon {
   client_capabilities: string[];
   host: SessionStartHost;
   file_access?: FileAccessSessionPayload;
+  shell_access?: ShellAccessSessionPayload;
 }
 
 export interface SharedKeyProofPayload {
@@ -1693,9 +1694,14 @@ export type DesktopOperation =
   | "file_list"
   | "file_read"
   | "file_write"
-  | "file_search";
+  | "file_search"
+  | "shell_exec";
 
 export const FILE_OPERATIONS = ["file_list", "file_read", "file_write", "file_search"] as const;
+
+export const SHELL_OPERATIONS = ["shell_exec"] as const;
+
+export type ShellOperation = (typeof SHELL_OPERATIONS)[number];
 
 export type FileOperation = (typeof FILE_OPERATIONS)[number];
 
@@ -1779,7 +1785,15 @@ export type DesktopErrorCode =
   | "DESKTOP_UI_UNAVAILABLE"
   | "DESKTOP_ELEMENT_NOT_FOUND"
   | "DESKTOP_ACCESSIBILITY_DENIED"
-  | "DESKTOP_BROWSER_UNAVAILABLE";
+  | "DESKTOP_BROWSER_UNAVAILABLE"
+  | "SHELL_ACCESS_DISABLED"
+  | "SHELL_ACCESS_DENIED"
+  | "SHELL_APPROVAL_REQUIRED"
+  | "SHELL_APPROVAL_DENIED"
+  | "SHELL_COMMAND_REJECTED"
+  | "SHELL_TIMEOUT"
+  | "SHELL_OUTPUT_TOO_LARGE"
+  | "SHELL_SPAWN_FAILED";
 
 export interface FileCommandParams {
   root_id?: string;
@@ -1804,12 +1818,15 @@ export interface DesktopCommandPayload {
     | DesktopStreamStopParams
     | DesktopInputParams
     | FileCommandParams
+    | ShellExecParams
     | Record<string, unknown>;
 }
 
 export interface DesktopResultPayload {
   command_id: string;
   success: boolean;
+  /** AuraGo-kompatibles Erfolgsfeld neben `success`. */
+  ok?: boolean;
   /** AuraGo-kompatibles Statusfeld neben `success`. */
   status?: "ok" | "error";
   session_id?: string;
@@ -1953,6 +1970,8 @@ export function normalizeDesktopCommandPayload(raw: unknown): DesktopCommandPayl
     params = {};
   } else if (isFileOperation(operation)) {
     params = normalizeFileCommandParams(paramsRecord);
+  } else if (isShellOperation(operation)) {
+    params = normalizeShellExecParams(paramsRecord);
   } else if (Object.keys(paramsRecord).length > 0) {
     params = paramsRecord;
   }
@@ -1982,6 +2001,95 @@ export function isDesktopStreamOperation(operation: string): boolean {
 
 export function isFileOperation(operation: string): operation is FileOperation {
   return FILE_OPERATIONS.includes(operation as FileOperation);
+}
+
+export function isShellOperation(operation: string): operation is ShellOperation {
+  return SHELL_OPERATIONS.includes(operation as ShellOperation);
+}
+
+export type ShellKind = "powershell" | "cmd" | "sh" | "bash" | "zsh";
+
+export interface ShellAccessCwd {
+  cwdId: string;
+  label: string;
+  canonicalPath: string;
+  pathDisplay: string;
+}
+
+export interface ShellAccessSettings {
+  enabled: boolean;
+  requiresApproval: boolean;
+  defaultCwd?: string;
+  allowedCwds: ShellAccessCwd[];
+  shells: ShellKind[];
+  selectedShell: ShellKind;
+  maxCommandChars: number;
+  maxOutputBytes: number;
+  defaultTimeoutMs: number;
+  maxTimeoutMs: number;
+}
+
+export interface ShellAccessSessionCwd {
+  cwd_id: string;
+  label: string;
+  path_display: string;
+}
+
+export interface ShellAccessSessionPayload {
+  enabled: boolean;
+  requires_approval: boolean;
+  default_cwd?: string;
+  allowed_cwds: ShellAccessSessionCwd[];
+  shells: string[];
+  max_command_chars: number;
+  max_output_bytes: number;
+  default_timeout_ms: number;
+  max_timeout_ms: number;
+}
+
+export interface ShellExecParams {
+  command: string;
+  cwd_id?: string;
+  cwd?: string;
+  timeout_ms?: number;
+}
+
+export interface ShellExecResult {
+  exit_code: number;
+  stdout: string;
+  stderr: string;
+  duration_ms: number;
+  timed_out: boolean;
+  truncated: boolean;
+  cwd_display: string;
+  shell: string;
+}
+
+export const DEFAULT_SHELL_ACCESS_SETTINGS: ShellAccessSettings = {
+  enabled: false,
+  requiresApproval: true,
+  defaultCwd: undefined,
+  allowedCwds: [],
+  shells: ["powershell", "cmd"],
+  selectedShell: "powershell",
+  maxCommandChars: 4000,
+  maxOutputBytes: 1_048_576,
+  defaultTimeoutMs: 30_000,
+  maxTimeoutMs: 120_000,
+};
+
+export function normalizeShellExecParams(raw: Record<string, unknown>): ShellExecParams {
+  return {
+    command: readString(raw, "command") ?? "",
+    cwd_id: readString(raw, "cwd_id", "cwdId"),
+    cwd: readString(raw, "cwd"),
+    timeout_ms:
+      typeof raw.timeout_ms === "number" && Number.isFinite(raw.timeout_ms)
+        ? raw.timeout_ms
+        : typeof raw.timeoutMs === "number" && Number.isFinite(raw.timeoutMs)
+          ? raw.timeoutMs
+          : undefined,
+  };
 }
 
 export function normalizeFileCommandParams(raw: Record<string, unknown>): FileCommandParams {
@@ -2242,6 +2350,8 @@ export interface AppSettings {
   browserControlEnabled: boolean;
   /** Lokale Ordnerfreigaben für Remote-Dateizugriff. */
   fileAccess: FileAccessSettings;
+  /** Remote-Shell-Zugriff für AuraGo-Agents. */
+  shellAccess: ShellAccessSettings;
   /** TTS-Modus für AuraGo-Chat-Antworten (nicht Gemini Live). */
   chatTtsMode: ChatTtsMode;
   /** Lautsprecher/Stummschaltung für Chat-Sprachausgabe (Statusleiste). */
@@ -2259,6 +2369,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   desktopControlEnabled: true,
   browserControlEnabled: true,
   fileAccess: { ...DEFAULT_FILE_ACCESS_SETTINGS },
+  shellAccess: { ...DEFAULT_SHELL_ACCESS_SETTINGS },
   chatTtsMode: "auto",
   chatSpeakerMode: true,
 };
@@ -2329,6 +2440,7 @@ export const AGODESK_CLIENT_CAPABILITIES = [
 
 export const AGODESK_FILE_READ_CAPABILITY = "remote.files.read";
 export const AGODESK_FILE_WRITE_CAPABILITY = "remote.files.write";
+export const AGODESK_SHELL_EXEC_CAPABILITY = "remote.shell.exec";
 
 export function isLoopbackHost(host: string): boolean {
   return host === "localhost" || host === "127.0.0.1" || host === "::1" || host === "[::1]";
@@ -2490,6 +2602,10 @@ export function hasAdvertisedFileWrite(capabilities: readonly string[]): boolean
   return hasAdvertisedCapability(capabilities, AGODESK_FILE_WRITE_CAPABILITY);
 }
 
+export function hasAdvertisedShellExec(capabilities: readonly string[]): boolean {
+  return hasAdvertisedCapability(capabilities, AGODESK_SHELL_EXEC_CAPABILITY);
+}
+
 export function hasAdvertisedCapability(
   capabilities: readonly string[],
   capability: string,
@@ -2609,10 +2725,46 @@ export function buildFileAccessSessionPayload(
   };
 }
 
+export function shellAccessIsConfigured(settings: ShellAccessSettings): boolean {
+  return settings.enabled && settings.allowedCwds.length > 0;
+}
+
+export function buildShellAccessSessionPayload(
+  shellAccess: ShellAccessSettings,
+): ShellAccessSessionPayload | undefined {
+  if (!shellAccessIsConfigured(shellAccess)) {
+    return undefined;
+  }
+
+  const allowedCwds = shellAccess.allowedCwds.map((cwd) => ({
+    cwd_id: cwd.cwdId,
+    label: cwd.label,
+    path_display: cwd.pathDisplay,
+  }));
+
+  const defaultCwd =
+    shellAccess.defaultCwd && allowedCwds.some((cwd) => cwd.cwd_id === shellAccess.defaultCwd)
+      ? shellAccess.defaultCwd
+      : allowedCwds[0]?.cwd_id;
+
+  return {
+    enabled: true,
+    requires_approval: shellAccess.requiresApproval,
+    ...(defaultCwd ? { default_cwd: defaultCwd } : {}),
+    allowed_cwds: allowedCwds,
+    shells: shellAccess.shells,
+    max_command_chars: shellAccess.maxCommandChars,
+    max_output_bytes: shellAccess.maxOutputBytes,
+    default_timeout_ms: shellAccess.defaultTimeoutMs,
+    max_timeout_ms: shellAccess.maxTimeoutMs,
+  };
+}
+
 export function agodeskClientCapabilities(
   desktopControlEnabled = true,
   fileAccess: FileAccessSettings = DEFAULT_FILE_ACCESS_SETTINGS,
   browserControlEnabled = false,
+  shellAccess: ShellAccessSettings = DEFAULT_SHELL_ACCESS_SETTINGS,
 ): string[] {
   const caps: string[] = [
     "chat.full_response",
@@ -2648,6 +2800,10 @@ export function agodeskClientCapabilities(
     if (hasWrite) {
       caps.push(AGODESK_FILE_WRITE_CAPABILITY);
     }
+  }
+
+  if (buildShellAccessSessionPayload(shellAccess)) {
+    caps.push(AGODESK_SHELL_EXEC_CAPABILITY);
   }
 
   caps.push("persona.assets");

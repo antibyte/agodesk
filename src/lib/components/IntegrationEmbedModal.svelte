@@ -1,6 +1,8 @@
 <script lang="ts">
   import { onDestroy, onMount, tick } from "svelte";
   import { i18n } from "../i18n";
+  import { focusTrap } from "../actions/focusTrap";
+  import Icon from "./Icon.svelte";
   import { openExternalUrl } from "../services/open-external-url";
   import {
     closeIntegrationEmbed,
@@ -132,9 +134,15 @@
 
 {#if shellVisible && url}
   <div class="embed-backdrop" role="presentation" onclick={handleClose}></div>
-  <section class="embed-modal glass-panel" aria-label={title || $i18n("integrations.embed.title")}>
+  <div
+    class="embed-modal glass-panel"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="embed-modal-title"
+    use:focusTrap
+  >
     <header class="embed-header">
-      <h2>{title || $i18n("integrations.embed.title")}</h2>
+      <h2 id="embed-modal-title">{title || $i18n("integrations.embed.title")}</h2>
       <div class="actions">
         <button
           type="button"
@@ -149,7 +157,7 @@
           aria-label={$i18n("common.close")}
           onclick={handleClose}
         >
-          ×
+          <Icon name="close" size={14} />
         </button>
       </div>
     </header>
@@ -172,7 +180,7 @@
         </div>
       {/if}
     </div>
-  </section>
+  </div>
 {/if}
 
 <style>
@@ -180,13 +188,13 @@
     position: fixed;
     inset: 0;
     background: rgba(0, 0, 0, 0.45);
-    z-index: 30;
+    z-index: var(--z-modal);
   }
 
   .embed-modal {
     position: fixed;
     inset: var(--space-5);
-    z-index: 31;
+    z-index: calc(var(--z-modal) + 1);
     display: grid;
     grid-template-rows: auto 1fr;
     border-radius: var(--radius-xl);

@@ -4,6 +4,9 @@ import type {
   ChatTtsMode,
   FileAccessRoot,
   FileAccessSettings,
+  ShellAccessCwd,
+  ShellAccessSettings,
+  ShellKind,
   SpeechSettings,
   UiSoundSettings,
   UiSoundTheme,
@@ -11,6 +14,7 @@ import type {
 import {
   DEFAULT_FILE_ACCESS_SETTINGS,
   DEFAULT_SETTINGS,
+  DEFAULT_SHELL_ACCESS_SETTINGS,
   DEFAULT_SPEECH_SETTINGS,
   DEFAULT_UI_SOUND_SETTINGS,
   UI_SOUND_THEMES,
@@ -203,6 +207,95 @@ function normalizeFileAccessSettings(
   };
 }
 
+const SHELL_KINDS: ShellKind[] = ["powershell", "cmd", "sh", "bash", "zsh"];
+
+function defaultShellPlatformSettings(): Pick<ShellAccessSettings, "shells" | "selectedShell"> {
+  if (typeof navigator !== "undefined" && /Win/i.test(navigator.userAgent)) {
+    return { shells: ["powershell", "cmd"], selectedShell: "powershell" };
+  }
+  return { shells: ["sh", "bash", "zsh"], selectedShell: "sh" };
+}
+
+function normalizeShellAccessCwd(raw: Partial<ShellAccessCwd>): ShellAccessCwd | null {
+  if (!raw || typeof raw !== "object") {
+    return null;
+  }
+  const canonicalPath = typeof raw.canonicalPath === "string" ? raw.canonicalPath.trim() : "";
+  const label = typeof raw.label === "string" ? raw.label.trim() : "";
+  const cwdId = typeof raw.cwdId === "string" ? raw.cwdId.trim() : "";
+  if (!canonicalPath || !label || !cwdId) {
+    return null;
+  }
+  const pathDisplay =
+    typeof raw.pathDisplay === "string" && raw.pathDisplay.trim()
+      ? raw.pathDisplay.trim()
+      : buildPathDisplay(canonicalPath);
+  return { cwdId, label, canonicalPath, pathDisplay };
+}
+
+export function normalizeShellAccessSettings(
+  saved: Partial<ShellAccessSettings> | null | undefined,
+): ShellAccessSettings {
+  const platformDefaults = defaultShellPlatformSettings();
+  if (!saved || typeof saved !== "object") {
+    return { ...DEFAULT_SHELL_ACCESS_SETTINGS, ...platformDefaults };
+  }
+
+  const allowedCwds = Array.isArray(saved.allowedCwds)
+    ? saved.allowedCwds
+        .map((cwd) => normalizeShellAccessCwd(cwd as Partial<ShellAccessCwd>))
+        .filter((cwd): cwd is ShellAccessCwd => cwd !== null)
+    : [];
+
+  const shells = Array.isArray(saved.shells)
+    ? saved.shells.filter((shell): shell is ShellKind => SHELL_KINDS.includes(shell as ShellKind))
+    : platformDefaults.shells;
+  const selectedShell =
+    typeof saved.selectedShell === "string" && SHELL_KINDS.includes(saved.selectedShell)
+      ? saved.selectedShell
+      : shells.includes(platformDefaults.selectedShell)
+        ? platformDefaults.selectedShell
+        : shells[0] ?? platformDefaults.selectedShell;
+
+  const maxCommandChars =
+    typeof saved.maxCommandChars === "number" && saved.maxCommandChars > 0
+      ? saved.maxCommandChars
+      : DEFAULT_SHELL_ACCESS_SETTINGS.maxCommandChars;
+  const maxOutputBytes =
+    typeof saved.maxOutputBytes === "number" && saved.maxOutputBytes > 0
+      ? saved.maxOutputBytes
+      : DEFAULT_SHELL_ACCESS_SETTINGS.maxOutputBytes;
+  const defaultTimeoutMs =
+    typeof saved.defaultTimeoutMs === "number" && saved.defaultTimeoutMs > 0
+      ? saved.defaultTimeoutMs
+      : DEFAULT_SHELL_ACCESS_SETTINGS.defaultTimeoutMs;
+  const maxTimeoutMs =
+    typeof saved.maxTimeoutMs === "number" && saved.maxTimeoutMs >= defaultTimeoutMs
+      ? saved.maxTimeoutMs
+      : DEFAULT_SHELL_ACCESS_SETTINGS.maxTimeoutMs;
+
+  const defaultCwd =
+    typeof saved.defaultCwd === "string" && allowedCwds.some((cwd) => cwd.cwdId === saved.defaultCwd)
+      ? saved.defaultCwd
+      : undefined;
+
+  return {
+    enabled: typeof saved.enabled === "boolean" ? saved.enabled : DEFAULT_SHELL_ACCESS_SETTINGS.enabled,
+    requiresApproval:
+      typeof saved.requiresApproval === "boolean"
+        ? saved.requiresApproval
+        : DEFAULT_SHELL_ACCESS_SETTINGS.requiresApproval,
+    defaultCwd,
+    allowedCwds,
+    shells: shells.length > 0 ? shells : platformDefaults.shells,
+    selectedShell,
+    maxCommandChars,
+    maxOutputBytes,
+    defaultTimeoutMs,
+    maxTimeoutMs,
+  };
+}
+
 export function normalizeAppSettings(saved: Partial<AppSettings> | null | undefined): AppSettings {
   const theme = saved?.theme;
   const serverUrl = normalizeServerUrl(saved?.serverUrl ?? DEFAULT_SETTINGS.serverUrl);
@@ -234,6 +327,7 @@ export function normalizeAppSettings(saved: Partial<AppSettings> | null | undefi
         ? saved.browserControlEnabled
         : DEFAULT_SETTINGS.browserControlEnabled,
     fileAccess: normalizeFileAccessSettings(saved?.fileAccess),
+    shellAccess: normalizeShellAccessSettings(saved?.shellAccess),
     chatTtsMode: normalizeChatTtsMode(saved?.chatTtsMode),
     chatSpeakerMode:
       typeof saved?.chatSpeakerMode === "boolean"

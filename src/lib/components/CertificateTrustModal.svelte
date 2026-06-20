@@ -2,6 +2,7 @@
   import { i18n } from "../i18n";
   import type { CertificateProbeResult, ClientErrorCode } from "../types/protocol";
   import { browserOrigin, probeServerCertificate } from "../services/tls";
+  import { focusTrap } from "../actions/focusTrap";
 
   interface Props {
     open?: boolean;
@@ -92,7 +93,9 @@
     bind:this={modalEl}
     class="modal ui-card glass-panel"
     open
+    aria-modal="true"
     aria-labelledby="cert-title"
+    use:focusTrap
     onclick={(e) => e.stopPropagation()}
   >
     <h2 id="cert-title">{title}</h2>
@@ -160,7 +163,7 @@
     background: var(--color-backdrop);
     backdrop-filter: blur(6px);
     -webkit-backdrop-filter: blur(6px);
-    z-index: 20;
+    z-index: var(--z-modal);
   }
 
   .modal {
@@ -168,7 +171,7 @@
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    z-index: 21;
+    z-index: calc(var(--z-modal) + 1);
     width: min(92vw, 36rem);
     margin: 0;
     border: none;

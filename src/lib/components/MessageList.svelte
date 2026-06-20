@@ -1,6 +1,6 @@
 <script lang="ts">
   import { tick } from "svelte";
-  import { fly } from "svelte/transition";
+  import { fade } from "svelte/transition";
   import { i18n } from "../i18n";
   import MessageBubble from "./MessageBubble.svelte";
   import ChatMediaBlock from "./ChatMediaBlock.svelte";
@@ -98,6 +98,11 @@
     lastSeenCount = messages.length;
     void stickToBottom();
   });
+  const reducedMotion =
+    typeof window !== "undefined" &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  const scrollFabTransition = reducedMotion ? { duration: 0 } : { duration: 220 };
 </script>
 
 <div class="message-list-wrap">
@@ -167,7 +172,7 @@
       title={scrollFabTitle}
       aria-label={$i18n("messageList.scrollToBottom.ariaLabel")}
       onclick={() => void scrollToBottom()}
-      transition:fly={{ y: 8, duration: 180 }}
+      transition:fade={scrollFabTransition}
     >
       <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
         <path d="M12 16 6 10h12l-6 6Z" fill="currentColor" />
@@ -198,6 +203,18 @@
     gap: var(--space-3);
     padding: var(--space-4) var(--space-5);
     scroll-behavior: smooth;
+    font-variant-numeric: tabular-nums;
+  }
+
+  @media (min-width: 1024px) {
+    .message-list {
+      align-items: center;
+    }
+
+    .message-list :global(.message-row) {
+      width: 100%;
+      max-width: 720px;
+    }
   }
 
   .empty {
@@ -264,11 +281,12 @@
     align-items: center;
     gap: var(--space-3);
     margin: var(--space-2) 0;
-    color: var(--color-muted);
-    font-size: 0.6875rem;
+    color: var(--color-footnote);
+    font-size: var(--font-size-xs);
     font-weight: 600;
     letter-spacing: 0.06em;
     text-transform: uppercase;
+    font-variant-numeric: tabular-nums;
   }
 
   .day-divider::before,

@@ -6,6 +6,7 @@ import {
   AGODESK_CLIENT_VERSION,
   agodeskClientCapabilities,
   buildFileAccessSessionPayload,
+  buildShellAccessSessionPayload,
 } from "../types/protocol";
 
 const fallbackHost: SessionStartHost = {
@@ -28,11 +29,14 @@ export async function buildSessionStartCommon(): Promise<SessionStartCommon> {
   }
 
   const fileAccess = get(settings).fileAccess;
+  const shellAccess = get(settings).shellAccess;
   const fileAccessPayload = buildFileAccessSessionPayload(fileAccess);
+  const shellAccessPayload = buildShellAccessSessionPayload(shellAccess);
   const clientCapabilities = agodeskClientCapabilities(
     get(settings).desktopControlEnabled,
     fileAccess,
     get(settings).browserControlEnabled,
+    shellAccess,
   );
 
   const common: SessionStartCommon = {
@@ -40,12 +44,16 @@ export async function buildSessionStartCommon(): Promise<SessionStartCommon> {
     client_capabilities: clientCapabilities,
     host,
     ...(fileAccessPayload ? { file_access: fileAccessPayload } : {}),
+    ...(shellAccessPayload ? { shell_access: shellAccessPayload } : {}),
   };
 
   console.info("[agodesk:session.start]", {
     file_access_enabled: Boolean(fileAccessPayload),
     file_roots: fileAccessPayload?.roots.map((root) => root.root_id) ?? [],
+    shell_access_enabled: Boolean(shellAccessPayload),
+    shell_cwds: shellAccessPayload?.allowed_cwds.map((cwd) => cwd.cwd_id) ?? [],
     client_file_capabilities: clientCapabilities.filter((cap) => cap.startsWith("remote.files.")),
+    client_shell_capabilities: clientCapabilities.filter((cap) => cap.startsWith("remote.shell.")),
     client_chat_attachment_capabilities: clientCapabilities.filter(
       (cap) => cap === "chat.media_upload" || cap === "chat.attachments",
     ),

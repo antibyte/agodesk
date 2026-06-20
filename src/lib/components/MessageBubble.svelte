@@ -91,6 +91,12 @@
     max-width: min(88%, 680px);
   }
 
+  @media (min-width: 1024px) {
+    .message-row {
+      max-width: min(88%, 720px);
+    }
+  }
+
   .message-row.user {
     align-self: flex-end;
   }
@@ -117,10 +123,11 @@
   .bubble {
     padding: var(--space-3) var(--space-4);
     border-radius: var(--radius-xl);
-    line-height: 1.55;
+    line-height: var(--line-height-normal);
     word-break: break-word;
     min-width: 0;
     flex: 1;
+    font-variant-numeric: tabular-nums;
   }
 
   .bubble :global(.message-body p) {
@@ -141,8 +148,13 @@
   .bubble time {
     display: block;
     margin-top: var(--space-2);
-    font-size: 0.6875rem;
-    opacity: 0.55;
+    font-size: var(--font-size-xs);
+    color: var(--color-footnote);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .user .bubble time {
+    color: color-mix(in srgb, var(--color-user-text) 78%, transparent);
   }
 
   .user .bubble {

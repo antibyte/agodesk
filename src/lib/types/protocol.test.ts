@@ -22,6 +22,9 @@ import {
   hasAdvertisedFileRead,
   hasAdvertisedFileWrite,
   hasAdvertisedPlanUpdates,
+  buildShellAccessSessionPayload,
+  isShellOperation,
+  normalizeShellExecParams,
   hasAdvertisedChatSessions,
   hasAdvertisedChatCancel,
   auragoServerTtsAvailable,
@@ -949,4 +952,63 @@ test("normalizeLoadedConversationMessage erlaubt reine Attachment-Nachrichten", 
   });
   assert.equal(message?.attachments?.length, 1);
   assert.equal(message?.content, "");
+});
+
+test("agodeskClientCapabilities advertises remote.shell.exec only when shell enabled", () => {
+  const disabled = agodeskClientCapabilities(true, DEFAULT_SETTINGS.fileAccess, false, {
+    ...DEFAULT_SETTINGS.shellAccess,
+    enabled: false,
+  });
+  assert.equal(disabled.includes("remote.shell.exec"), false);
+
+  const enabled = agodeskClientCapabilities(true, DEFAULT_SETTINGS.fileAccess, false, {
+    ...DEFAULT_SETTINGS.shellAccess,
+    enabled: true,
+    allowedCwds: [
+      {
+        cwdId: "workspace",
+        label: "Workspace",
+        canonicalPath: "C:/Projects/demo",
+        pathDisplay: "~/Projects/demo",
+      },
+    ],
+  });
+  assert.equal(enabled.includes("remote.shell.exec"), true);
+});
+
+test("buildShellAccessSessionPayload omits canonical paths", () => {
+  const payload = buildShellAccessSessionPayload({
+    ...DEFAULT_SETTINGS.shellAccess,
+    enabled: true,
+    allowedCwds: [
+      {
+        cwdId: "workspace",
+        label: "Workspace",
+        canonicalPath: "C:/secret/path",
+        pathDisplay: "~/Projects/demo",
+      },
+    ],
+  });
+  assert.equal(payload?.enabled, true);
+  assert.equal(payload?.allowed_cwds[0]?.path_display, "~/Projects/demo");
+  assert.equal(
+    (payload?.allowed_cwds[0] as { canonicalPath?: string }).canonicalPath,
+    undefined,
+  );
+});
+
+test("isShellOperation erkennt shell_exec", () => {
+  assert.equal(isShellOperation("shell_exec"), true);
+  assert.equal(isShellOperation("file_list"), false);
+});
+
+test("normalizeShellExecParams normalisiert snake_case und camelCase", () => {
+  const params = normalizeShellExecParams({
+    command: "git status",
+    cwd_id: "workspace",
+    timeout_ms: 15000,
+  });
+  assert.equal(params.command, "git status");
+  assert.equal(params.cwd_id, "workspace");
+  assert.equal(params.timeout_ms, 15000);
 });

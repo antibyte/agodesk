@@ -1,7 +1,8 @@
 <script lang="ts">
-  import { fly } from "svelte/transition";
+  import { fade } from "svelte/transition";
   import { i18n } from "../i18n";
   import type { SpeechProvider } from "../types/protocol";
+  import Icon from "./Icon.svelte";
 
   interface Props {
     partialTranscript?: string;
@@ -27,7 +28,12 @@
     compact = false,
   }: Props = $props();
 
-  const bannerTransition = { y: 8, duration: 220 };
+  const reducedMotion =
+    typeof window !== "undefined" &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  const bannerTransition = reducedMotion ? { duration: 180 } : { y: 8, duration: 220 };
+  const bannerOutTransition = reducedMotion ? { duration: 140 } : { y: -4, duration: 220 };
 </script>
 
 {#if vadLoading}
@@ -36,8 +42,8 @@
     class:compact
     data-tone="info"
     role="status"
-    in:fly={bannerTransition}
-    out:fly={{ ...bannerTransition, y: -4 }}
+    in:fade={bannerTransition}
+    out:fade={bannerOutTransition}
   >
     <span class="pulse-dot" aria-hidden="true"></span>
     <span>{$i18n("speechBanner.vad.loading")}</span>
@@ -46,12 +52,12 @@
   <section
     class="speech-banner banner-glass"
     class:compact
-    data-tone="warn"
+    data-tone="warning"
     role="alert"
-    in:fly={bannerTransition}
-    out:fly={{ ...bannerTransition, y: -4 }}
+    in:fade={bannerTransition}
+    out:fade={bannerOutTransition}
   >
-    <span class="icon" aria-hidden="true">⚠</span>
+    <Icon name="warning" size={16} class="banner-icon" />
     <span>{vadError}</span>
   </section>
 {:else if errorMessage}
@@ -60,10 +66,10 @@
     class:compact
     data-tone="danger"
     role="alert"
-    in:fly={bannerTransition}
-    out:fly={{ ...bannerTransition, y: -4 }}
+    in:fade={bannerTransition}
+    out:fade={bannerOutTransition}
   >
-    <span class="icon" aria-hidden="true">!</span>
+    <Icon name="error" size={16} class="banner-icon" />
     <span>{errorMessage}</span>
   </section>
 {:else if partialTranscript}
@@ -73,8 +79,8 @@
     data-tone="accent"
     role="status"
     aria-live="polite"
-    in:fly={bannerTransition}
-    out:fly={{ ...bannerTransition, y: -4 }}
+    in:fade={bannerTransition}
+    out:fade={bannerOutTransition}
   >
     <div class="content">
       <span class="pulse-dot" aria-hidden="true"></span>
@@ -102,8 +108,8 @@
     class:compact
     data-tone="accent"
     role="status"
-    in:fly={bannerTransition}
-    out:fly={{ ...bannerTransition, y: -4 }}
+    in:fade={bannerTransition}
+    out:fade={bannerOutTransition}
   >
     <div class="content">
       <span class="pulse-dot" aria-hidden="true"></span>
@@ -139,7 +145,7 @@
   }
 
   .speech-banner.mode {
-    font-size: 0.75rem;
+    font-size: var(--font-size-xs);
   }
 
   .mode-chip {
@@ -168,16 +174,9 @@
     white-space: nowrap;
   }
 
-  .icon {
-    display: grid;
-    place-items: center;
-    width: 1.1rem;
-    height: 1.1rem;
-    border-radius: var(--radius-full);
-    background: color-mix(in srgb, var(--color-danger) 20%, transparent);
-    font-weight: 800;
-    font-size: 0.7rem;
+  :global(.banner-icon) {
     flex-shrink: 0;
+    color: currentColor;
   }
 
   @keyframes pulse {
@@ -189,6 +188,12 @@
     50% {
       opacity: 0.55;
       transform: scale(0.85);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .pulse-dot {
+      animation: none;
     }
   }
 </style>

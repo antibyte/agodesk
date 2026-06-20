@@ -6,6 +6,7 @@
     FileAccessRoot,
     FileAccessSettings,
     SessionStatus,
+    ShellAccessSettings,
     SpeechSettings,
     ThemeMode,
     UiSoundSettings,
@@ -13,6 +14,7 @@
   } from "../types/protocol";
   import {
     DEFAULT_FILE_ACCESS_SETTINGS,
+    DEFAULT_SHELL_ACCESS_SETTINGS,
     DEFAULT_SPEECH_SETTINGS,
     DEFAULT_UI_SOUND_SETTINGS,
     UI_SOUND_THEMES,
@@ -23,6 +25,8 @@
     isGeminiSpeechProvider,
     hasAdvertisedFileRead,
     hasAdvertisedFileWrite,
+    hasAdvertisedShellExec,
+    shellAccessIsConfigured,
   } from "../types/protocol";
   import { APP_LOCALES, LOCALE_LABELS, getTranslateFn, i18n, type UiLocaleSetting } from "../i18n";
   import type { MessageKey } from "../i18n/types";
@@ -61,11 +65,17 @@
     cloneFileAccessSettings,
     createFileAccessRootId,
   } from "../services/file-access";
+  import {
+    buildShellCwdFromFolder,
+    cloneShellAccessSettings,
+  } from "../services/shell-access";
   import { canonicalizeFolderPath, pickFolderPath } from "../services/file-commands";
   import { GEMINI_API_KEY_URL, openExternalUrl } from "../services/open-external-url";
   import { SERVER_PRESETS } from "../services/settings-presets";
   import { normalizeServerUrl } from "../services/server-url";
   import { previewUiSoundTheme } from "../services/ui-sounds";
+  import { toastService } from "../services/toast";
+  import { checkForUpdates } from "../services/update-flow";
   import WindowControls from "./WindowControls.svelte";
   import HotkeyField from "./HotkeyField.svelte";
   import { isDesktopShell } from "../services/window-controls";
@@ -83,6 +93,7 @@
     | "desktopControlEnabled"
     | "browserControlEnabled"
     | "fileAccess"
+    | "shellAccess"
     | "chatTtsMode"
   >;
 
@@ -100,6 +111,7 @@
     | "language"
     | "desktop"
     | "files"
+    | "shell"
     | "speech"
     | "about";
 
@@ -116,6 +128,7 @@
     desktopControlEnabled?: boolean;
     browserControlEnabled?: boolean;
     fileAccess?: FileAccessSettings;
+    shellAccess?: ShellAccessSettings;
     chatTtsMode?: ChatTtsMode;
     connectionStatus?: ConnectionStatus;
     sessionStatus?: SessionStatus;
@@ -144,6 +157,7 @@
     desktopControlEnabled = true,
     browserControlEnabled = false,
     fileAccess = DEFAULT_FILE_ACCESS_SETTINGS,
+    shellAccess = DEFAULT_SHELL_ACCESS_SETTINGS,
     chatTtsMode = "auto",
     connectionStatus = "disconnected",
     sessionStatus = "idle",
@@ -173,6 +187,9 @@
   let draftFileAccess = $state<FileAccessSettings>(
     cloneFileAccessSettings(DEFAULT_FILE_ACCESS_SETTINGS),
   );
+  let draftShellAccess = $state<ShellAccessSettings>(
+    cloneShellAccessSettings(DEFAULT_SHELL_ACCESS_SETTINGS),
+  );
   let draftChatTtsMode = $state<ChatTtsMode>("auto");
   let draftSpeech = $state<SpeechSettings>({ ...DEFAULT_SPEECH_SETTINGS });
   let draftUiSoundEnabled = $state(true);
@@ -182,6 +199,8 @@
   let hostInfo = $state<HostInfo | null>(null);
   let dirty = $state(false);
   let saving = $state(false);
+  let sectionSearch = $state("");
+  let updateCheckBusy = $state(false);
 
   let backButtonEl = $state<HTMLButtonElement | null>(null);
 
@@ -204,6 +223,7 @@
         ["language", "settings.section.language.label", "settings.section.language.hint"],
         ["desktop", "settings.section.desktop.label", "settings.section.desktop.hint"],
         ["files", "settings.section.files.label", "settings.section.files.hint"],
+        ["shell", "settings.section.shell.label", "settings.section.shell.hint"],
         ["speech", "settings.section.speech.label", "settings.section.speech.hint"],
         ["about", "settings.section.about.label", "settings.section.about.hint"],
       ] as const
@@ -213,6 +233,17 @@
       hint: $i18n(hintKey),
     })),
   );
+
+  const filteredSections = $derived.by(() => {
+    const query = sectionSearch.trim().toLowerCase();
+    if (!query) {
+      return sections;
+    }
+    return sections.filter(
+      (section) =>
+        section.label.toLowerCase().includes(query) || section.hint.toLowerCase().includes(query),
+    );
+  });
 
   const serverOrigin = $derived.by(() => {
     try {
@@ -294,6 +325,18 @@
     (fileReadRequested && !fileReadNegotiated) || (fileWriteRequested && !fileWriteNegotiated),
   );
 
+  const shellConfiguredLocally = $derived(
+    draftShellAccess.enabled && draftShellAccess.allowedCwds.length > 0,
+  );
+  const shellNegotiated = $derived(hasAdvertisedShellExec(advertisedCapabilities));
+  const shellNegotiationMismatch = $derived(shellConfiguredLocally && !shellNegotiated);
+
+  const shellOptions = $derived(
+    draftShellAccess.shells.length > 0
+      ? draftShellAccess.shells
+      : DEFAULT_SHELL_ACCESS_SETTINGS.shells,
+  );
+
   function themeIcon(mode: ThemeMode): string {
     if (mode === "system") return "◐";
     if (mode === "light") return "☀";
@@ -322,6 +365,7 @@
       draftDesktopControlEnabled = desktopControlEnabled;
       draftBrowserControlEnabled = browserControlEnabled;
       draftFileAccess = cloneFileAccessSettings(fileAccess);
+      draftShellAccess = cloneShellAccessSettings(shellAccess);
       draftChatTtsMode = chatTtsMode;
       draftSpeech = { ...DEFAULT_SPEECH_SETTINGS, ...speech };
       draftUiSoundEnabled = uiSounds.enabled;
@@ -500,6 +544,7 @@
       desktopControlEnabled: draftDesktopControlEnabled,
       browserControlEnabled: draftBrowserControlEnabled,
       fileAccess: cloneFileAccessSettings(draftFileAccess),
+      shellAccess: cloneShellAccessSettings(draftShellAccess),
       chatTtsMode: draftChatTtsMode,
     };
   }
@@ -517,9 +562,17 @@
     try {
       await onSave?.(buildSavePayload());
       dirty = false;
+      toastService.show({
+        type: "success",
+        message: $i18n("settings.saveSuccess"),
+      });
       onBack?.();
     } catch (error) {
       console.error("[agodesk:settings] save failed", error);
+      toastService.show({
+        type: "error",
+        message: $i18n("settings.saveError"),
+      });
     } finally {
       saving = false;
     }
@@ -584,6 +637,59 @@
     } catch (error) {
       console.error("[agodesk:settings] add folder failed", error);
     }
+  }
+
+  async function addShellCwd(): Promise<void> {
+    const picked = await pickFolderPath();
+    if (!picked) {
+      return;
+    }
+
+    try {
+      const canonical = await canonicalizeFolderPath(picked);
+      const segments = canonical.replace(/\\/g, "/").split("/").filter(Boolean);
+      const label = segments[segments.length - 1] ?? canonical;
+      const cwd = buildShellCwdFromFolder(label, canonical);
+      draftShellAccess = {
+        ...draftShellAccess,
+        allowedCwds: [...draftShellAccess.allowedCwds, cwd],
+        defaultCwd: draftShellAccess.defaultCwd ?? cwd.cwdId,
+      };
+      markDirty();
+    } catch (error) {
+      console.error("[agodesk:settings] add shell cwd failed", error);
+    }
+  }
+
+  function removeShellCwd(cwdId: string): void {
+    const nextCwds = draftShellAccess.allowedCwds.filter((cwd) => cwd.cwdId !== cwdId);
+    draftShellAccess = {
+      ...draftShellAccess,
+      allowedCwds: nextCwds,
+      defaultCwd:
+        draftShellAccess.defaultCwd === cwdId ? nextCwds[0]?.cwdId : draftShellAccess.defaultCwd,
+      enabled: nextCwds.length > 0 ? draftShellAccess.enabled : false,
+    };
+    markDirty();
+  }
+
+  function updateShellCwdLabel(cwdId: string, label: string): void {
+    draftShellAccess = {
+      ...draftShellAccess,
+      allowedCwds: draftShellAccess.allowedCwds.map((cwd) =>
+        cwd.cwdId === cwdId ? { ...cwd, label } : cwd,
+      ),
+    };
+    markDirty();
+  }
+
+  function onShellEnabledChange(event: Event): void {
+    const checked = (event.currentTarget as HTMLInputElement).checked;
+    if (checked && draftShellAccess.allowedCwds.length === 0) {
+      return;
+    }
+    draftShellAccess = { ...draftShellAccess, enabled: checked };
+    markDirty();
   }
 
   function removeFileRoot(rootId: string): void {
@@ -731,6 +837,30 @@
     previewUiSoundTheme(theme);
   }
 
+  async function handleCheckForUpdates(): Promise<void> {
+    if (updateCheckBusy) {
+      return;
+    }
+
+    updateCheckBusy = true;
+    try {
+      const result = await checkForUpdates({ silent: false });
+      if (result === "upToDate") {
+        toastService.show({
+          type: "success",
+          message: getTranslateFn()("update.toast.upToDate"),
+        });
+      } else if (result === "error") {
+        toastService.show({
+          type: "error",
+          message: getTranslateFn()("update.toast.failed"),
+        });
+      }
+    } finally {
+      updateCheckBusy = false;
+    }
+  }
+
   // Quick win: focus back button when settings view is shown (for keyboard users)
   onMount(() => {
     // small delay for layout
@@ -789,7 +919,16 @@
 
   <div class="settings-layout">
     <nav class="settings-nav" aria-label={$i18n("settings.navAriaLabel")}>
-      {#each sections as section (section.id)}
+      <label class="nav-search">
+        <span class="sr-only">{$i18n("settings.search.label")}</span>
+        <input
+          type="search"
+          class="ui-input"
+          bind:value={sectionSearch}
+          placeholder={$i18n("settings.search.placeholder")}
+        />
+      </label>
+      {#each filteredSections as section (section.id)}
         <button
           type="button"
           class="nav-item"
@@ -1210,7 +1349,6 @@
               </label>
 
               <p class="help">{$i18n("settings.fileAccess.disabledHelp")}</p>
-              <p class="help">{$i18n("settings.fileAccess.shellUnsupported")}</p>
 
               {#if fileReadRequested || fileWriteRequested}
                 <dl class="info-grid compact negotiation-grid">
@@ -1360,6 +1498,177 @@
                   disabled={!draftFileAccess.enabled}
                 >
                   {$i18n("settings.fileAccess.roots.add")}
+                </button>
+              </div>
+            </section>
+          {/if}
+
+          {#if activeSection === "shell"}
+            <section class="ui-card">
+              <div class="card-header">
+                <h2>{$i18n("settings.shellAccess.title")}</h2>
+                <p>{$i18n("settings.shellAccess.description")}</p>
+              </div>
+
+              <label class="field checkbox-field">
+                <input
+                  type="checkbox"
+                  checked={draftShellAccess.enabled}
+                  disabled={draftShellAccess.allowedCwds.length === 0}
+                  onchange={onShellEnabledChange}
+                />
+                <span>{$i18n("settings.shellAccess.enable")}</span>
+              </label>
+
+              <p class="help">{$i18n("settings.shellAccess.disabledHelp")}</p>
+              {#if draftShellAccess.allowedCwds.length === 0}
+                <p class="help warn">{$i18n("settings.shellAccess.requireCwd")}</p>
+              {/if}
+
+              {#if shellConfiguredLocally || shellAccessIsConfigured({ ...draftShellAccess, enabled: true })}
+                <dl class="meta-list">
+                  <div>
+                    <dt>{$i18n("settings.shellAccess.negotiated.title")}</dt>
+                    <dd>
+                      <span class="ui-chip" data-tone={shellNegotiated ? "accepted" : "idle"}>
+                        remote.shell.exec —
+                        {shellNegotiated
+                          ? $i18n("settings.shellAccess.negotiated.ok")
+                          : $i18n("settings.shellAccess.negotiated.missing")}
+                      </span>
+                    </dd>
+                  </div>
+                </dl>
+                {#if shellNegotiationMismatch}
+                  <p class="help warn">{$i18n("settings.shellAccess.negotiated.reconnectHint")}</p>
+                {/if}
+              {/if}
+
+              <label class="field checkbox-field">
+                <input
+                  type="checkbox"
+                  bind:checked={draftShellAccess.requiresApproval}
+                  onchange={markDirty}
+                  disabled={!draftShellAccess.enabled}
+                />
+                <span>{$i18n("settings.shellAccess.requiresApproval")}</span>
+              </label>
+
+              <div class="field-grid">
+                <label class="field">
+                  <span class="field-label">{$i18n("settings.shellAccess.shell")}</span>
+                  <select
+                    bind:value={draftShellAccess.selectedShell}
+                    onchange={markDirty}
+                    disabled={!draftShellAccess.enabled}
+                  >
+                    {#each shellOptions as shell (shell)}
+                      <option value={shell}>{shell}</option>
+                    {/each}
+                  </select>
+                </label>
+                <label class="field">
+                  <span class="field-label">{$i18n("settings.shellAccess.defaultCwd")}</span>
+                  <select
+                    bind:value={draftShellAccess.defaultCwd}
+                    onchange={markDirty}
+                    disabled={!draftShellAccess.enabled || draftShellAccess.allowedCwds.length === 0}
+                  >
+                    {#each draftShellAccess.allowedCwds as cwd (cwd.cwdId)}
+                      <option value={cwd.cwdId}>{cwd.label}</option>
+                    {/each}
+                  </select>
+                </label>
+              </div>
+
+              <div class="field-grid">
+                <label class="field">
+                  <span class="field-label">{$i18n("settings.shellAccess.limits.command")}</span>
+                  <input
+                    type="number"
+                    min="256"
+                    bind:value={draftShellAccess.maxCommandChars}
+                    oninput={markDirty}
+                    disabled={!draftShellAccess.enabled}
+                  />
+                </label>
+                <label class="field">
+                  <span class="field-label">{$i18n("settings.shellAccess.limits.output")}</span>
+                  <input
+                    type="number"
+                    min="4096"
+                    bind:value={draftShellAccess.maxOutputBytes}
+                    oninput={markDirty}
+                    disabled={!draftShellAccess.enabled}
+                  />
+                </label>
+                <label class="field">
+                  <span class="field-label">{$i18n("settings.shellAccess.limits.defaultTimeout")}</span>
+                  <input
+                    type="number"
+                    min="1000"
+                    bind:value={draftShellAccess.defaultTimeoutMs}
+                    oninput={markDirty}
+                    disabled={!draftShellAccess.enabled}
+                  />
+                </label>
+                <label class="field">
+                  <span class="field-label">{$i18n("settings.shellAccess.limits.maxTimeout")}</span>
+                  <input
+                    type="number"
+                    min="1000"
+                    bind:value={draftShellAccess.maxTimeoutMs}
+                    oninput={markDirty}
+                    disabled={!draftShellAccess.enabled}
+                  />
+                </label>
+              </div>
+
+              {#if draftShellAccess.allowedCwds.length === 0}
+                <p class="help">{$i18n("settings.shellAccess.cwds.empty")}</p>
+              {:else}
+                <ul class="root-list">
+                  {#each draftShellAccess.allowedCwds as cwd (cwd.cwdId)}
+                    <li class="root-item">
+                      <div class="root-fields">
+                        <label class="field">
+                          <span class="field-label">{$i18n("settings.shellAccess.cwds.label")}</span>
+                          <input
+                            type="text"
+                            value={cwd.label}
+                            oninput={(event) =>
+                              updateShellCwdLabel(
+                                cwd.cwdId,
+                                (event.currentTarget as HTMLInputElement).value,
+                              )}
+                            disabled={!draftShellAccess.enabled}
+                          />
+                        </label>
+                        <label class="field">
+                          <span class="field-label">{$i18n("settings.shellAccess.cwds.path")}</span>
+                          <input type="text" value={cwd.pathDisplay} readonly />
+                        </label>
+                      </div>
+                      <button
+                        type="button"
+                        class="ui-btn ui-btn-secondary"
+                        onclick={() => removeShellCwd(cwd.cwdId)}
+                        disabled={!draftShellAccess.enabled}
+                      >
+                        {$i18n("settings.shellAccess.cwds.remove")}
+                      </button>
+                    </li>
+                  {/each}
+                </ul>
+              {/if}
+
+              <div class="action-row">
+                <button
+                  type="button"
+                  class="ui-btn ui-btn-secondary"
+                  onclick={() => void addShellCwd()}
+                >
+                  {$i18n("settings.shellAccess.cwds.add")}
                 </button>
               </div>
             </section>
@@ -1849,6 +2158,19 @@
                 </div>
               </dl>
 
+              <div class="action-row">
+                <button
+                  type="button"
+                  class="ui-btn ui-btn-secondary"
+                  disabled={updateCheckBusy}
+                  onclick={() => void handleCheckForUpdates()}
+                >
+                  {updateCheckBusy
+                    ? $i18n("settings.about.checkingForUpdates")
+                    : $i18n("settings.about.checkForUpdates")}
+                </button>
+              </div>
+
               <p class="help">{$i18n("settings.about.docsHelp")}</p>
             </section>
           {/if}
@@ -1970,6 +2292,26 @@
     -webkit-backdrop-filter: blur(var(--blur));
     align-self: start;
     max-height: 100%;
+  }
+
+  .nav-search {
+    padding: var(--space-1) var(--space-2) var(--space-2);
+  }
+
+  .nav-search .ui-input {
+    width: 100%;
+  }
+
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
   }
 
   .nav-item {

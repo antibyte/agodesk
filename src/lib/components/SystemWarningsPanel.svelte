@@ -4,6 +4,8 @@
   import ChatMessageBody from "./ChatMessageBody.svelte";
   import type { SystemWarning } from "../types/protocol";
   import { formatMessageTime } from "../services/chat-format";
+  import { focusTrap } from "../actions/focusTrap";
+  import Icon from "./Icon.svelte";
 
   interface Props {
     visible?: boolean;
@@ -32,7 +34,7 @@
 </script>
 
 {#if visible}
-  <aside class="warnings-panel glass-panel" aria-label={$i18n("warnings.title")}>
+  <aside class="warnings-panel glass-panel" aria-label={$i18n("warnings.title")} use:focusTrap>
     <header class="panel-header">
       <div>
         <h2>{$i18n("warnings.title")}</h2>
@@ -59,7 +61,7 @@
           aria-label={$i18n("common.close")}
           onclick={() => onClose?.()}
         >
-          ×
+          <Icon name="close" size={14} />
         </button>
       </div>
     </header>
@@ -111,7 +113,7 @@
     width: min(24rem, calc(100vw - 2rem));
     max-height: min(28rem, 55vh);
     overflow: auto;
-    z-index: 5;
+    z-index: var(--z-panel);
     border-radius: var(--radius-xl);
     padding: var(--space-3);
   }

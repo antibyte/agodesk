@@ -29,6 +29,8 @@ import { resetDesktopStreamState, startDesktopStream, stopDesktopStream } from "
 import { listRemoteFiles, readRemoteFile, writeRemoteFile } from "./file-commands";
 import { searchRemoteFiles, parseFileSearchContent, fileSearchErrorCode } from "./file-search-sync";
 import { fileAccessIsConfigured } from "./file-access";
+import { auditShellAccess, type ShellValidationSuccess } from "./shell-access";
+import { invokeShellExec } from "./shell-commands";
 
 export type {
   ActiveWindowInfo,
@@ -328,6 +330,7 @@ function finalizeDesktopResult(payload: DesktopResultPayload): DesktopResultPayl
   if (payload.success) {
     return {
       ...payload,
+      ok: true,
       status: "ok",
       error: null,
       error_code: null,
@@ -336,11 +339,117 @@ function finalizeDesktopResult(payload: DesktopResultPayload): DesktopResultPayl
 
   return {
     ...payload,
+    ok: false,
     status: "error",
     data: payload.data ?? null,
     error: payload.error ?? "Desktop command failed.",
     error_code: payload.error_code ?? "DESKTOP_OPERATION_UNSUPPORTED",
   };
+}
+
+export interface ExecuteShellCommandOptions {
+  context?: DesktopCommandContext;
+  forcedError?: {
+    code: DesktopErrorCode;
+    message: string;
+  };
+  prevalidated?: ShellValidationSuccess;
+}
+
+export async function executeShellCommand(
+  wsSend: DesktopResultSender,
+  command: DesktopCommandPayload,
+  options: ExecuteShellCommandOptions = {},
+): Promise<void> {
+  const result: DesktopResultPayload = {
+    command_id: command.command_id,
+    success: false,
+  };
+  const context = options.context;
+
+  if (options.forcedError) {
+    desktopFailure(result, options.forcedError.code, options.forcedError.message);
+    await sendDesktopResult(wsSend, result, context);
+    return;
+  }
+
+  const shellSettings = get(settings).shellAccess;
+  const validation = options.prevalidated;
+
+  if (!validation) {
+    desktopFailure(result, "SHELL_ACCESS_DISABLED", "Shell command was not validated.");
+    await sendDesktopResult(wsSend, result, context);
+    return;
+  }
+
+  try {
+    const execResult = await invokeShellExec({
+      command: validation.command,
+      cwd: validation.cwd.canonicalPath,
+      shell: validation.shell,
+      timeoutMs: validation.timeoutMs,
+      maxOutputBytes: shellSettings.maxOutputBytes,
+    });
+
+    auditShellAccess({
+      commandId: command.command_id,
+      cwdId: validation.cwd.cwdId,
+      shell: validation.shell,
+      timeoutMs: validation.timeoutMs,
+      ok: true,
+      exitCode: execResult.exit_code,
+      durationMs: execResult.duration_ms,
+      timedOut: execResult.timed_out,
+      truncated: execResult.truncated,
+    });
+
+    result.success = true;
+    result.data = {
+      exit_code: execResult.exit_code,
+      stdout: execResult.stdout,
+      stderr: execResult.stderr,
+      duration_ms: execResult.duration_ms,
+      timed_out: execResult.timed_out,
+      truncated: execResult.truncated,
+      cwd_display: validation.cwd.pathDisplay,
+      shell: execResult.shell || validation.shell,
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    const code = parseShellInvokeError(message);
+    auditShellAccess({
+      commandId: command.command_id,
+      cwdId: validation.cwd.cwdId,
+      shell: validation.shell,
+      timeoutMs: validation.timeoutMs,
+      ok: false,
+      errorCode: code,
+      timedOut: code === "SHELL_TIMEOUT",
+    });
+    if (code === "SHELL_TIMEOUT") {
+      result.data = {
+        timed_out: true,
+        cwd_display: validation.cwd.pathDisplay,
+        shell: validation.shell,
+      };
+    }
+    desktopFailure(result, code, message.replace(/^SHELL_[A-Z_]+:\s*/, ""));
+  }
+
+  await sendDesktopResult(wsSend, finalizeDesktopResult(result), context);
+}
+
+function parseShellInvokeError(message: string): DesktopErrorCode {
+  for (const code of [
+    "SHELL_TIMEOUT",
+    "SHELL_OUTPUT_TOO_LARGE",
+    "SHELL_SPAWN_FAILED",
+  ] as const) {
+    if (message.startsWith(code)) {
+      return code;
+    }
+  }
+  return "SHELL_SPAWN_FAILED";
 }
 
 export async function executeDesktopCommand(

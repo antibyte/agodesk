@@ -10,6 +10,7 @@ import {
   canExecuteDesktopCommands,
   isDesktopInputOperation,
   isFileOperation,
+  isShellOperation,
   isDesktopBrowserOperation,
   normalizeDesktopCommandPayload,
   requiresLocalDesktopApproval,
@@ -20,12 +21,17 @@ import { sessionState } from "../stores/session";
 import { executeDesktopCommand, type DesktopResultSender } from "./desktop";
 import { resetDesktopStreamState } from "./desktop-stream";
 import { handleDesktopCommand } from "./session-flow";
+import {
+  handleIncomingShellCommand,
+  resetShellCommandState,
+} from "./shell-flow";
 
 const pendingInputCommands: DesktopCommandPayload[] = [];
 
 export function resetDesktopCommandState(): void {
   pendingInputCommands.length = 0;
   resetDesktopStreamState();
+  resetShellCommandState();
 }
 
 export function getPendingInputCommandCount(): number {
@@ -86,7 +92,7 @@ export async function handleIncomingDesktopCommand(
     return;
   }
 
-  if (!get(settings).desktopControlEnabled && !isFileOperation(command.operation)) {
+  if (!get(settings).desktopControlEnabled && !isFileOperation(command.operation) && !isShellOperation(command.operation)) {
     await rejectCommand(
       context.wsSend,
       command,
@@ -94,6 +100,15 @@ export async function handleIncomingDesktopCommand(
       "Desktop-Steuerung ist in den agodesk-Einstellungen deaktiviert.",
       desktopContext,
     );
+    return;
+  }
+
+  if (isShellOperation(command.operation)) {
+    await handleIncomingShellCommand(command, context.wsSend, desktopContext, {
+      onApprovalPrompt: () => {
+        context.onRemoteControlPrompt?.(command.operation);
+      },
+    });
     return;
   }
 

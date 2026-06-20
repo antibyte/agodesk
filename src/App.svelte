@@ -2,6 +2,7 @@
   import { onMount } from "svelte";
   import ChatView from "./lib/components/ChatView.svelte";
   import UiSoundBridge from "./lib/components/UiSoundBridge.svelte";
+  import ToastContainer from "./lib/components/ToastContainer.svelte";
 
   onMount(() => {
     void import("@tauri-apps/api/window").then(({ getCurrentWindow }) => {
@@ -12,6 +13,7 @@
 
 <div class="app-window">
   <UiSoundBridge />
+  <ToastContainer />
   <ChatView />
 </div>
 
