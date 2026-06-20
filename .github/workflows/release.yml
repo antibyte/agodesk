@@ -143,9 +143,15 @@ jobs:
           for f in src-tauri/target/release/bundle/rpm/*.rpm; do cp "$f" release-assets/linux/; done
           for f in src-tauri/target/release/bundle/appimage/*.AppImage; do cp "$f" release-assets/linux/; done
           if [ "${{ steps.signing.outputs.signed }}" = "true" ]; then
+            for f in src-tauri/target/release/bundle/deb/*.deb.sig; do cp "$f" release-assets/linux/; done
+            for f in src-tauri/target/release/bundle/rpm/*.rpm.sig; do cp "$f" release-assets/linux/; done
             for f in src-tauri/target/release/bundle/appimage/*.AppImage.sig; do cp "$f" release-assets/linux/; done
+            if ! ls release-assets/linux/*.sig >/dev/null 2>&1; then
+              echo "Missing Linux .sig updater artifacts after signed build."
+              exit 1
+            fi
           else
-            echo "Unsigned release: skipping AppImage .sig artifacts."
+            echo "Unsigned release: skipping Linux .sig artifacts."
           fi
           ls -la release-assets/linux/
 

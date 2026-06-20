@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Build Tauri updater latest.json from release assets (NSIS + AppImage + .sig files).
+ * Build Tauri updater latest.json from release assets (NSIS + Linux bundle + .sig files).
  *
  * Usage:
  *   node scripts/generate-update-manifest.mjs \
@@ -11,6 +11,7 @@
  */
 import fs from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 function parseArgs(argv) {
   const options = {
@@ -72,31 +73,34 @@ function assetUrl(repo, tag, fileName) {
   return `https://github.com/${repo}/releases/download/${tag}/${encodeURIComponent(fileName)}`;
 }
 
+export function findSignedBundle(files, matchers) {
+  for (const matcher of matchers) {
+    const bundlePath = files.find((file) => matcher.test(file) && !file.endsWith(".sig"));
+    if (!bundlePath) {
+      continue;
+    }
+    const sigPath = `${bundlePath}.sig`;
+    if (fs.existsSync(sigPath)) {
+      return { bundlePath, sigPath };
+    }
+  }
+  return null;
+}
+
 function main() {
   const options = parseArgs(process.argv.slice(2));
   const version = options.tag.replace(/^v/, "");
   const files = walkFiles(options.assets);
 
-  const nsisExe = files.find((file) => /-setup\.exe$/i.test(file) && !file.endsWith(".sig"));
-  const appImage = files.find((file) => file.endsWith(".AppImage") && !file.endsWith(".sig"));
+  const windows = findSignedBundle(files, [/-setup\.exe$/i]);
+  const linux = findSignedBundle(files, [/\.AppImage$/i, /\.deb$/i]);
 
-  if (!nsisExe) {
-    throw new Error("NSIS setup .exe not found in assets");
+  if (!windows) {
+    throw new Error("Signed NSIS setup .exe not found in assets");
   }
 
-  if (!appImage) {
-    throw new Error("Linux AppImage not found in assets");
-  }
-
-  const nsisSig = `${nsisExe}.sig`;
-  const appImageSig = `${appImage}.sig`;
-
-  if (!fs.existsSync(nsisSig)) {
-    throw new Error(`Missing signature file: ${nsisSig}`);
-  }
-
-  if (!fs.existsSync(appImageSig)) {
-    throw new Error(`Missing signature file: ${appImageSig}`);
+  if (!linux) {
+    throw new Error("Signed Linux update bundle not found in assets (.AppImage or .deb with .sig)");
   }
 
   const manifest = {
@@ -105,12 +109,12 @@ function main() {
     pub_date: new Date().toISOString(),
     platforms: {
       "windows-x86_64": {
-        signature: readSignature(nsisSig),
-        url: assetUrl(options.repo, options.tag, path.basename(nsisExe)),
+        signature: readSignature(windows.sigPath),
+        url: assetUrl(options.repo, options.tag, path.basename(windows.bundlePath)),
       },
       "linux-x86_64": {
-        signature: readSignature(appImageSig),
-        url: assetUrl(options.repo, options.tag, path.basename(appImage)),
+        signature: readSignature(linux.sigPath),
+        url: assetUrl(options.repo, options.tag, path.basename(linux.bundlePath)),
       },
     },
   };
@@ -118,6 +122,13 @@ function main() {
   fs.mkdirSync(path.dirname(options.out), { recursive: true });
   fs.writeFileSync(options.out, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
   console.log(`Wrote ${options.out} for version ${version}`);
+  console.log(`Linux update bundle: ${path.basename(linux.bundlePath)}`);
 }
 
-main();
+const isMain =
+  process.argv[1] &&
+  path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url));
+
+if (isMain) {
+  main();
+}
