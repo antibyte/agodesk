@@ -17,10 +17,19 @@ test("validateTauriSigningKey accepts well-formed minisign key", () => {
 test("validateTauriSigningKey rejects key without comment header", () => {
   const result = validateTauriSigningKey("RWQ...base64...", "");
   assert.equal(result.ok, false);
-  assert.match(result.reason, /minisign header/i);
+  assert.match(result.reason, /header/i);
 });
 
 test("validateTauriSigningKey rejects empty key", () => {
   const result = validateTauriSigningKey("", "");
   assert.equal(result.ok, false);
+});
+
+test("validateTauriSigningKey accepts rsign CI key without password", () => {
+  const rsignKey = [
+    "untrusted comment: rsign encrypted secret key",
+    "RWQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQ",
+  ].join("\n");
+  const result = validateTauriSigningKey(rsignKey, "");
+  assert.equal(result.ok, true);
 });

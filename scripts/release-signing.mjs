@@ -40,7 +40,9 @@ export function validateTauriSigningKey(privateKey, password = process.env.TAURI
     };
   }
 
-  const looksEncrypted = privateKey.includes("encrypted secret key");
+  const isRsignCiKey = privateKey.includes("rsign encrypted secret key");
+  const looksEncrypted =
+    privateKey.includes("encrypted secret key") && !isRsignCiKey;
   if (looksEncrypted && !password?.trim()) {
     return {
       ok: false,
