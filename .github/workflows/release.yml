@@ -47,7 +47,7 @@ jobs:
 
       - name: Build frontend + sidecar + NSIS installer
         env:
-          TAURI_SIGNING_PRIVATE_KEY_PATH: ${{ steps.signing.outputs.signed == 'true' && steps.signing.outputs.key_path || '' }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ steps.signing.outputs.signed == 'true' && secrets.TAURI_SIGNING_PRIVATE_KEY || '' }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ steps.signing.outputs.signed == 'true' && secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD || '' }}
         run: npm run build:win
 
@@ -131,7 +131,7 @@ jobs:
 
       - name: Build frontend + sidecar + Linux bundles
         env:
-          TAURI_SIGNING_PRIVATE_KEY_PATH: ${{ steps.signing.outputs.signed == 'true' && steps.signing.outputs.key_path || '' }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ steps.signing.outputs.signed == 'true' && secrets.TAURI_SIGNING_PRIVATE_KEY || '' }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ steps.signing.outputs.signed == 'true' && secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD || '' }}
         run: npm run build:linux
 

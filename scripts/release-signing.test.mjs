@@ -1,6 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { normalizePrivateKey, toTauriKeyFileContent, validateTauriSigningKey } from "./release-signing.mjs";
+import {
+  buildSigningEnv,
+  normalizePrivateKey,
+  toTauriKeyEnvValue,
+  validateTauriSigningKey,
+} from "./release-signing.mjs";
 
 const sampleKey = [
   "untrusted comment: minisign private key: ABCD1234",
@@ -52,20 +57,31 @@ test("normalizePrivateKey repairs single-line secret with space separator", () =
   assert.equal(normalizePrivateKey(flattened), decoded);
 });
 
-test("toTauriKeyFileContent keeps base64 key file secret unchanged", () => {
+test("toTauriKeyEnvValue keeps base64 key file secret unchanged", () => {
   const encoded = Buffer.from(
     "untrusted comment: rsign encrypted secret key\nRWQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQ\n",
     "utf8",
   ).toString("base64");
   const decoded = normalizePrivateKey(encoded);
-  assert.equal(toTauriKeyFileContent(encoded, decoded), encoded);
+  assert.equal(toTauriKeyEnvValue(encoded, decoded), encoded);
 });
 
-test("toTauriKeyFileContent encodes decoded multiline secrets for Tauri", () => {
+test("toTauriKeyEnvValue encodes decoded multiline secrets for Tauri", () => {
   const decoded = [
     "untrusted comment: rsign encrypted secret key",
     "RWQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQ",
   ].join("\n");
   const expected = Buffer.from(`${decoded}\n`, "utf8").toString("base64");
-  assert.equal(toTauriKeyFileContent(decoded, decoded), expected);
+  assert.equal(toTauriKeyEnvValue(decoded, decoded), expected);
+});
+
+test("buildSigningEnv uses base64 key material without private key path", () => {
+  const decoded = [
+    "untrusted comment: rsign encrypted secret key",
+    "RWQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQ",
+  ].join("\n");
+  const encoded = Buffer.from(`${decoded}\n`, "utf8").toString("base64");
+  const env = buildSigningEnv(encoded, decoded, "");
+  assert.equal(env.TAURI_SIGNING_PRIVATE_KEY, encoded);
+  assert.equal(env.TAURI_SIGNING_PRIVATE_KEY_PATH, undefined);
 });
