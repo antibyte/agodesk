@@ -30,7 +30,7 @@
   },
   "plugins": {
     "updater": {
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDQwNDdCNzlCMDQ2N0VBRjIKUldUeTZtY0VtN2RIUURJMTgwd2J0OEovT1hWYjR6dVhyaDZJcW1CdnFxL2YyYVo5OUFFUW01U3cK",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDI5NEMwRTI5MzI3QTYxMkIKUldRcllYb3lLUTVNS2ZicWdjckdmVmhUSnhzTy9yaFJ5NDFXME9xSEQ3Tjc1Q2YxOUFPaU9PdXoK",
       "endpoints": [
         "https://github.com/antibyte/agodesk/releases/latest/download/latest.json"
       ],

@@ -24,11 +24,11 @@ export function validateTauriSigningKey(privateKey, password = process.env.TAURI
     };
   }
 
-  if (!privateKey.includes("minisign private key")) {
+  if (!privateKey.includes("minisign private key") && !privateKey.includes("rsign encrypted secret key")) {
     return {
       ok: false,
       reason:
-        'TAURI_SIGNING_PRIVATE_KEY is missing the minisign header line ("untrusted comment: minisign private key: ...").',
+        'TAURI_SIGNING_PRIVATE_KEY is missing the key header line ("untrusted comment: minisign private key: ..." or "rsign encrypted secret key").',
     };
   }
 
