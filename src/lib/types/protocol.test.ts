@@ -991,10 +991,7 @@ test("buildShellAccessSessionPayload omits canonical paths", () => {
   });
   assert.equal(payload?.enabled, true);
   assert.equal(payload?.allowed_cwds[0]?.path_display, "~/Projects/demo");
-  assert.equal(
-    (payload?.allowed_cwds[0] as { canonicalPath?: string }).canonicalPath,
-    undefined,
-  );
+  assert.equal((payload?.allowed_cwds[0] as { canonicalPath?: string }).canonicalPath, undefined);
 });
 
 test("isShellOperation erkennt shell_exec", () => {

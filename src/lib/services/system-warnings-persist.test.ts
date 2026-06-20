@@ -53,5 +53,8 @@ test("mergeAcknowledgedIds fuegt neue IDs hinzu", () => {
     ["warn-b"],
   );
 
-  assert.deepEqual(getAcknowledgedIdsForServer(merged, "https://example.com/"), new Set(["warn-a", "warn-b"]));
+  assert.deepEqual(
+    getAcknowledgedIdsForServer(merged, "https://example.com/"),
+    new Set(["warn-a", "warn-b"]),
+  );
 });

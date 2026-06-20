@@ -14,6 +14,7 @@
     UiSoundTheme,
   } from "../types/protocol";
   import {
+    AGODESK_CLIENT_VERSION,
     DEFAULT_FILE_ACCESS_SETTINGS,
     DEFAULT_OPENPETS_SETTINGS,
     DEFAULT_SHELL_ACCESS_SETTINGS,
@@ -67,10 +68,7 @@
     cloneFileAccessSettings,
     createFileAccessRootId,
   } from "../services/file-access";
-  import {
-    buildShellCwdFromFolder,
-    cloneShellAccessSettings,
-  } from "../services/shell-access";
+  import { buildShellCwdFromFolder, cloneShellAccessSettings } from "../services/shell-access";
   import { canonicalizeFolderPath, pickFolderPath } from "../services/file-commands";
   import { GEMINI_API_KEY_URL, openExternalUrl } from "../services/open-external-url";
   import { SERVER_PRESETS } from "../services/settings-presets";
@@ -85,6 +83,7 @@
     type OpenPetsStatusResult,
   } from "../services/openpets-flow";
   import WindowControls from "./WindowControls.svelte";
+  import SettingsHealthSummary from "./SettingsHealthSummary.svelte";
   import HotkeyField from "./HotkeyField.svelte";
   import { isDesktopShell } from "../services/window-controls";
   import { onMount } from "svelte";
@@ -177,7 +176,7 @@
     sessionError = "",
     advertisedCapabilities = [],
     remoteControlActive = false,
-    appVersion = "0.1.0",
+    appVersion = AGODESK_CLIENT_VERSION,
     initialSection = undefined,
     onBack,
     onSave,
@@ -972,6 +971,21 @@
     </div>
   </header>
 
+  <div class="settings-health-shell">
+    <SettingsHealthSummary
+      {connectionStatus}
+      {sessionStatus}
+      speechEnabled={draftSpeech.enabled}
+      speechProvider={draftSpeech.provider}
+      fileAccessEnabled={draftFileAccess.enabled}
+      fileRootCount={draftFileAccess.roots.length}
+      shellAccessEnabled={draftShellAccess.enabled}
+      shellCwdCount={draftShellAccess.allowedCwds.length}
+      openPetsEnabled={draftOpenPetsEnabled}
+      {dirty}
+    />
+  </div>
+
   <div class="settings-layout">
     <nav class="settings-nav" aria-label={$i18n("settings.navAriaLabel")}>
       <label class="nav-search">
@@ -1260,11 +1274,7 @@
 
               <label class="field toggle-field">
                 <span class="field-label">{$i18n("settings.openpets.enable")}</span>
-                <input
-                  type="checkbox"
-                  bind:checked={draftOpenPetsEnabled}
-                  onchange={markDirty}
-                />
+                <input type="checkbox" bind:checked={draftOpenPetsEnabled} onchange={markDirty} />
               </label>
 
               <p class="field-help">{$i18n("settings.openpets.requirement")}</p>
@@ -1651,7 +1661,7 @@
                 <p class="help warn">{$i18n("settings.shellAccess.requireCwd")}</p>
               {/if}
 
-              {#if shellConfiguredLocally || shellAccessIsConfigured({ ...draftShellAccess, enabled: true })}
+              {#if shellConfiguredLocally || shellAccessIsConfigured( { ...draftShellAccess, enabled: true }, )}
                 <dl class="meta-list">
                   <div>
                     <dt>{$i18n("settings.shellAccess.negotiated.title")}</dt>
@@ -1698,7 +1708,8 @@
                   <select
                     bind:value={draftShellAccess.defaultCwd}
                     onchange={markDirty}
-                    disabled={!draftShellAccess.enabled || draftShellAccess.allowedCwds.length === 0}
+                    disabled={!draftShellAccess.enabled ||
+                      draftShellAccess.allowedCwds.length === 0}
                   >
                     {#each draftShellAccess.allowedCwds as cwd (cwd.cwdId)}
                       <option value={cwd.cwdId}>{cwd.label}</option>
@@ -1729,7 +1740,9 @@
                   />
                 </label>
                 <label class="field">
-                  <span class="field-label">{$i18n("settings.shellAccess.limits.defaultTimeout")}</span>
+                  <span class="field-label"
+                    >{$i18n("settings.shellAccess.limits.defaultTimeout")}</span
+                  >
                   <input
                     type="number"
                     min="1000"
@@ -1758,7 +1771,8 @@
                     <li class="root-item">
                       <div class="root-fields">
                         <label class="field">
-                          <span class="field-label">{$i18n("settings.shellAccess.cwds.label")}</span>
+                          <span class="field-label">{$i18n("settings.shellAccess.cwds.label")}</span
+                          >
                           <input
                             type="text"
                             value={cwd.label}
@@ -2390,6 +2404,10 @@
 
   .dirty-badge {
     font-size: 0.8125rem;
+  }
+
+  .settings-health-shell {
+    flex-shrink: 0;
   }
 
   .settings-layout {

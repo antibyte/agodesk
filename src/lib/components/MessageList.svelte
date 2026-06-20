@@ -4,10 +4,11 @@
   import { i18n } from "../i18n";
   import MessageBubble from "./MessageBubble.svelte";
   import ChatMediaBlock from "./ChatMediaBlock.svelte";
-  import PersonaAvatar from "./PersonaAvatar.svelte";
+  import CompanionPresenceCard from "./CompanionPresenceCard.svelte";
   import { chatMessages } from "../stores/chat";
   import { personaState } from "../stores/persona";
   import { resolvePersonaWelcomeImage } from "../services/persona-display";
+  import { deriveCompanionPresence } from "../services/companion-presence";
   import { formatDayLabel } from "../services/chat-format";
   import type { ChatMediaItem, ConnectionStatus, SessionStatus } from "../types/protocol";
 
@@ -16,6 +17,7 @@
     sessionStatus?: SessionStatus;
     connectionStatus?: ConnectionStatus;
     speechActive?: boolean;
+    speechErrorMessage?: string;
     mediaItems?: ChatMediaItem[];
     mediaEnabled?: boolean;
     serverUrl?: string;
@@ -28,6 +30,7 @@
     sessionStatus = "idle",
     connectionStatus = "disconnected",
     speechActive = false,
+    speechErrorMessage = "",
     mediaItems = [],
     mediaEnabled = false,
     serverUrl = "",
@@ -44,6 +47,20 @@
   const showScrollFab = $derived(!shouldStickToBottom && $chatMessages.length > 0);
 
   const welcomePersonaImage = $derived(resolvePersonaWelcomeImage($personaState));
+
+  const emptyPresence = $derived(
+    deriveCompanionPresence({
+      connectionStatus,
+      sessionStatus,
+      requestInFlight: awaitingResponse,
+      speechActive,
+      speechErrorMessage,
+    }),
+  );
+
+  const showPairAction = $derived(
+    sessionStatus === "awaiting_pairing" || sessionStatus === "error",
+  );
 
   const scrollFabTitle = $derived(
     newMessageCount > 0
@@ -99,8 +116,7 @@
     void stickToBottom();
   });
   const reducedMotion =
-    typeof window !== "undefined" &&
-    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
   const scrollFabTransition = reducedMotion ? { duration: 0 } : { duration: 220 };
 </script>
@@ -109,34 +125,40 @@
   <div class="message-list" bind:this={container} onscroll={handleScroll}>
     {#if $chatMessages.length === 0}
       <div class="empty">
-        <div class="empty-avatar" class:pulse={speechActive}>
-          <PersonaAvatar
-            imageUrl={welcomePersonaImage.imageUrl}
-            fallbackImageUrl={welcomePersonaImage.fallbackImageUrl}
-            label={$personaState.persona}
-            size="lg"
-            loading={$personaState.loading}
-          />
-        </div>
-        <h2>{$i18n("messageList.empty.title")}</h2>
-        <p>{$i18n("messageList.empty.description")}</p>
-        {#if sessionStatus === "awaiting_pairing" || sessionStatus === "error"}
-          <button type="button" class="ui-btn ui-btn-primary cta" onclick={() => onPairDevice?.()}>
-            {$i18n("messageList.empty.pairDevice")}
-          </button>
-        {:else if connectionStatus !== "connected"}
-          <p class="hint">{$i18n("chatView.hint.noConnection")}</p>
-        {/if}
-        <ul class="tips glass-panel-subtle">
+        <CompanionPresenceCard
+          state={emptyPresence}
+          imageUrl={welcomePersonaImage.imageUrl}
+          fallbackImageUrl={welcomePersonaImage.fallbackImageUrl}
+          label={$personaState.persona}
+          loading={$personaState.loading}
+          primaryActionLabel={showPairAction ? $i18n("messageList.empty.pairDevice") : undefined}
+          onPrimaryAction={showPairAction ? () => onPairDevice?.() : undefined}
+          facts={[
+            {
+              label: $i18n("messageList.empty.title"),
+              value: $i18n("messageList.empty.description"),
+            },
+          ]}
+        />
+        <ul
+          class="tips glass-panel-subtle ui-shortcut-grid"
+          aria-label={$i18n("inputBox.shortcuts.ariaLabel")}
+        >
           <li>
-            <kbd>Enter</kbd> — {$i18n("messageList.tip.sendMessage")}
+            <span class="ui-kbd">Enter</span>
+            <span>{$i18n("messageList.tip.sendMessage")}</span>
           </li>
           <li>
-            <kbd>Shift</kbd>+<kbd>Enter</kbd> — {$i18n("messageList.tip.newline")}
+            <span class="shortcut-keys"
+              ><span class="ui-kbd">Shift</span><span class="shortcut-plus">+</span><span
+                class="ui-kbd">Enter</span
+              ></span
+            >
+            <span>{$i18n("messageList.tip.newline")}</span>
           </li>
           <li>
-            <strong>{$i18n("messageList.tip.settingsLabel")}</strong>
-            — {$i18n("messageList.tip.settingsDescription")}
+            <span class="ui-kbd">{$i18n("messageList.tip.settingsLabel")}</span>
+            <span>{$i18n("messageList.tip.settingsDescription")}</span>
           </li>
         </ul>
       </div>
@@ -219,61 +241,35 @@
 
   .empty {
     margin: auto;
-    max-width: 30rem;
-    text-align: center;
-    color: var(--color-muted);
-    line-height: 1.65;
+    width: 100%;
+    max-width: 32rem;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
     padding: var(--space-6) var(--space-4);
   }
 
-  .empty-avatar {
-    display: inline-flex;
-    margin-bottom: var(--space-4);
-    filter: drop-shadow(0 0 32px color-mix(in srgb, var(--color-accent) 40%, transparent));
-  }
-
-  .empty-avatar.pulse {
-    animation: glow 2s ease-in-out infinite;
-  }
-
-  .empty h2 {
-    margin: 0 0 var(--space-2);
-    color: var(--color-text);
-    font-size: 1.375rem;
-    font-weight: 650;
-    letter-spacing: -0.025em;
-    text-wrap: balance;
-  }
-
-  .empty p {
-    margin: 0 0 var(--space-4);
-    font-size: 0.9375rem;
-  }
-
-  .cta {
-    margin-bottom: var(--space-4);
-  }
-
   .tips {
-    list-style: none;
     padding: var(--space-4);
-    margin: var(--space-4) 0 0;
-    text-align: left;
-    font-size: 0.8125rem;
+    margin: 0;
     border-radius: var(--radius-xl);
+    font-size: var(--font-size-sm);
+    color: var(--color-muted);
   }
 
   .tips li {
-    margin: var(--space-2) 0;
+    display: contents;
   }
 
-  kbd {
-    font-family: var(--font-mono);
-    font-size: 0.6875rem;
-    padding: 0.12rem 0.4rem;
-    border-radius: var(--radius-sm);
-    border: 1px solid var(--color-border-subtle);
-    background: color-mix(in srgb, var(--glass-surface) 80%, transparent);
+  .shortcut-keys {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.2rem;
+  }
+
+  .shortcut-plus {
+    font-size: var(--font-size-xs);
+    color: var(--color-muted);
   }
 
   .day-divider {
@@ -283,10 +279,9 @@
     margin: var(--space-2) 0;
     color: var(--color-footnote);
     font-size: var(--font-size-xs);
-    font-weight: 600;
-    letter-spacing: 0.06em;
+    font-weight: 500;
+    letter-spacing: 0.02em;
     text-transform: uppercase;
-    font-variant-numeric: tabular-nums;
   }
 
   .day-divider::before,
@@ -294,42 +289,33 @@
     content: "";
     flex: 1;
     height: 1px;
-    background: linear-gradient(
-      90deg,
-      transparent,
-      var(--color-border-subtle) 20%,
-      var(--color-border-subtle) 80%,
-      transparent
-    );
+    background: var(--color-border-subtle);
   }
 
-  .day-divider span {
-    padding: 0.15rem 0.65rem;
-    white-space: nowrap;
-    border-radius: var(--radius-full);
-    background: color-mix(in srgb, var(--glass-surface) 70%, transparent);
-    border: 1px solid var(--color-border-subtle);
+  .media-strip {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+    width: 100%;
+    max-width: 720px;
+    margin: 0 auto;
   }
 
   .typing {
-    align-self: flex-start;
-    display: inline-flex;
+    display: flex;
     gap: 0.35rem;
-    padding: var(--space-3) var(--space-4);
-    border-radius: var(--radius-xl);
-    background: var(--color-assistant-bg);
-    border: 1px solid var(--color-assistant-border);
-    backdrop-filter: blur(calc(var(--blur) * 0.5));
-    -webkit-backdrop-filter: blur(calc(var(--blur) * 0.5));
-    box-shadow: var(--shadow-1);
+    padding: var(--space-2) var(--space-4);
+    align-self: flex-start;
+    margin-left: var(--space-2);
   }
 
   .typing span {
     width: 0.45rem;
     height: 0.45rem;
-    border-radius: 999px;
-    background: var(--color-muted);
-    animation: bounce 1.2s ease-in-out infinite;
+    border-radius: var(--radius-full);
+    background: var(--color-accent);
+    opacity: 0.45;
+    animation: typing-bounce 1.2s ease-in-out infinite;
   }
 
   .typing span:nth-child(2) {
@@ -340,11 +326,18 @@
     animation-delay: 0.3s;
   }
 
-  .media-strip {
-    display: grid;
-    gap: var(--space-2);
-    align-self: stretch;
-    max-width: min(88%, 680px);
+  @keyframes typing-bounce {
+    0%,
+    80%,
+    100% {
+      transform: translateY(0);
+      opacity: 0.35;
+    }
+
+    40% {
+      transform: translateY(-4px);
+      opacity: 0.9;
+    }
   }
 
   .scroll-fab {
@@ -353,25 +346,22 @@
     bottom: var(--space-4);
     display: grid;
     place-items: center;
-    width: 2.625rem;
-    height: 2.625rem;
-    border: 1px solid var(--glass-border);
+    width: 2.5rem;
+    height: 2.5rem;
+    border: 1px solid var(--color-border-subtle);
     border-radius: var(--radius-full);
     background: var(--glass-surface);
     color: var(--color-text);
+    cursor: pointer;
     box-shadow: var(--shadow-2);
     backdrop-filter: blur(var(--blur));
     -webkit-backdrop-filter: blur(var(--blur));
-    cursor: pointer;
     z-index: 2;
-    transition:
-      transform var(--transition-fast),
-      box-shadow var(--transition-fast);
   }
 
   .scroll-fab:hover {
-    transform: translateY(-2px);
-    box-shadow: var(--accent-glow);
+    border-color: color-mix(in srgb, var(--color-accent) 35%, var(--color-border));
+    color: var(--color-accent);
   }
 
   .scroll-fab:focus-visible {
@@ -379,11 +369,7 @@
     box-shadow: var(--focus-ring);
   }
 
-  .scroll-fab:active {
-    transform: translateY(0) scale(0.97);
-  }
-
-  .scroll-fab .badge {
+  .badge {
     position: absolute;
     top: -0.35rem;
     right: -0.35rem;
@@ -399,26 +385,10 @@
     place-items: center;
   }
 
-  @keyframes bounce {
-    0%,
-    80%,
-    100% {
-      transform: translateY(0);
-      opacity: 0.45;
-    }
-    40% {
-      transform: translateY(-4px);
-      opacity: 1;
-    }
-  }
-
-  @keyframes glow {
-    0%,
-    100% {
-      filter: drop-shadow(0 0 12px color-mix(in srgb, var(--color-accent) 25%, transparent));
-    }
-    50% {
-      filter: drop-shadow(0 0 28px color-mix(in srgb, var(--color-accent) 45%, transparent));
+  @media (prefers-reduced-motion: reduce) {
+    .typing span {
+      animation: none;
+      opacity: 0.6;
     }
   }
 </style>

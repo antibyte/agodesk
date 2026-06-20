@@ -134,11 +134,9 @@ export async function approvePendingShellCommand(): Promise<void> {
 
   if (pendingShellCommands.length > 0) {
     const queued = pendingShellCommands[0];
-    const queuedValidation = await validateShellExecRequest(
-      shellSettings,
-      queued.params,
-      { negotiated },
-    );
+    const queuedValidation = await validateShellExecRequest(shellSettings, queued.params, {
+      negotiated,
+    });
     if (queuedValidation.ok) {
       setShellApproval({
         commandId: queued.command.command_id,

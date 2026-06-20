@@ -67,6 +67,7 @@
     recordSystemWarningAcknowledgement,
   } from "../services/system-warnings-flow";
   import { deliverSpeechTranscript } from "../services/speech-delivery";
+  import { deriveCompanionPresence } from "../services/companion-presence";
   import { stopSpeechSession, toggleSpeechSession } from "../services/speech-flow";
   import { interruptLocalSpeechPlayback } from "../services/local-speech-tts";
   import { stopAllChatAssistantTts } from "../services/chat-audio";
@@ -111,6 +112,7 @@
   } from "../types/protocol";
   import {
     canSendChat,
+    AGODESK_CLIENT_VERSION,
     hasAdvertisedChatSessions,
     hasAdvertisedChatMediaEvents,
     hasAdvertisedChatMediaUpload,
@@ -151,7 +153,7 @@
   let embedModalOpen = $state(false);
   let embedModalUrl = $state("");
   let embedModalTitle = $state("");
-  let appVersion = $state("0.1.0");
+  let appVersion = $state(AGODESK_CLIENT_VERSION);
   const integrationPreviewNative = isIntegrationEmbedAvailable();
   let wsService = createWebSocketService();
   let prevConnection: typeof $connectionStatus | null = null;
@@ -204,6 +206,16 @@
 
   const streamingActive = $derived($chatMessages.some((message) => message.streaming === true));
 
+  const companionPresence = $derived(
+    deriveCompanionPresence({
+      connectionStatus: $connectionStatus,
+      sessionStatus: $sessionState.status,
+      requestInFlight: pending || streamingActive || $chatConversationState.requestInFlight,
+      speechActive: $speechState.isActive,
+      speechErrorMessage: $speechState.errorMessage || $speechState.vadError,
+    }),
+  );
+
   const speechAllowed = $derived($settings.speech.enabled);
 
   const remoteBannerVisible = $derived(
@@ -211,7 +223,9 @@
       ($sessionState.remoteControlPending || $sessionState.remoteControlActive),
   );
 
-  const shellBannerVisible = $derived($shellApprovalState.pending && $shellApprovalState.request !== null);
+  const shellBannerVisible = $derived(
+    $shellApprovalState.pending && $shellApprovalState.request !== null,
+  );
 
   const updateBannerVisible = $derived(isUpdateBannerVisible($updateState));
 
@@ -947,7 +961,7 @@
         sessionError={$sessionState.errorMessage}
         advertisedCapabilities={$sessionState.advertisedCapabilities}
         remoteControlActive={$sessionState.remoteControlActive}
-        appVersion={appVersion}
+        {appVersion}
         onBack={() => {
           settingsOpen = false;
           settingsInitialSection = undefined;
@@ -1008,6 +1022,9 @@
           onToggleHistory={handleToggleHistory}
           onToggleIntegrations={handleToggleIntegrations}
           onToggleWarnings={handleToggleWarnings}
+          companionTone={companionPresence.tone}
+          speechActive={$speechState.isActive}
+          requestInFlight={pending || streamingActive || $chatConversationState.requestInFlight}
         />
 
         <ChatHistoryPanel
@@ -1082,6 +1099,7 @@
         sessionStatus={$sessionState.status}
         connectionStatus={$connectionStatus}
         speechActive={$speechState.isActive}
+        speechErrorMessage={$speechState.errorMessage || $speechState.vadError}
         {mediaEnabled}
         mediaItems={activeMediaItems}
         serverUrl={$settings.serverUrl}

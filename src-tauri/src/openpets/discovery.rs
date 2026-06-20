@@ -193,9 +193,9 @@ pub fn parse_ipc_endpoint(endpoint: &str) -> Result<ParsedEndpoint, OpenPetsClie
                 message: "Discovery endpoint is not an OpenPets named pipe.".to_string(),
             });
         }
-        return Ok(ParsedEndpoint::Path {
+        Ok(ParsedEndpoint::Path {
             path: endpoint.to_string(),
-        });
+        })
     }
 
     #[cfg(unix)]

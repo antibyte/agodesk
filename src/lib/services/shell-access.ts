@@ -1,5 +1,10 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { ShellAccessCwd, ShellAccessSettings, ShellExecParams, ShellKind } from "../types/protocol";
+import type {
+  ShellAccessCwd,
+  ShellAccessSettings,
+  ShellExecParams,
+  ShellKind,
+} from "../types/protocol";
 import { shellAccessIsConfigured } from "../types/protocol";
 import { buildPathDisplay } from "./file-access";
 

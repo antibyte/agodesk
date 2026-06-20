@@ -21,10 +21,7 @@ import { sessionState } from "../stores/session";
 import { executeDesktopCommand, type DesktopResultSender } from "./desktop";
 import { resetDesktopStreamState } from "./desktop-stream";
 import { handleDesktopCommand } from "./session-flow";
-import {
-  handleIncomingShellCommand,
-  resetShellCommandState,
-} from "./shell-flow";
+import { handleIncomingShellCommand, resetShellCommandState } from "./shell-flow";
 
 const pendingInputCommands: DesktopCommandPayload[] = [];
 
@@ -92,7 +89,11 @@ export async function handleIncomingDesktopCommand(
     return;
   }
 
-  if (!get(settings).desktopControlEnabled && !isFileOperation(command.operation) && !isShellOperation(command.operation)) {
+  if (
+    !get(settings).desktopControlEnabled &&
+    !isFileOperation(command.operation) &&
+    !isShellOperation(command.operation)
+  ) {
     await rejectCommand(
       context.wsSend,
       command,

@@ -20,22 +20,13 @@ test("mapDownloadProgress bei unbekannter Groesse liefert 0", () => {
 });
 
 test("isUpdateBannerVisible nur bei available/downloading und nicht dismissed", () => {
-  assert.equal(
-    isUpdateBannerVisible({ status: "available", dismissed: false }),
-    true,
-  );
+  assert.equal(isUpdateBannerVisible({ status: "available", dismissed: false }), true);
   assert.equal(
     isUpdateBannerVisible({ status: "downloading", dismissed: false, progress: 42 }),
     true,
   );
-  assert.equal(
-    isUpdateBannerVisible({ status: "available", dismissed: true }),
-    false,
-  );
-  assert.equal(
-    isUpdateBannerVisible({ status: "idle", dismissed: false }),
-    false,
-  );
+  assert.equal(isUpdateBannerVisible({ status: "available", dismissed: true }), false);
+  assert.equal(isUpdateBannerVisible({ status: "idle", dismissed: false }), false);
 });
 
 test("resetUpdateStateForTests setzt Store zurueck", () => {

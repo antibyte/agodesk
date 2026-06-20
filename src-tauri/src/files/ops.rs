@@ -12,7 +12,7 @@ use crate::access_policy::{clamp_read_bytes, clamp_write_bytes, resolve_authoriz
 use super::access::{canonicalize_path, resolve_file_path, resolve_file_path_for_write, validate_parent_directory};
 use super::types::{
     FileAccessRootInput, FileListEntry, FileListResult, FilePermission, FileReadResult,
-    FileWriteResult, root_has_permission,
+    FileWriteArgs, FileWriteResult, root_has_permission,
 };
 
 const MAX_LIST_ENTRIES: usize = 500;
@@ -180,13 +180,16 @@ fn decode_utf8_text(bytes: &[u8]) -> Result<String, String> {
 pub fn file_write(
     app: AppHandle,
     roots: Vec<FileAccessRootInput>,
-    root_id: Option<String>,
-    path: String,
-    content: String,
-    max_bytes: u64,
-    expected_hash: Option<String>,
-    create_only: bool,
+    args: FileWriteArgs,
 ) -> Result<FileWriteResult, String> {
+    let FileWriteArgs {
+        root_id,
+        path,
+        content,
+        max_bytes,
+        expected_hash,
+        create_only,
+    } = args;
     let max_bytes = clamp_write_bytes(&app, max_bytes)?;
     let bytes = content.as_bytes();
     if bytes.len() as u64 > max_bytes {

@@ -50,7 +50,11 @@
 </script>
 
 {#if visible}
-  <aside class="integrations-panel glass-panel" aria-label={$i18n("integrations.title")} use:focusTrap>
+  <aside
+    class="integrations-panel glass-panel"
+    aria-label={$i18n("integrations.title")}
+    use:focusTrap
+  >
     <header class="panel-header">
       <h2>{$i18n("integrations.title")}</h2>
       <button

@@ -3,10 +3,7 @@ import { settings } from "../stores/settings";
 import { get } from "svelte/store";
 import type { SystemWarningsPayload, WsMessage } from "../types/protocol";
 import { normalizeSystemWarningsPayload } from "../types/protocol";
-import {
-  applyLocalAcknowledgements,
-  countUnacknowledgedWarnings,
-} from "./system-warnings-persist";
+import { applyLocalAcknowledgements, countUnacknowledgedWarnings } from "./system-warnings-persist";
 import {
   getPersistedAcknowledgedWarningIds,
   initSystemWarningsPersist,

@@ -31,7 +31,9 @@ export function sanitizeAcknowledgedWarningsStore(
       continue;
     }
 
-    const uniqueIds = [...new Set(ids.filter((id): id is string => typeof id === "string" && id.length > 0))];
+    const uniqueIds = [
+      ...new Set(ids.filter((id): id is string => typeof id === "string" && id.length > 0)),
+    ];
     if (uniqueIds.length > 0) {
       next[normalizedUrl] = uniqueIds;
     }

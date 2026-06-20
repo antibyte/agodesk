@@ -136,9 +136,15 @@
     border: 1px solid color-mix(in srgb, var(--color-accent) 22%, transparent);
   }
 
+  .persona-avatar[data-size="lg"][data-tone="assistant"],
+  .persona-avatar[data-size="md"][data-tone="assistant"] {
+    box-shadow:
+      0 0 0 2px var(--color-companion-ring),
+      0 8px 24px color-mix(in srgb, var(--color-accent) 22%, transparent);
+  }
+
   .persona-avatar[data-size="lg"][data-tone="assistant"] {
     border-width: 3px;
-    box-shadow: 0 8px 24px color-mix(in srgb, var(--color-accent) 25%, transparent);
   }
 
   .persona-avatar[data-tone="system"] {

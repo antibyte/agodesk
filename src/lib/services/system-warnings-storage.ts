@@ -55,10 +55,7 @@ export function getPersistedAcknowledgedWarningIds(serverUrl: string): Set<strin
   return getAcknowledgedIdsForServer(memoryStore, serverUrl);
 }
 
-export async function persistAcknowledgedWarningId(
-  serverUrl: string,
-  id: string,
-): Promise<void> {
+export async function persistAcknowledgedWarningId(serverUrl: string, id: string): Promise<void> {
   if (!id) {
     return;
   }
@@ -83,10 +80,7 @@ export function resetSystemWarningsPersistForTests(): void {
   loaded = false;
 }
 
-export function seedSystemWarningsPersistForTests(
-  serverUrl: string,
-  ids: string[],
-): void {
+export function seedSystemWarningsPersistForTests(serverUrl: string, ids: string[]): void {
   memoryStore = mergeAcknowledgedIds({}, serverUrl, ids);
   loaded = true;
 }

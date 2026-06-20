@@ -18,8 +18,7 @@
   let finishResetTimer: ReturnType<typeof setTimeout> | null = null;
 
   $effect(() => {
-    const requestInFlight =
-      $openPetsContext.pending || $chatConversationState.requestInFlight;
+    const requestInFlight = $openPetsContext.pending || $chatConversationState.requestInFlight;
     if (prevRequestInFlight && !requestInFlight) {
       requestJustFinished = true;
       if (finishResetTimer) {

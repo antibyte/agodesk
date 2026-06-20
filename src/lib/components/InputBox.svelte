@@ -224,8 +224,7 @@
       pendingFiles.length > 0 &&
       draft.trim().length === 0
     ) {
-      const index =
-        focusedPillIndex ?? (event.key === "Backspace" ? pendingFiles.length - 1 : 0);
+      const index = focusedPillIndex ?? (event.key === "Backspace" ? pendingFiles.length - 1 : 0);
       if (index >= 0 && index < pendingFiles.length) {
         event.preventDefault();
         removePendingFile(index);
@@ -298,6 +297,13 @@
   ondragleave={handleDragLeave}
   ondrop={handleDrop}
 >
+  {#if dragActive}
+    <div class="drop-overlay" role="status" aria-live="polite">
+      <strong>{$i18n("inputBox.attachments.dropHere.title")}</strong>
+      <span>{$i18n("inputBox.attachments.dropHere.description")}</span>
+    </div>
+  {/if}
+
   {#if composerHint}
     <p class="hint">{composerHint}</p>
   {/if}
@@ -402,14 +408,40 @@
   </div>
 
   {#if showFootnote}
-    <p class="footnote">
-      {attachmentsEnabled ? $i18n("inputBox.footnoteWithAttachments") : $i18n("inputBox.footnote")}
-    </p>
+    <ul class="footnote ui-shortcut-grid" aria-label={$i18n("inputBox.shortcuts.ariaLabel")}>
+      <li>
+        <span class="ui-kbd">Enter</span>
+        <span>{$i18n("inputBox.shortcut.send")}</span>
+      </li>
+      <li>
+        <span class="shortcut-keys">
+          <span class="ui-kbd">Ctrl</span><span class="shortcut-plus">+</span><span class="ui-kbd"
+            >Enter</span
+          >
+        </span>
+        <span>{$i18n("inputBox.shortcut.ctrlSend")}</span>
+      </li>
+      <li>
+        <span class="shortcut-keys">
+          <span class="ui-kbd">Shift</span><span class="shortcut-plus">+</span><span class="ui-kbd"
+            >Enter</span
+          >
+        </span>
+        <span>{$i18n("inputBox.shortcut.newline")}</span>
+      </li>
+      {#if attachmentsEnabled}
+        <li>
+          <span class="shortcut-spacer" aria-hidden="true"></span>
+          <span>{$i18n("inputBox.shortcut.attachments")}</span>
+        </li>
+      {/if}
+    </ul>
   {/if}
 </form>
 
 <style>
   .input-box {
+    position: relative;
     display: flex;
 
     flex-direction: column;
@@ -655,8 +687,36 @@
     transform: scale(0.96) translateY(0);
   }
 
+  .drop-overlay {
+    position: absolute;
+    inset: var(--space-2);
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-1);
+    border-radius: var(--radius-xl);
+    background: color-mix(in srgb, var(--color-companion-surface) 92%, transparent);
+    border: 1px dashed color-mix(in srgb, var(--color-accent) 45%, var(--color-border));
+    color: var(--color-text);
+    text-align: center;
+    pointer-events: none;
+  }
+
+  .drop-overlay strong {
+    font-size: var(--font-size-md);
+  }
+
+  .drop-overlay span {
+    font-size: var(--font-size-sm);
+    color: var(--color-muted);
+  }
+
   .footnote {
     margin: 0;
+    list-style: none;
+    padding: 0;
 
     font-size: 0.6875rem;
 
@@ -664,6 +724,21 @@
 
     padding-left: var(--space-1);
 
-    opacity: 0.75;
+    opacity: 0.85;
+  }
+
+  .footnote li {
+    display: contents;
+  }
+
+  .shortcut-keys {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.2rem;
+  }
+
+  .shortcut-plus {
+    font-size: var(--font-size-xs);
+    color: var(--color-muted);
   }
 </style>

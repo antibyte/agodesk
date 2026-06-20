@@ -29,8 +29,7 @@
   }: Props = $props();
 
   const reducedMotion =
-    typeof window !== "undefined" &&
-    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
   const bannerTransition = reducedMotion ? { duration: 180 } : { y: 8, duration: 220 };
   const bannerOutTransition = reducedMotion ? { duration: 140 } : { y: -4, duration: 220 };
@@ -132,8 +131,13 @@
 <style>
   .speech-banner {
     display: flex;
-    align-items: center;
-    gap: var(--space-2);
+  }
+
+  .speech-banner.listening,
+  .speech-banner.mode[data-tone="accent"] {
+    background: var(--color-companion-surface);
+    border-color: color-mix(in srgb, var(--color-accent) 28%, var(--color-border));
+    box-shadow: var(--shadow-companion);
   }
 
   .content {
@@ -151,6 +155,11 @@
   .mode-chip {
     margin-left: auto;
     flex-shrink: 0;
+  }
+
+  .speech-banner.listening .pulse-dot,
+  .speech-banner.mode .pulse-dot {
+    background: var(--color-accent);
   }
 
   .pulse-dot {

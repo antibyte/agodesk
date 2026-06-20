@@ -7,6 +7,7 @@
   import WindowControls from "./WindowControls.svelte";
   import Icon from "./Icon.svelte";
   import { returnFocusToTrigger, setFocusTrigger } from "../actions/focusTrap";
+  import type { CompanionPresenceTone } from "../services/companion-presence";
 
   interface Props {
     serverUrl?: string;
@@ -25,6 +26,9 @@
     warningsEnabled?: boolean;
     warningsActive?: boolean;
     warningsUnacknowledged?: number;
+    companionTone?: CompanionPresenceTone;
+    speechActive?: boolean;
+    requestInFlight?: boolean;
     onOpenSettings?: () => void;
     onReconnect?: () => void;
     onToggleTheme?: () => void;
@@ -51,6 +55,9 @@
     warningsEnabled = false,
     warningsActive = false,
     warningsUnacknowledged = 0,
+    companionTone = "ready",
+    speechActive = false,
+    requestInFlight = false,
     onOpenSettings,
     onReconnect,
     onToggleTheme,
@@ -180,13 +187,19 @@
     title={$i18n("statusBar.openSettings.title")}
     onclick={() => onOpenSettings?.()}
   >
-    <span class="brand-mark" aria-hidden="true">
+    <span
+      class="brand-mark"
+      data-companion-tone={companionTone}
+      class:companion-live={speechActive || requestInFlight}
+      aria-hidden="true"
+    >
       <Icon name="brand" size={18} />
     </span>
     <span class="status-copy">
       <span class="status-line">
         <span
-          class="dot"
+          class="ui-status-orb"
+          data-tone={companionTone}
           data-status={connectionStatus}
           aria-label={$i18n("statusBar.connectionStatus.ariaLabel")}
         ></span>
@@ -472,7 +485,24 @@
     background: var(--color-accent);
     color: white;
     flex-shrink: 0;
-    box-shadow: var(--accent-glow);
+    transition: box-shadow var(--motion-companion);
+    box-shadow: var(--accent-glow), 0 0 0 2px var(--color-companion-ring);
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .brand-mark.companion-live {
+      animation: status-ring-pulse 2.4s ease-in-out infinite;
+    }
+  }
+
+  @keyframes status-ring-pulse {
+    0%,
+    100% {
+      box-shadow: var(--accent-glow), 0 0 0 2px color-mix(in srgb, var(--color-companion-ring) 55%, transparent);
+    }
+    50% {
+      box-shadow: var(--accent-glow), 0 0 0 4px color-mix(in srgb, var(--color-companion-ring) 90%, transparent);
+    }
   }
 
   .status-copy {
@@ -518,31 +548,6 @@
     align-items: center;
     gap: var(--space-2);
     flex-shrink: 0;
-  }
-
-  .dot {
-    width: 0.55rem;
-    height: 0.55rem;
-    border-radius: var(--radius-full);
-    background: var(--color-muted);
-    flex-shrink: 0;
-    box-shadow: 0 0 0 2px color-mix(in srgb, currentColor 15%, transparent);
-  }
-
-  .dot[data-status="connected"] {
-    background: var(--color-success);
-    box-shadow: 0 0 8px color-mix(in srgb, var(--color-success) 55%, transparent);
-  }
-
-  .dot[data-status="connecting"] {
-    background: var(--color-warning);
-    box-shadow: 0 0 8px color-mix(in srgb, var(--color-warning) 55%, transparent);
-  }
-
-  .dot[data-status="error"],
-  .dot[data-status="disconnected"] {
-    background: var(--color-danger);
-    box-shadow: 0 0 8px color-mix(in srgb, var(--color-danger) 55%, transparent);
   }
 
   :global(.icon-settings) {

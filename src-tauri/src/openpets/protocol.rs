@@ -6,6 +6,7 @@ pub const OPENPETS_IPC_VERSION: u8 = 1;
 pub const MAX_IPC_MESSAGE_BYTES: usize = 16 * 1024;
 pub const CONNECT_TIMEOUT_MS: u64 = 2_000;
 pub const RESPONSE_TIMEOUT_MS: u64 = 3_000;
+#[allow(dead_code)]
 pub const INSTALL_RESPONSE_TIMEOUT_MS: u64 = 60_000;
 
 pub const ALLOWED_REACTIONS: &[&str] = &[
@@ -44,32 +45,33 @@ pub struct OpenPetsIpcRequest {
     pub params: Option<Value>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
-pub struct OpenPetsIpcOkResponse {
-    pub id: Option<String>,
-    pub ok: bool,
-    pub result: Value,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-pub struct OpenPetsIpcErrorBody {
-    pub code: String,
-    pub message: String,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-#[serde(untagged)]
-pub enum OpenPetsIpcResponse {
-    Ok {
-        id: Option<String>,
-        ok: bool,
-        result: Value,
-    },
-    Err {
-        id: Option<String>,
-        ok: bool,
-        error: OpenPetsIpcErrorBody,
-    },
+pub fn map_ipc_response(line: &str) -> Result<Value, OpenPetsClientError> {
+    let parsed: Value = serde_json::from_str(line).map_err(|_| OpenPetsClientError {
+        code: "invalid_response".to_string(),
+        message: "IPC response shape is invalid.".to_string(),
+    })?;
+    match parsed.get("ok").and_then(Value::as_bool) {
+        Some(true) => Ok(parsed.get("result").cloned().unwrap_or(Value::Null)),
+        Some(false) => {
+            let code = parsed
+                .get("error")
+                .and_then(|error| error.get("code"))
+                .and_then(Value::as_str)
+                .unwrap_or("unknown_error")
+                .to_string();
+            let message = parsed
+                .get("error")
+                .and_then(|error| error.get("message"))
+                .and_then(Value::as_str)
+                .unwrap_or("OpenPets returned an error.")
+                .to_string();
+            Err(OpenPetsClientError { code, message })
+        }
+        _ => Err(OpenPetsClientError {
+            code: "invalid_response".to_string(),
+            message: "IPC response ok flag is invalid.".to_string(),
+        }),
+    }
 }
 
 #[derive(Debug, Clone)]

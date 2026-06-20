@@ -63,8 +63,7 @@ export function showToast(options: ToastOptions): string {
     id,
     type: options.type,
     message: options.message,
-    duration:
-      options.duration ?? (options.type === "error" ? 0 : DEFAULT_DURATION),
+    duration: options.duration ?? (options.type === "error" ? 0 : DEFAULT_DURATION),
     dismissible: options.dismissible ?? true,
     createdAt: Date.now(),
   };
@@ -91,10 +90,12 @@ function dismiss(id: string): void {
     clearTimeout(timer);
     timers.delete(id);
   }
-  update((state) => promoteFromQueue({
-    active: state.active.filter((item) => item.id !== id),
-    queue: state.queue,
-  }));
+  update((state) =>
+    promoteFromQueue({
+      active: state.active.filter((item) => item.id !== id),
+      queue: state.queue,
+    }),
+  );
 }
 
 export function dismissAllToasts(): void {

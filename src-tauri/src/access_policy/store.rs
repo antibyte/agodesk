@@ -41,6 +41,7 @@ pub struct ShellAccessPolicy {
 
 #[derive(Debug, Clone)]
 pub struct ShellCwdPolicy {
+    #[allow(dead_code)]
     pub cwd_id: String,
     pub canonical_path: String,
 }

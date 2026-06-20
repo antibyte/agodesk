@@ -34,17 +34,17 @@
     background:
       radial-gradient(
         ellipse 720px 420px at 50% -120px,
-        color-mix(in srgb, var(--color-accent) 16%, transparent),
+        color-mix(in srgb, var(--color-accent) 22%, transparent),
         transparent 72%
       ),
       radial-gradient(
         ellipse 480px 360px at 105% 92%,
-        color-mix(in srgb, var(--color-accent) 7%, transparent),
+        color-mix(in srgb, var(--color-accent) 10%, transparent),
         transparent 68%
       ),
       radial-gradient(
         ellipse 520px 380px at -8% 42%,
-        color-mix(in srgb, var(--color-accent) 5%, transparent),
+        color-mix(in srgb, var(--color-accent) 8%, transparent),
         transparent 70%
       ),
       var(--color-bg);

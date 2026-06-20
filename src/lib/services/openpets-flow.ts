@@ -75,7 +75,11 @@ export function deriveOpenPetsReaction(input: OpenPetsLifecycleInput): OpenPetsR
   }
   if (input.remoteOperation) {
     const operation = input.remoteOperation.toLowerCase();
-    if (operation.includes("shell") || operation.includes("exec") || operation.includes("browser")) {
+    if (
+      operation.includes("shell") ||
+      operation.includes("exec") ||
+      operation.includes("browser")
+    ) {
       return "running";
     }
     if (operation.includes("test")) {
@@ -143,7 +147,9 @@ export async function setOpenPetsEnabled(
   });
 }
 
-export async function sendOpenPetsReaction(reaction: OpenPetsReaction): Promise<OpenPetsActionResult> {
+export async function sendOpenPetsReaction(
+  reaction: OpenPetsReaction,
+): Promise<OpenPetsActionResult> {
   return invoke<OpenPetsActionResult>("openpets_react", { reaction });
 }
 

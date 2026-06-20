@@ -1,4 +1,5 @@
 import { getVersion } from "@tauri-apps/api/app";
+import { AGODESK_CLIENT_VERSION } from "../types/protocol";
 
 let cachedVersion: string | null = null;
 
@@ -10,7 +11,7 @@ export async function getAppVersion(): Promise<string> {
   try {
     cachedVersion = await getVersion();
   } catch {
-    cachedVersion = "0.1.0";
+    cachedVersion = AGODESK_CLIENT_VERSION;
   }
 
   return cachedVersion;

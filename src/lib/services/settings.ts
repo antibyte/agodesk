@@ -257,7 +257,7 @@ export function normalizeShellAccessSettings(
       ? saved.selectedShell
       : shells.includes(platformDefaults.selectedShell)
         ? platformDefaults.selectedShell
-        : shells[0] ?? platformDefaults.selectedShell;
+        : (shells[0] ?? platformDefaults.selectedShell);
 
   const maxCommandChars =
     typeof saved.maxCommandChars === "number" && saved.maxCommandChars > 0
@@ -277,12 +277,14 @@ export function normalizeShellAccessSettings(
       : DEFAULT_SHELL_ACCESS_SETTINGS.maxTimeoutMs;
 
   const defaultCwd =
-    typeof saved.defaultCwd === "string" && allowedCwds.some((cwd) => cwd.cwdId === saved.defaultCwd)
+    typeof saved.defaultCwd === "string" &&
+    allowedCwds.some((cwd) => cwd.cwdId === saved.defaultCwd)
       ? saved.defaultCwd
       : undefined;
 
   return {
-    enabled: typeof saved.enabled === "boolean" ? saved.enabled : DEFAULT_SHELL_ACCESS_SETTINGS.enabled,
+    enabled:
+      typeof saved.enabled === "boolean" ? saved.enabled : DEFAULT_SHELL_ACCESS_SETTINGS.enabled,
     requiresApproval:
       typeof saved.requiresApproval === "boolean"
         ? saved.requiresApproval
@@ -302,7 +304,8 @@ function normalizeOpenPetsSettings(saved: Partial<OpenPetsSettings> | undefined)
   const petId =
     typeof saved?.petId === "string" && saved.petId.trim().length > 0 ? saved.petId.trim() : null;
   return {
-    enabled: typeof saved?.enabled === "boolean" ? saved.enabled : DEFAULT_OPENPETS_SETTINGS.enabled,
+    enabled:
+      typeof saved?.enabled === "boolean" ? saved.enabled : DEFAULT_OPENPETS_SETTINGS.enabled,
     petId,
     reactToSpeech:
       typeof saved?.reactToSpeech === "boolean"

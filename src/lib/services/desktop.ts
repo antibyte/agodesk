@@ -440,11 +440,7 @@ export async function executeShellCommand(
 }
 
 function parseShellInvokeError(message: string): DesktopErrorCode {
-  for (const code of [
-    "SHELL_TIMEOUT",
-    "SHELL_OUTPUT_TOO_LARGE",
-    "SHELL_SPAWN_FAILED",
-  ] as const) {
+  for (const code of ["SHELL_TIMEOUT", "SHELL_OUTPUT_TOO_LARGE", "SHELL_SPAWN_FAILED"] as const) {
     if (message.startsWith(code)) {
       return code;
     }

@@ -65,6 +65,13 @@
   --radius-xl: 1.125rem;
   --radius-full: 9999px;
   --radius-window: 16px;
+  --radius-2xl: 1.5rem;
+  --motion-companion: 360ms cubic-bezier(0.22, 1, 0.36, 1);
+  --color-companion-surface: color-mix(in srgb, var(--glass-surface) 88%, var(--color-accent-soft));
+  --color-companion-ring: color-mix(in srgb, var(--color-accent) 36%, transparent);
+  --shadow-companion:
+    0 18px 48px color-mix(in srgb, var(--color-accent) 14%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.42);
 
   --transition-fast: 160ms cubic-bezier(0.22, 1, 0.36, 1);
   --transition-base: 260ms cubic-bezier(0.22, 1, 0.36, 1);
@@ -125,6 +132,17 @@
     --blur: 24px;
     --blur-strong: 32px;
     --shadow-3: 0 24px 64px rgba(15, 23, 42, 0.1);
+    --radius-2xl: 1.5rem;
+    --motion-companion: 360ms cubic-bezier(0.22, 1, 0.36, 1);
+    --color-companion-surface: color-mix(
+      in srgb,
+      var(--glass-surface) 88%,
+      var(--color-accent-soft)
+    );
+    --color-companion-ring: color-mix(in srgb, var(--color-accent) 36%, transparent);
+    --shadow-companion:
+      0 18px 48px color-mix(in srgb, var(--color-accent) 14%, transparent),
+      inset 0 1px 0 rgba(255, 255, 255, 0.42);
   }
 }
 
@@ -194,6 +212,13 @@
   --radius-xl: 1.125rem;
   --radius-full: 9999px;
   --radius-window: 16px;
+  --radius-2xl: 1.5rem;
+  --motion-companion: 360ms cubic-bezier(0.22, 1, 0.36, 1);
+  --color-companion-surface: color-mix(in srgb, var(--glass-surface) 88%, var(--color-accent-soft));
+  --color-companion-ring: color-mix(in srgb, var(--color-accent) 36%, transparent);
+  --shadow-companion:
+    0 18px 48px color-mix(in srgb, var(--color-accent) 14%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.42);
 
   --transition-fast: 160ms cubic-bezier(0.22, 1, 0.36, 1);
   --transition-base: 260ms cubic-bezier(0.22, 1, 0.36, 1);
@@ -254,6 +279,18 @@
     --blur: 24px;
     --blur-strong: 32px;
     --shadow-3: 0 24px 72px rgba(0, 0, 0, 0.6);
+    --radius-2xl: 1.5rem;
+    --motion-companion: 360ms cubic-bezier(0.22, 1, 0.36, 1);
+    --color-companion-surface: color-mix(
+      in srgb,
+      var(--glass-surface) 88%,
+      var(--color-accent-soft)
+    );
+    --color-companion-ring: color-mix(in srgb, var(--color-accent) 42%, transparent);
+    --shadow-companion:
+      0 22px 60px rgba(0, 0, 0, 0.42),
+      0 0 0 1px color-mix(in srgb, var(--color-accent) 12%, transparent),
+      inset 0 1px 0 rgba(255, 255, 255, 0.08);
   }
 }
 
@@ -487,6 +524,58 @@ select {
   transition:
     border-color var(--transition-fast),
     box-shadow var(--transition-fast);
+}
+
+.ui-kbd {
+  display: inline-grid;
+  place-items: center;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  min-width: 1.55rem;
+  height: 1.45rem;
+  padding: 0 0.35rem;
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--glass-surface) 76%, transparent);
+  border: 1px solid var(--color-border-subtle);
+  font-size: var(--font-size-xs);
+  line-height: 1;
+  color: var(--color-text);
+}
+
+.ui-shortcut-grid {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.45rem 0.75rem;
+  align-items: center;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ui-status-orb {
+  flex-shrink: 0;
+  width: 0.72rem;
+  height: 0.72rem;
+  border-radius: var(--radius-full);
+  background: currentColor;
+  box-shadow: 0 0 0 0.24rem color-mix(in srgb, currentColor 12%, transparent);
+}
+
+.ui-status-orb[data-tone="ready"],
+.ui-status-orb[data-tone="listening"] {
+  color: var(--color-accent);
+}
+
+.ui-status-orb[data-tone="thinking"] {
+  color: var(--color-warning);
+}
+
+.ui-status-orb[data-tone="blocked"] {
+  color: var(--color-muted);
+}
+
+.ui-status-orb[data-tone="error"] {
+  color: var(--color-danger);
 }
 
 .ui-input:focus-visible {

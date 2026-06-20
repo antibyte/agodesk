@@ -42,6 +42,16 @@ pub struct FileWriteResult {
     pub bytes_written: u64,
 }
 
+#[derive(Debug, Clone, Deserialize)]
+pub struct FileWriteArgs {
+    pub root_id: Option<String>,
+    pub path: String,
+    pub content: String,
+    pub max_bytes: u64,
+    pub expected_hash: Option<String>,
+    pub create_only: bool,
+}
+
 #[derive(Debug, Clone)]
 pub struct ResolvedFilePath {
     pub root_id: String,

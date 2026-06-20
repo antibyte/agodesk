@@ -9,6 +9,8 @@ build/
 tsconfig.tsbuildinfo
 mcps/
 agent-tools/
+# Local agent terminal snapshots
+terminals/
 
 # Rust / Tauri
 src-tauri/target/

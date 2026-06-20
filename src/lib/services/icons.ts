@@ -41,7 +41,8 @@ export const ICONS: Record<IconName, IconDefinition> = {
     strokeWidth: 2,
   },
   "eye-open": {
-    paths: '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>',
+    paths:
+      '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>',
     strokeWidth: 2,
   },
   "eye-closed": {
@@ -60,7 +61,8 @@ export const ICONS: Record<IconName, IconDefinition> = {
     strokeWidth: 2,
   },
   history: {
-    paths: '<path d="M3 12a9 9 0 1 0 3-6.7"/><polyline points="3 3 3 9 9 9"/><path d="M12 7v5l3 2"/>',
+    paths:
+      '<path d="M3 12a9 9 0 1 0 3-6.7"/><polyline points="3 3 3 9 9 9"/><path d="M12 7v5l3 2"/>',
     strokeWidth: 2,
   },
   integrations: {
@@ -83,7 +85,8 @@ export const ICONS: Record<IconName, IconDefinition> = {
     strokeWidth: 2,
   },
   system: {
-    paths: '<circle cx="12" cy="12" r="10"/><path d="M12 2v20M12 2a10 10 0 0 1 0 20Z" fill="currentColor" stroke="none"/>',
+    paths:
+      '<circle cx="12" cy="12" r="10"/><path d="M12 2v20M12 2a10 10 0 0 1 0 20Z" fill="currentColor" stroke="none"/>',
     strokeWidth: 2,
   },
   settings: {
@@ -92,7 +95,8 @@ export const ICONS: Record<IconName, IconDefinition> = {
     strokeWidth: 2,
   },
   overflow: {
-    paths: '<circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/>',
+    paths:
+      '<circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/>',
     fill: true,
     strokeWidth: 0,
   },

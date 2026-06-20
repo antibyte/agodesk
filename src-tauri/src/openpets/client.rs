@@ -7,7 +7,7 @@ use uuid::Uuid;
 
 use crate::openpets::discovery::{parse_ipc_endpoint, read_discovery_file, ParsedEndpoint};
 use crate::openpets::protocol::{
-    OpenPetsClientError, OpenPetsDiscoveryFile, OpenPetsIpcRequest,
+    map_ipc_response, OpenPetsClientError, OpenPetsDiscoveryFile, OpenPetsIpcRequest,
     CONNECT_TIMEOUT_MS, MAX_IPC_MESSAGE_BYTES, OPENPETS_IPC_VERSION, RESPONSE_TIMEOUT_MS,
 };
 
@@ -111,7 +111,7 @@ async fn connect_path(path: &str) -> Result<ConnectedStream, OpenPetsClientError
         let stream = tokio::net::UnixStream::connect(path)
             .await
             .map_err(map_connect_error)?;
-        return Ok(ConnectedStream::Unix(stream));
+        Ok(ConnectedStream::Unix(stream))
     }
 
     #[cfg(windows)]
@@ -120,7 +120,7 @@ async fn connect_path(path: &str) -> Result<ConnectedStream, OpenPetsClientError
         let client = ClientOptions::new()
             .open(path)
             .map_err(map_connect_error)?;
-        return Ok(ConnectedStream::NamedPipe(client));
+        Ok(ConnectedStream::NamedPipe(client))
     }
 
     #[cfg(not(any(unix, windows)))]
@@ -142,32 +142,7 @@ async fn exchange(stream: &mut ConnectedStream, request_line: String) -> Result<
             message: "OpenPets IPC response is too large.".to_string(),
         });
     }
-    let parsed: Value = serde_json::from_str(&response_line).map_err(|_| OpenPetsClientError {
-        code: "invalid_response".to_string(),
-        message: "IPC response shape is invalid.".to_string(),
-    })?;
-    match parsed.get("ok").and_then(Value::as_bool) {
-        Some(true) => Ok(parsed.get("result").cloned().unwrap_or(Value::Null)),
-        Some(false) => {
-            let code = parsed
-                .get("error")
-                .and_then(|error| error.get("code"))
-                .and_then(Value::as_str)
-                .unwrap_or("unknown_error")
-                .to_string();
-            let message = parsed
-                .get("error")
-                .and_then(|error| error.get("message"))
-                .and_then(Value::as_str)
-                .unwrap_or("OpenPets returned an error.")
-                .to_string();
-            Err(OpenPetsClientError { code, message })
-        }
-        _ => Err(OpenPetsClientError {
-            code: "invalid_response".to_string(),
-            message: "IPC response ok flag is invalid.".to_string(),
-        }),
-    }
+    map_ipc_response(&response_line)
 }
 
 async fn write_all(stream: &mut ConnectedStream, bytes: &[u8]) -> Result<(), OpenPetsClientError> {
