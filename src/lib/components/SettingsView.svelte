@@ -5,6 +5,7 @@
     ConnectionStatus,
     FileAccessRoot,
     FileAccessSettings,
+    OpenPetsSettings,
     SessionStatus,
     ShellAccessSettings,
     SpeechSettings,
@@ -14,6 +15,7 @@
   } from "../types/protocol";
   import {
     DEFAULT_FILE_ACCESS_SETTINGS,
+    DEFAULT_OPENPETS_SETTINGS,
     DEFAULT_SHELL_ACCESS_SETTINGS,
     DEFAULT_SPEECH_SETTINGS,
     DEFAULT_UI_SOUND_SETTINGS,
@@ -76,6 +78,12 @@
   import { previewUiSoundTheme } from "../services/ui-sounds";
   import { toastService } from "../services/toast";
   import { checkForUpdates } from "../services/update-flow";
+  import {
+    fetchOpenPetsPets,
+    fetchOpenPetsStatus,
+    type OpenPetsPetListItem,
+    type OpenPetsStatusResult,
+  } from "../services/openpets-flow";
   import WindowControls from "./WindowControls.svelte";
   import HotkeyField from "./HotkeyField.svelte";
   import { isDesktopShell } from "../services/window-controls";
@@ -95,6 +103,7 @@
     | "fileAccess"
     | "shellAccess"
     | "chatTtsMode"
+    | "openPets"
   >;
 
   const GEMINI_VOICE_OPTIONS = ["Zephyr", "Puck", "Charon", "Kore", "Fenrir", "Aoede"] as const;
@@ -108,6 +117,7 @@
     | "connection"
     | "device"
     | "appearance"
+    | "openpets"
     | "language"
     | "desktop"
     | "files"
@@ -130,6 +140,7 @@
     fileAccess?: FileAccessSettings;
     shellAccess?: ShellAccessSettings;
     chatTtsMode?: ChatTtsMode;
+    openPets?: OpenPetsSettings;
     connectionStatus?: ConnectionStatus;
     sessionStatus?: SessionStatus;
     sessionId?: string;
@@ -159,6 +170,7 @@
     fileAccess = DEFAULT_FILE_ACCESS_SETTINGS,
     shellAccess = DEFAULT_SHELL_ACCESS_SETTINGS,
     chatTtsMode = "auto",
+    openPets = DEFAULT_OPENPETS_SETTINGS,
     connectionStatus = "disconnected",
     sessionStatus = "idle",
     sessionId = "",
@@ -191,6 +203,13 @@
     cloneShellAccessSettings(DEFAULT_SHELL_ACCESS_SETTINGS),
   );
   let draftChatTtsMode = $state<ChatTtsMode>("auto");
+  let draftOpenPetsEnabled = $state(false);
+  let draftOpenPetsPetId = $state<string>("");
+  let draftOpenPetsReactToSpeech = $state(true);
+  let draftOpenPetsShowMessages = $state(false);
+  let openPetsStatus = $state<OpenPetsStatusResult | null>(null);
+  let openPetsPets = $state<OpenPetsPetListItem[]>([]);
+  let openPetsCatalogBusy = $state(false);
   let draftSpeech = $state<SpeechSettings>({ ...DEFAULT_SPEECH_SETTINGS });
   let draftUiSoundEnabled = $state(true);
   let draftUiSoundTheme = $state<UiSoundTheme>("soft");
@@ -220,6 +239,7 @@
         ["connection", "settings.section.connection.label", "settings.section.connection.hint"],
         ["device", "settings.section.device.label", "settings.section.device.hint"],
         ["appearance", "settings.section.appearance.label", "settings.section.appearance.hint"],
+        ["openpets", "settings.section.openpets.label", "settings.section.openpets.hint"],
         ["language", "settings.section.language.label", "settings.section.language.hint"],
         ["desktop", "settings.section.desktop.label", "settings.section.desktop.hint"],
         ["files", "settings.section.files.label", "settings.section.files.hint"],
@@ -367,6 +387,10 @@
       draftFileAccess = cloneFileAccessSettings(fileAccess);
       draftShellAccess = cloneShellAccessSettings(shellAccess);
       draftChatTtsMode = chatTtsMode;
+      draftOpenPetsEnabled = openPets.enabled;
+      draftOpenPetsPetId = openPets.petId ?? "";
+      draftOpenPetsReactToSpeech = openPets.reactToSpeech;
+      draftOpenPetsShowMessages = openPets.showMessages;
       draftSpeech = { ...DEFAULT_SPEECH_SETTINGS, ...speech };
       draftUiSoundEnabled = uiSounds.enabled;
       draftUiSoundTheme = uiSounds.theme;
@@ -387,6 +411,31 @@
         hostInfo = null;
       });
   });
+
+  $effect(() => {
+    if (activeSection !== "openpets") {
+      return;
+    }
+    void refreshOpenPetsPanel();
+  });
+
+  async function refreshOpenPetsPanel(): Promise<void> {
+    openPetsCatalogBusy = true;
+    try {
+      const [status, catalog] = await Promise.all([fetchOpenPetsStatus(), fetchOpenPetsPets()]);
+      openPetsStatus = status;
+      openPetsPets = catalog.pets.filter((pet) => !pet.broken);
+    } catch {
+      openPetsStatus = {
+        reachable: false,
+        enabled: draftOpenPetsEnabled,
+        unavailableReason: "OpenPets desktop app or local IPC is unavailable.",
+      };
+      openPetsPets = [];
+    } finally {
+      openPetsCatalogBusy = false;
+    }
+  }
 
   $effect(() => {
     void refreshApiKeyStatus();
@@ -546,6 +595,12 @@
       fileAccess: cloneFileAccessSettings(draftFileAccess),
       shellAccess: cloneShellAccessSettings(draftShellAccess),
       chatTtsMode: draftChatTtsMode,
+      openPets: {
+        enabled: draftOpenPetsEnabled,
+        petId: draftOpenPetsPetId.trim() || null,
+        reactToSpeech: draftOpenPetsReactToSpeech,
+        showMessages: draftOpenPetsShowMessages,
+      },
     };
   }
 
@@ -1194,6 +1249,77 @@
                 />
               </section>
             {/if}
+          {/if}
+
+          {#if activeSection === "openpets"}
+            <section class="ui-card">
+              <div class="card-header">
+                <h2>{$i18n("settings.openpets.title")}</h2>
+                <p>{$i18n("settings.openpets.description")}</p>
+              </div>
+
+              <label class="field toggle-field">
+                <span class="field-label">{$i18n("settings.openpets.enable")}</span>
+                <input
+                  type="checkbox"
+                  bind:checked={draftOpenPetsEnabled}
+                  onchange={markDirty}
+                />
+              </label>
+
+              <p class="field-help">{$i18n("settings.openpets.requirement")}</p>
+
+              <label class="field">
+                <span class="field-label">{$i18n("settings.openpets.pet.label")}</span>
+                <select
+                  class="ui-input"
+                  bind:value={draftOpenPetsPetId}
+                  onchange={markDirty}
+                  disabled={openPetsCatalogBusy || openPetsPets.length === 0}
+                >
+                  <option value="">{$i18n("settings.openpets.pet.default")}</option>
+                  {#each openPetsPets as pet (pet.id)}
+                    <option value={pet.id}>{pet.displayName}</option>
+                  {/each}
+                </select>
+                <span class="field-help">{$i18n("settings.openpets.pet.help")}</span>
+              </label>
+
+              <label class="field toggle-field">
+                <span class="field-label">{$i18n("settings.openpets.reactToSpeech")}</span>
+                <input
+                  type="checkbox"
+                  bind:checked={draftOpenPetsReactToSpeech}
+                  onchange={markDirty}
+                />
+              </label>
+
+              <label class="field toggle-field">
+                <span class="field-label">{$i18n("settings.openpets.showMessages")}</span>
+                <input
+                  type="checkbox"
+                  bind:checked={draftOpenPetsShowMessages}
+                  onchange={markDirty}
+                />
+              </label>
+
+              <div class="status-block">
+                {#if openPetsCatalogBusy}
+                  <p>{$i18n("settings.openpets.status.loading")}</p>
+                {:else if openPetsStatus?.reachable}
+                  <p>
+                    {$i18n("settings.openpets.status.reachable", {
+                      version: openPetsStatus.appVersion ?? "?",
+                      pet: openPetsStatus.petName ?? openPetsStatus.petId ?? "?",
+                    })}
+                  </p>
+                {:else}
+                  <p class="status-warning">
+                    {$i18n("settings.openpets.status.unavailable")}
+                  </p>
+                {/if}
+              </div>
+            </section>
           {/if}
 
           {#if activeSection === "language"}

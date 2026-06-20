@@ -34,5 +34,6 @@
   aria-label={ariaLabel}
   role={ariaLabel ? "img" : undefined}
 >
+  <!-- eslint-disable-next-line svelte/no-at-html-tags -- static SVG fragments from icons.ts, no user input -->
   {@html def.paths}
 </svg>

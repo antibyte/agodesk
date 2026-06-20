@@ -39,6 +39,8 @@
     updateState,
   } from "../services/update-flow";
   import { loadSettings, saveSettings } from "../services/settings";
+  import { applyOpenPetsSettings } from "../services/openpets-flow";
+  import { openPetsContext } from "../stores/openpets-context";
   import { cycleTheme, destroyThemeListener } from "../services/theme";
   import { saveTrustedCertificate } from "../services/tls";
   import { openExternalUrl } from "../services/open-external-url";
@@ -98,6 +100,7 @@
     handleChatWsMessage,
   } from "../services/chat-ws-inbound";
   import { connectChatWebSocket, createWebSocketService } from "../services/chat-ws-connect";
+  import { isChatError } from "../services/websocket";
   import { chatPlanState, isChatPlanPanelVisible } from "../stores/chat-plan";
   import { agentMoodState } from "../stores/agent-mood";
   import type {
@@ -130,6 +133,7 @@
     | "connection"
     | "device"
     | "appearance"
+    | "openpets"
     | "language"
     | "desktop"
     | "files"
@@ -288,12 +292,15 @@
     agentMoodState.reset();
   }
 
+  function setPendingState(value: boolean): void {
+    pending = value;
+    openPetsContext.setPending(value);
+  }
+
   function createWsInboundContext() {
     return createChatWsInboundContext(wsService, $settings.serverUrl, {
       addSystemMessage,
-      setPending: (value) => {
-        pending = value;
-      },
+      setPending: setPendingState,
       setPairingBusy: (value) => {
         pairingBusy = value;
       },
@@ -302,6 +309,7 @@
       },
       setRemoteOperation: (value) => {
         remoteOperation = value;
+        openPetsContext.setRemoteOperation(value);
       },
       resetPlanAndMoodState,
       wsSend: (message) => wsService.send(message),
@@ -310,12 +318,16 @@
 
   async function handleIncomingMessage(message: WsMessage): Promise<void> {
     await handleChatWsMessage(message, createWsInboundContext());
+    if (isChatError(message)) {
+      openPetsContext.markRequestFailed();
+    }
   }
 
   async function connect(url: string, options?: { pinnedFingerprint?: string }): Promise<void> {
     certModalOpen = false;
     tlsErrorCode = null;
     pending = false;
+    openPetsContext.reset();
 
     await wsService.disconnect().catch(() => {});
     wsService = createWebSocketService();
@@ -359,6 +371,7 @@
     void checkForUpdates({ silent: true });
 
     const loaded = await loadSettings();
+    await applyOpenPetsSettings(loaded.openPets);
     await applyMinimizeToTraySetting(loaded.minimizeToTray);
     await applyShowWindowHotkey(loaded.showWindowHotkey);
     await connect(loaded.serverUrl);
@@ -375,6 +388,7 @@
     }
 
     await saveSettings(next);
+    await applyOpenPetsSettings(next.openPets);
     await applyMinimizeToTraySetting(next.minimizeToTray);
     const hotkeyResult = await applyShowWindowHotkey(next.showWindowHotkey);
     if (!hotkeyResult.ok) {
@@ -608,7 +622,7 @@
           });
         },
         onPending: () => {
-          pending = true;
+          setPendingState(true);
         },
       });
     } catch (error) {
@@ -722,10 +736,11 @@
     }
     try {
       await sendChatMessageWithConversation(wsService, $sessionState.sessionId, text, { files });
-      pending = true;
+      setPendingState(true);
       playUiSound("send");
     } catch (error) {
-      pending = false;
+      setPendingState(false);
+      openPetsContext.markRequestFailed();
       chatMessages.addMessage({
         id: crypto.randomUUID(),
         role: "system",
@@ -740,7 +755,7 @@
   }
 
   async function handleStopRequest(): Promise<void> {
-    pending = false;
+    setPendingState(false);
     await stopActiveChatRequest(wsService);
   }
 
@@ -826,7 +841,7 @@
     const conn = $connectionStatus;
     const prev = prevConnection;
     if (prev === "connected" && conn !== "connected" && pending) {
-      pending = false;
+      setPendingState(false);
       toastService.show({
         type: "error",
         message: getTranslateFn()("chatView.connectionLost"),
@@ -925,6 +940,7 @@
         fileAccess={$settings.fileAccess}
         shellAccess={$settings.shellAccess}
         chatTtsMode={$settings.chatTtsMode}
+        openPets={$settings.openPets}
         connectionStatus={$connectionStatus}
         sessionStatus={$sessionState.status}
         sessionId={$sessionState.sessionId}

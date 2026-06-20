@@ -1,6 +1,6 @@
 [[permission]]
 identifier = "agodesk-commands"
-description = "Allows agodesk credential, desktop, file, tray, and websocket commands."
+description = "Allows agodesk credential, desktop, file, openpets, tray, and websocket commands."
 commands.allow = [
   "store_shared_key",
   "get_shared_key",
@@ -55,5 +55,10 @@ commands.allow = [
   "upload_chat_attachment",
   "integration_embed_open",
   "integration_embed_set_bounds",
-  "integration_embed_close"
+  "integration_embed_close",
+  "openpets_status",
+  "openpets_set_enabled",
+  "openpets_react",
+  "openpets_say",
+  "openpets_list_pets"
 ]

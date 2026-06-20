@@ -2204,6 +2204,24 @@ export interface UiSoundSettings {
   volume: number;
 }
 
+export interface OpenPetsSettings {
+  /** OpenPets-Desktop-App bei Agent-Aktivitaet steuern. */
+  enabled: boolean;
+  /** Optionales Agent-Pet statt Default-Pet (OpenPets Pet-ID). */
+  petId: string | null;
+  /** Pet auch bei aktiver Sprachsitzung reagieren lassen. */
+  reactToSpeech: boolean;
+  /** Kurze Statusnachrichten ueber openpets_say senden. */
+  showMessages: boolean;
+}
+
+export const DEFAULT_OPENPETS_SETTINGS: OpenPetsSettings = {
+  enabled: false,
+  petId: null,
+  reactToSpeech: true,
+  showMessages: false,
+};
+
 /** Speech pipeline backend: cloud Gemini, hybrid local ASR + online TTS, or fully offline. */
 export type SpeechProvider = "gemini_live" | "hybrid" | "offline";
 
@@ -2356,6 +2374,8 @@ export interface AppSettings {
   chatTtsMode: ChatTtsMode;
   /** Lautsprecher/Stummschaltung für Chat-Sprachausgabe (Statusleiste). */
   chatSpeakerMode: boolean;
+  /** OpenPets Desktop-Pet Integration. */
+  openPets: OpenPetsSettings;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -2372,6 +2392,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   shellAccess: { ...DEFAULT_SHELL_ACCESS_SETTINGS },
   chatTtsMode: "auto",
   chatSpeakerMode: true,
+  openPets: { ...DEFAULT_OPENPETS_SETTINGS },
 };
 
 export const PROTOCOL_VERSION = "agodesk.v1";

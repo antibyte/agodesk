@@ -5,8 +5,9 @@ use fff_search::{
     AiGrepConfig, FuzzySearchOptions, GrepMode, GrepSearchOptions, PaginationArgs, QueryParser,
 };
 use regex::RegexBuilder;
-use tauri::State;
+use tauri::{AppHandle, State};
 
+use crate::access_policy::resolve_authorized_file_roots;
 use crate::files::access::{is_within_root, resolve_directory, resolve_file_path};
 use crate::files::search::format::{
     self, FileSearchMatch, find_data, grep_count_data, grep_recursive_count_data, matches_to_json,
@@ -24,24 +25,29 @@ const MAX_GREP_MATCHES_PER_FILE: usize = 10_000;
 
 #[tauri::command]
 pub fn file_search_sync_roots(
+    app: AppHandle,
     state: State<'_, FileSearchState>,
     roots: Vec<FileAccessRootInput>,
 ) -> Result<(), String> {
+    let roots = resolve_authorized_file_roots(&app, &roots)?;
     state.sync_roots(&roots)
 }
 
 #[tauri::command]
 pub fn file_search_rescan(
+    app: AppHandle,
     state: State<'_, FileSearchState>,
     roots: Vec<FileAccessRootInput>,
     root_id: String,
 ) -> Result<(), String> {
+    let roots = resolve_authorized_file_roots(&app, &roots)?;
     state.rescan_root(&roots, root_id.trim())
 }
 
 #[tauri::command]
 #[allow(clippy::too_many_arguments)]
 pub fn file_search(
+    app: AppHandle,
     state: State<'_, FileSearchState>,
     roots: Vec<FileAccessRootInput>,
     root_id: Option<String>,
@@ -51,6 +57,7 @@ pub fn file_search(
     glob: Option<String>,
     output_mode: Option<String>,
 ) -> Result<String, String> {
+    let roots = resolve_authorized_file_roots(&app, &roots)?;
     ensure_file_access_enabled(&roots)?;
 
     let op = operation.trim();

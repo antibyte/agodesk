@@ -2,6 +2,7 @@
   import { onMount } from "svelte";
   import ChatView from "./lib/components/ChatView.svelte";
   import UiSoundBridge from "./lib/components/UiSoundBridge.svelte";
+  import OpenPetsBridge from "./lib/components/OpenPetsBridge.svelte";
   import ToastContainer from "./lib/components/ToastContainer.svelte";
 
   onMount(() => {
@@ -13,6 +14,7 @@
 
 <div class="app-window">
   <UiSoundBridge />
+  <OpenPetsBridge />
   <ToastContainer />
   <ChatView />
 </div>

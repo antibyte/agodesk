@@ -6,7 +6,9 @@ use std::time::UNIX_EPOCH;
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use chrono::{DateTime, Utc};
 use sha2::{Digest, Sha256};
+use tauri::AppHandle;
 
+use crate::access_policy::{clamp_read_bytes, clamp_write_bytes, resolve_authorized_file_roots};
 use super::access::{canonicalize_path, resolve_file_path, resolve_file_path_for_write, validate_parent_directory};
 use super::types::{
     FileAccessRootInput, FileListEntry, FileListResult, FilePermission, FileReadResult,
@@ -18,11 +20,13 @@ const MAX_LIST_DEPTH: usize = 8;
 
 #[tauri::command]
 pub fn file_list(
+    app: AppHandle,
     roots: Vec<FileAccessRootInput>,
     root_id: Option<String>,
     path: String,
     recursive: bool,
 ) -> Result<FileListResult, String> {
+    let roots = resolve_authorized_file_roots(&app, &roots)?;
     let resolved = resolve_file_path(&roots, root_id.as_deref(), &path)?;
     ensure_permission(&roots, &resolved.root_id, FilePermission::Read)?;
 
@@ -100,16 +104,15 @@ fn collect_entries(
 
 #[tauri::command]
 pub fn file_read(
+    app: AppHandle,
     roots: Vec<FileAccessRootInput>,
     root_id: Option<String>,
     path: String,
     max_bytes: u64,
     encoding: Option<String>,
 ) -> Result<FileReadResult, String> {
-    if max_bytes == 0 {
-        return Err("FILE_TOO_LARGE".to_string());
-    }
-
+    let max_bytes = clamp_read_bytes(&app, max_bytes)?;
+    let roots = resolve_authorized_file_roots(&app, &roots)?;
     let resolved = resolve_file_path(&roots, root_id.as_deref(), &path)?;
     ensure_permission(&roots, &resolved.root_id, FilePermission::Read)?;
 
@@ -175,6 +178,7 @@ fn decode_utf8_text(bytes: &[u8]) -> Result<String, String> {
 
 #[tauri::command]
 pub fn file_write(
+    app: AppHandle,
     roots: Vec<FileAccessRootInput>,
     root_id: Option<String>,
     path: String,
@@ -183,11 +187,13 @@ pub fn file_write(
     expected_hash: Option<String>,
     create_only: bool,
 ) -> Result<FileWriteResult, String> {
+    let max_bytes = clamp_write_bytes(&app, max_bytes)?;
     let bytes = content.as_bytes();
     if bytes.len() as u64 > max_bytes {
         return Err("FILE_TOO_LARGE".to_string());
     }
 
+    let roots = resolve_authorized_file_roots(&app, &roots)?;
     let resolved = resolve_file_path_for_write(&roots, root_id.as_deref(), &path)?;
     ensure_permission(&roots, &resolved.root_id, FilePermission::Write)?;
     validate_parent_directory(&resolved.absolute_path)?;

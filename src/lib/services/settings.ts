@@ -4,6 +4,7 @@ import type {
   ChatTtsMode,
   FileAccessRoot,
   FileAccessSettings,
+  OpenPetsSettings,
   ShellAccessCwd,
   ShellAccessSettings,
   ShellKind,
@@ -13,6 +14,7 @@ import type {
 } from "../types/protocol";
 import {
   DEFAULT_FILE_ACCESS_SETTINGS,
+  DEFAULT_OPENPETS_SETTINGS,
   DEFAULT_SETTINGS,
   DEFAULT_SHELL_ACCESS_SETTINGS,
   DEFAULT_SPEECH_SETTINGS,
@@ -296,6 +298,23 @@ export function normalizeShellAccessSettings(
   };
 }
 
+function normalizeOpenPetsSettings(saved: Partial<OpenPetsSettings> | undefined): OpenPetsSettings {
+  const petId =
+    typeof saved?.petId === "string" && saved.petId.trim().length > 0 ? saved.petId.trim() : null;
+  return {
+    enabled: typeof saved?.enabled === "boolean" ? saved.enabled : DEFAULT_OPENPETS_SETTINGS.enabled,
+    petId,
+    reactToSpeech:
+      typeof saved?.reactToSpeech === "boolean"
+        ? saved.reactToSpeech
+        : DEFAULT_OPENPETS_SETTINGS.reactToSpeech,
+    showMessages:
+      typeof saved?.showMessages === "boolean"
+        ? saved.showMessages
+        : DEFAULT_OPENPETS_SETTINGS.showMessages,
+  };
+}
+
 export function normalizeAppSettings(saved: Partial<AppSettings> | null | undefined): AppSettings {
   const theme = saved?.theme;
   const serverUrl = normalizeServerUrl(saved?.serverUrl ?? DEFAULT_SETTINGS.serverUrl);
@@ -333,6 +352,7 @@ export function normalizeAppSettings(saved: Partial<AppSettings> | null | undefi
       typeof saved?.chatSpeakerMode === "boolean"
         ? saved.chatSpeakerMode
         : DEFAULT_SETTINGS.chatSpeakerMode,
+    openPets: normalizeOpenPetsSettings(saved?.openPets),
   };
 }
 

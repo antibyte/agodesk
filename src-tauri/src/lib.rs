@@ -1,8 +1,10 @@
+mod access_policy;
 mod commands;
 pub mod computer_use;
 mod desktop;
 mod files;
 mod integration_embed;
+mod openpets;
 pub mod speech;
 mod shell;
 mod tray;
@@ -25,6 +27,7 @@ pub fn run() {
         .manage(WsTransportState::default())
         .manage(TrayState::default())
         .manage(computer_use::browser::BrowserState::default())
+        .manage(openpets::OpenPetsState::default())
         .setup(|app| {
             speech::runtime::init_sherpa_runtime();
             speech::asr::normalize_legacy_model_layouts();
@@ -125,12 +128,20 @@ pub fn run() {
             commands::speech_sidecar_ping,
             commands::speech_sidecar_transcribe,
             commands::speech_sidecar_synthesize,
+            openpets::commands::openpets_status,
+            openpets::commands::openpets_set_enabled,
+            openpets::commands::openpets_react,
+            openpets::commands::openpets_say,
+            openpets::commands::openpets_list_pets,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|app_handle, event| {
             if matches!(event, RunEvent::Exit) {
                 tray::prepare_tray_for_exit(app_handle);
+                if let Some(state) = app_handle.try_state::<openpets::OpenPetsState>() {
+                    tauri::async_runtime::block_on(state.shutdown());
+                }
             }
         });
 }

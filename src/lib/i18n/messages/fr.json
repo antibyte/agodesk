@@ -35,6 +35,8 @@
   "settings.section.device.hint": "Appairage et session",
   "settings.section.appearance.label": "Apparence",
   "settings.section.appearance.hint": "Thème et interface",
+  "settings.section.openpets.label": "OpenPets",
+  "settings.section.openpets.hint": "Desktop pet",
   "settings.section.language.label": "Langue",
   "settings.section.language.hint": "Langue de l'interface",
   "settings.section.desktop.label": "Bureau",
@@ -546,5 +548,17 @@
   "update.banner.progress": "{percent} % téléchargé",
   "update.toast.upToDate": "agodesk est déjà à jour.",
   "update.toast.failed": "Échec de la vérification des mises à jour.",
-  "update.toast.installed": "Mise à jour installée. Redémarrage de l’application…"
+  "update.toast.installed": "Mise à jour installée. Redémarrage de l’application…",
+  "settings.openpets.title": "OpenPets Desktop-Pet",
+  "settings.openpets.description": "Steuert die externe OpenPets-App über lokales IPC, wenn der Agent arbeitet. OpenPets muss separat installiert und im Infobereich laufen.",
+  "settings.openpets.enable": "OpenPets-Integration aktivieren",
+  "settings.openpets.requirement": "Voraussetzung: OpenPets Desktop-App läuft (https://openpets.dev).",
+  "settings.openpets.pet.label": "Agent-Pet",
+  "settings.openpets.pet.default": "Standard-Pet (OpenPets Default)",
+  "settings.openpets.pet.help": "Optional ein bestimmtes installiertes Pet für agodesk-Leases wählen.",
+  "settings.openpets.reactToSpeech": "Bei aktiver Sprachsitzung reagieren",
+  "settings.openpets.showMessages": "Kurze Statusnachrichten anzeigen",
+  "settings.openpets.status.loading": "OpenPets-Status wird geprüft …",
+  "settings.openpets.status.reachable": "Erreichbar (Version {version}, Pet: {pet})",
+  "settings.openpets.status.unavailable": "OpenPets ist nicht erreichbar. Bitte Desktop-App starten."
 }

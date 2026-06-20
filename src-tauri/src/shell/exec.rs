@@ -1,9 +1,11 @@
 use std::io::Read;
-use std::path::Path;
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
 use serde::{Deserialize, Serialize};
+use tauri::AppHandle;
+
+use crate::access_policy::validate_shell_exec;
 
 #[derive(Debug, Deserialize)]
 pub struct ShellExecRequest {
@@ -26,23 +28,20 @@ pub struct ShellExecResponse {
 }
 
 #[tauri::command]
-pub async fn shell_exec(request: ShellExecRequest) -> Result<ShellExecResponse, String> {
-    if request.command.trim().is_empty() {
-        return Err("SHELL_COMMAND_REJECTED: command is empty".to_string());
-    }
-    if request.max_output_bytes == 0 {
-        return Err("SHELL_OUTPUT_TOO_LARGE: output limit is zero".to_string());
-    }
+pub async fn shell_exec(app: AppHandle, request: ShellExecRequest) -> Result<ShellExecResponse, String> {
+    let validated = validate_shell_exec(&app, &request)?;
+    let timeout = Duration::from_millis(validated.timeout_ms);
+    let shell = validated.shell.clone();
 
-    let cwd = Path::new(&request.cwd);
-    if !cwd.is_dir() {
-        return Err("SHELL_ACCESS_DENIED: working directory is unavailable".to_string());
-    }
+    let exec_request = ShellExecRequest {
+        command: validated.command,
+        cwd: validated.cwd,
+        shell: validated.shell,
+        timeout_ms: validated.timeout_ms,
+        max_output_bytes: validated.max_output_bytes,
+    };
 
-    let shell = request.shell.trim().to_lowercase();
-    let timeout = Duration::from_millis(request.timeout_ms.max(1));
-
-    tauri::async_runtime::spawn_blocking(move || run_shell_command(request, &shell, timeout))
+    tauri::async_runtime::spawn_blocking(move || run_shell_command(exec_request, &shell, timeout))
         .await
         .map_err(|error| format!("SHELL_SPAWN_FAILED: {error}"))?
 }
