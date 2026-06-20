@@ -4,15 +4,46 @@
  * Falls back to unsigned bundles when secrets are missing or malformed.
  */
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 const tauriConfPath = path.join(root, "src-tauri", "tauri.conf.json");
 
-function readPrivateKey() {
+function readPrivateKeyRaw() {
   const raw = process.env.TAURI_SIGNING_PRIVATE_KEY?.trim();
   return raw || "";
+}
+
+export function normalizePrivateKey(raw) {
+  const trimmed = raw.trim();
+  if (!trimmed) {
+    return "";
+  }
+
+  if (!trimmed.includes("untrusted comment")) {
+    try {
+      const decoded = Buffer.from(trimmed, "base64").toString("utf8").trim();
+      if (decoded.includes("untrusted comment")) {
+        return decoded.replace(/\r\n/g, "\n");
+      }
+    } catch {
+      // fall through
+    }
+  }
+
+  const normalized = trimmed.replace(/\r\n/g, "\n");
+  if (normalized.includes("\n")) {
+    return normalized;
+  }
+
+  const singleLine = normalized.match(/^(untrusted comment: .+?) (RW[A-Za-z0-9+/=]+)$/);
+  if (singleLine) {
+    return `${singleLine[1]}\n${singleLine[2]}`;
+  }
+
+  return normalized;
 }
 
 export function validateTauriSigningKey(privateKey, password = process.env.TAURI_SIGNING_PRIVATE_KEY_PASSWORD) {
@@ -20,7 +51,7 @@ export function validateTauriSigningKey(privateKey, password = process.env.TAURI
     return {
       ok: false,
       reason:
-        "TAURI_SIGNING_PRIVATE_KEY is empty. Paste the full minisign private key (including the untrusted comment line).",
+        "TAURI_SIGNING_PRIVATE_KEY is empty. Paste the base64 .key file content or the full decoded minisign key.",
     };
   }
 
@@ -61,26 +92,56 @@ function setUpdaterArtifacts(enabled) {
   fs.writeFileSync(tauriConfPath, `${JSON.stringify(conf, null, 2)}\n`, "utf8");
 }
 
-function writeGithubOutput(signed, reason) {
+function writeGithubOutput(signed, reason, keyPath = "") {
   const outputPath = process.env.GITHUB_OUTPUT;
   if (!outputPath) {
     return;
   }
   const lines = [`signed=${signed ? "true" : "false"}`];
+  if (keyPath) {
+    lines.push(`key_path=${keyPath}`);
+  }
   if (reason) {
     lines.push(`reason<<EOF`, reason, `EOF`);
   }
   fs.appendFileSync(outputPath, `${lines.join("\n")}\n`, "utf8");
 }
 
+function writeGithubEnv(keyPath) {
+  const envPath = process.env.GITHUB_ENV;
+  if (!envPath) {
+    return;
+  }
+  fs.appendFileSync(
+    envPath,
+    [
+      `TAURI_SIGNING_PRIVATE_KEY_PATH=${keyPath}`,
+      "TAURI_SIGNING_PRIVATE_KEY=",
+    ].join("\n") + "\n",
+    "utf8",
+  );
+}
+
+function materializeSigningKey(privateKey) {
+  const keyPath = path.join(
+    process.env.RUNNER_TEMP || os.tmpdir(),
+    "tauri-signing.key",
+  );
+  fs.writeFileSync(keyPath, `${privateKey}\n`, { mode: 0o600 });
+  return keyPath;
+}
+
 function configure() {
-  const privateKey = readPrivateKey();
+  const privateKey = normalizePrivateKey(readPrivateKeyRaw());
   const validation = validateTauriSigningKey(privateKey);
 
   if (validation.ok) {
+    const keyPath = materializeSigningKey(privateKey);
     setUpdaterArtifacts(true);
-    writeGithubOutput(true, "");
+    writeGithubOutput(true, "", keyPath);
+    writeGithubEnv(keyPath);
     console.log("[release-signing] Updater signing enabled.");
+    console.log(`[release-signing] Private key materialized at ${keyPath}`);
     return;
   }
 
