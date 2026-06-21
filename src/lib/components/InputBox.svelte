@@ -408,34 +408,25 @@
   </div>
 
   {#if showFootnote}
-    <ul class="footnote ui-shortcut-grid" aria-label={$i18n("inputBox.shortcuts.ariaLabel")}>
-      <li>
+    <p class="footnote" aria-label={$i18n("inputBox.shortcuts.ariaLabel")}>
+      <span class="footnote-item">
         <span class="ui-kbd">Enter</span>
         <span>{$i18n("inputBox.shortcut.send")}</span>
-      </li>
-      <li>
-        <span class="shortcut-keys">
-          <span class="ui-kbd">Ctrl</span><span class="shortcut-plus">+</span><span class="ui-kbd"
-            >Enter</span
-          >
-        </span>
-        <span>{$i18n("inputBox.shortcut.ctrlSend")}</span>
-      </li>
-      <li>
+      </span>
+      <span class="footnote-sep" aria-hidden="true">·</span>
+      <span class="footnote-item">
         <span class="shortcut-keys">
           <span class="ui-kbd">Shift</span><span class="shortcut-plus">+</span><span class="ui-kbd"
             >Enter</span
           >
         </span>
         <span>{$i18n("inputBox.shortcut.newline")}</span>
-      </li>
+      </span>
       {#if attachmentsEnabled}
-        <li>
-          <span class="shortcut-spacer" aria-hidden="true"></span>
-          <span>{$i18n("inputBox.shortcut.attachments")}</span>
-        </li>
+        <span class="footnote-sep" aria-hidden="true">·</span>
+        <span class="footnote-item">{$i18n("inputBox.shortcut.attachments")}</span>
       {/if}
-    </ul>
+    </p>
   {/if}
 </form>
 
@@ -448,7 +439,7 @@
 
     gap: var(--space-2);
 
-    padding: var(--space-4) var(--space-5);
+    padding: var(--space-3) var(--space-5);
 
     border-top: 1px solid var(--color-border-subtle);
 
@@ -714,21 +705,28 @@
   }
 
   .footnote {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.25rem 0.45rem;
     margin: 0;
-    list-style: none;
-    padding: 0;
-
-    font-size: 0.6875rem;
-
+    padding: 0 0 0 var(--space-1);
+    font-size: 0.625rem;
+    line-height: 1.2;
     color: var(--color-muted);
-
-    padding-left: var(--space-1);
-
-    opacity: 0.85;
+    opacity: 0.8;
   }
 
-  .footnote li {
-    display: contents;
+  .footnote-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    white-space: nowrap;
+  }
+
+  .footnote-sep {
+    opacity: 0.45;
+    user-select: none;
   }
 
   .shortcut-keys {

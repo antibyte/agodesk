@@ -140,27 +140,6 @@
             },
           ]}
         />
-        <ul
-          class="tips glass-panel-subtle ui-shortcut-grid"
-          aria-label={$i18n("inputBox.shortcuts.ariaLabel")}
-        >
-          <li>
-            <span class="ui-kbd">Enter</span>
-            <span>{$i18n("messageList.tip.sendMessage")}</span>
-          </li>
-          <li>
-            <span class="shortcut-keys"
-              ><span class="ui-kbd">Shift</span><span class="shortcut-plus">+</span><span
-                class="ui-kbd">Enter</span
-              ></span
-            >
-            <span>{$i18n("messageList.tip.newline")}</span>
-          </li>
-          <li>
-            <span class="ui-kbd">{$i18n("messageList.tip.settingsLabel")}</span>
-            <span>{$i18n("messageList.tip.settingsDescription")}</span>
-          </li>
-        </ul>
       </div>
     {:else}
       {#each $chatMessages as message, index (message.id)}
@@ -247,29 +226,6 @@
     flex-direction: column;
     gap: var(--space-4);
     padding: var(--space-6) var(--space-4);
-  }
-
-  .tips {
-    padding: var(--space-4);
-    margin: 0;
-    border-radius: var(--radius-xl);
-    font-size: var(--font-size-sm);
-    color: var(--color-muted);
-  }
-
-  .tips li {
-    display: contents;
-  }
-
-  .shortcut-keys {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.2rem;
-  }
-
-  .shortcut-plus {
-    font-size: var(--font-size-xs);
-    color: var(--color-muted);
   }
 
   .day-divider {
