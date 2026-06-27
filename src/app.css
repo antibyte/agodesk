@@ -190,9 +190,12 @@
   --blur-strong: 32px;
 
   --color-panel-shadow: none;
-  --color-bubble-shadow: 0 4px 20px rgba(0, 0, 0, 0.2), 0 0 0 1px color-mix(in srgb, var(--color-accent) 5%, transparent);
+  --color-bubble-shadow:
+    0 4px 20px rgba(0, 0, 0, 0.2), 0 0 0 1px color-mix(in srgb, var(--color-accent) 5%, transparent);
   --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.18);
-  --shadow-2: 0 4px 20px rgba(0, 0, 0, 0.22), 0 0 0 1px color-mix(in srgb, var(--color-accent) 4%, transparent);
+  --shadow-2:
+    0 4px 20px rgba(0, 0, 0, 0.22),
+    0 0 0 1px color-mix(in srgb, var(--color-accent) 4%, transparent);
   --shadow-3: 0 24px 72px rgba(0, 0, 0, 0.32);
   --accent-glow:
     0 0 0 1px color-mix(in srgb, var(--color-accent) 25%, transparent),
@@ -705,13 +708,22 @@ select {
 }
 
 .ui-entry {
-  animation: ui-entry var(--entry-duration, 650ms) var(--entry-ease, cubic-bezier(0.22, 1, 0.36, 1)) both;
+  animation: ui-entry var(--entry-duration, 650ms) var(--entry-ease, cubic-bezier(0.22, 1, 0.36, 1))
+    both;
 }
 
-.ui-entry-delay-1 { animation-delay: 80ms; }
-.ui-entry-delay-2 { animation-delay: 160ms; }
-.ui-entry-delay-3 { animation-delay: 240ms; }
-.ui-entry-delay-4 { animation-delay: 320ms; }
+.ui-entry-delay-1 {
+  animation-delay: 80ms;
+}
+.ui-entry-delay-2 {
+  animation-delay: 160ms;
+}
+.ui-entry-delay-3 {
+  animation-delay: 240ms;
+}
+.ui-entry-delay-4 {
+  animation-delay: 320ms;
+}
 
 @media (prefers-reduced-motion: reduce) {
   .ui-entry {

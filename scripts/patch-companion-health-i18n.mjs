@@ -4,7 +4,10 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-const messagesDir = path.join(path.dirname(fileURLToPath(import.meta.url)), "../src/lib/i18n/messages");
+const messagesDir = path.join(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "../src/lib/i18n/messages",
+);
 
 /** @type {Record<string, Record<string, string>>} */
 const TRANSLATIONS = {
