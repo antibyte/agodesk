@@ -4,7 +4,7 @@ Plattformunabhängiger Desktop-Chat-Client für agentic Frameworks. Verbindet si
 
 ## Voraussetzungen
 
-- [Node.js](https://nodejs.org/) 18+
+- [Node.js](https://nodejs.org/) 22+ (siehe `.nvmrc`)
 - [Rust](https://www.rust-lang.org/tools/install)
 - Windows: [Microsoft C++ Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/)
 

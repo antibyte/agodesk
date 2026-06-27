@@ -1,3 +1,6 @@
+# Local agent/design tooling
+.commandcode/
+
 # Development artifacts
 _create-tauri-app/
 _tauri-icons/
