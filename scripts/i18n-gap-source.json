@@ -1,0 +1,350 @@
+{
+  "certModal.host.label": {
+    "en": "Host",
+    "de": "Host"
+  },
+  "certModal.issuer.label": {
+    "en": "Issuer",
+    "de": "Issuer"
+  },
+  "certModal.subject.label": {
+    "en": "Subject",
+    "de": "Subject"
+  },
+  "chatMedia.stl.noViewer": {
+    "en": "STL preview is not available in AgoDesk.",
+    "de": "STL-Vorschau ist in AgoDesk nicht verfügbar."
+  },
+  "chatMedia.youtube.openExternal": {
+    "en": "Open on YouTube",
+    "de": "Auf YouTube öffnen"
+  },
+  "chatPlan.tasks.total": {
+    "en": "Total: {count}",
+    "de": "Gesamt: {count}"
+  },
+  "chatPlan.title": {
+    "en": "Plan",
+    "de": "Plan"
+  },
+  "chatView.history.messageCount": {
+    "en": "{count} messages",
+    "de": "{count} Nachrichten"
+  },
+  "chatView.stop.label": {
+    "en": "Stop",
+    "de": "Stopp"
+  },
+  "companionPresence.label.offline": {
+    "en": "Offline",
+    "de": "Offline"
+  },
+  "connection.status.error": {
+    "en": "Error",
+    "de": "Fehler"
+  },
+  "integrations.embed.title": {
+    "en": "Integration",
+    "de": "Integration"
+  },
+  "locale.setting.system": {
+    "en": "System",
+    "de": "System"
+  },
+  "messageBubble.sender.default": {
+    "en": "AuraGo Agent",
+    "de": "AuraGo Agent"
+  },
+  "remoteControl.operation.browserAction": {
+    "en": "Browser action",
+    "de": "Browser-Aktion"
+  },
+  "remoteControl.operation.browserConnect": {
+    "en": "Browser connect",
+    "de": "Browser verbinden"
+  },
+  "remoteControl.operation.browserDisconnect": {
+    "en": "Browser disconnect",
+    "de": "Browser trennen"
+  },
+  "remoteControl.operation.browserSnapshot": {
+    "en": "Browser snapshot",
+    "de": "Browser-Snapshot"
+  },
+  "remoteControl.operation.screenshot": {
+    "en": "Screenshot",
+    "de": "Screenshot"
+  },
+  "session.status.error": {
+    "en": "Error",
+    "de": "Fehler"
+  },
+  "session.status.loopback": {
+    "en": "Loopback dev",
+    "de": "Loopback-Dev"
+  },
+  "settings.about.protocol.label": {
+    "en": "Protocol",
+    "de": "Protokoll"
+  },
+  "settings.about.version.label": {
+    "en": "Version",
+    "de": "Version"
+  },
+  "settings.appearance.showWindowHotkey.invalidWarning": {
+    "en": "Invalid format. Example: Alt+Shift+G",
+    "de": "Ungültiges Format. Beispiel: Alt+Shift+G"
+  },
+  "settings.appearance.uiSounds.volume": {
+    "en": "Volume ({percent} %)",
+    "de": "Lautstärke ({percent} %)"
+  },
+  "settings.connection.session.label": {
+    "en": "Session",
+    "de": "Session"
+  },
+  "settings.connection.status.label": {
+    "en": "Status",
+    "de": "Status"
+  },
+  "settings.connection.transport.wss": {
+    "en": "WSS (TLS)",
+    "de": "WSS (TLS)"
+  },
+  "settings.connection.websocket.title": {
+    "en": "WebSocket server",
+    "de": "WebSocket-Server"
+  },
+  "settings.desktop.browser.enable": {
+    "en": "Browser automation enabled (Chrome/Edge CDP)",
+    "de": "Browser-Automatisierung aktiviert (Chrome/Edge CDP)"
+  },
+  "settings.desktop.browser.testing": {
+    "en": "Testing CDP connection (port 9222)…",
+    "de": "Teste CDP-Verbindung (Port 9222)…"
+  },
+  "settings.desktop.discovery.label": {
+    "en": "Discovery",
+    "de": "Discovery"
+  },
+  "settings.desktop.screenshots.label": {
+    "en": "Screenshots",
+    "de": "Screenshots"
+  },
+  "settings.device.hostname.label": {
+    "en": "Hostname",
+    "de": "Hostname"
+  },
+  "settings.device.platform.label": {
+    "en": "Platform",
+    "de": "Plattform"
+  },
+  "settings.fileAccess.negotiated.missing": {
+    "en": "missing in session.accepted",
+    "de": "fehlt in session.accepted"
+  },
+  "settings.health.companion.title": {
+    "en": "Companion",
+    "de": "Companion"
+  },
+  "settings.health.speech.provider": {
+    "en": "Provider: {provider}",
+    "de": "Provider: {provider}"
+  },
+  "settings.health.speech.title": {
+    "en": "Voice",
+    "de": "Sprache"
+  },
+  "settings.health.status.error": {
+    "en": "Error",
+    "de": "Fehler"
+  },
+  "settings.section.appearance.hint": {
+    "en": "Theme & UI",
+    "de": "Theme & UI"
+  },
+  "settings.section.desktop.label": {
+    "en": "Desktop",
+    "de": "Desktop"
+  },
+  "settings.section.openpets.hint": {
+    "en": "Desktop pet",
+    "de": "Desktop-Pet"
+  },
+  "settings.section.openpets.label": {
+    "en": "OpenPets",
+    "de": "OpenPets"
+  },
+  "settings.section.shell.label": {
+    "en": "Shell",
+    "de": "Shell"
+  },
+  "settings.section.speech.hint": {
+    "en": "Gemini Live",
+    "de": "Gemini Live"
+  },
+  "settings.shellAccess.disabledHelp": {
+    "en": "Disabled by default: agodesk does not advertise remote.shell.exec and rejects shell_exec.",
+    "de": "Deaktiviert (Standard): agodesk sendet keine remote.shell.exec-Capability und lehnt shell_exec ab."
+  },
+  "settings.shellAccess.limits.maxTimeout": {
+    "en": "Max timeout (ms)",
+    "de": "Max. Timeout (ms)"
+  },
+  "settings.shellAccess.negotiated.missing": {
+    "en": "missing in session.accepted",
+    "de": "fehlt in session.accepted"
+  },
+  "settings.shellAccess.shell": {
+    "en": "Shell",
+    "de": "Shell"
+  },
+  "settings.speech.apiKey.freeKeyLink": {
+    "en": "Google AI Studio",
+    "de": "Google AI Studio"
+  },
+  "settings.speech.apiKey.placeholderNew": {
+    "en": "AIza…",
+    "de": "AIza…"
+  },
+  "settings.speech.apiKey.statusLabel": {
+    "en": "Status:",
+    "de": "Status:"
+  },
+  "settings.speech.asrStatus.downloadButton": {
+    "en": "Download model",
+    "de": "Modell herunterladen"
+  },
+  "settings.speech.asrStatus.ready.whisper_small_de": {
+    "en": "Whisper Small ASR model found and ready.",
+    "de": "Whisper Small ASR-Modell gefunden und einsatzbereit."
+  },
+  "settings.speech.bargeInMode.energy": {
+    "en": "Energy (lightweight)",
+    "de": "Energy (leichtgewichtig)"
+  },
+  "settings.speech.bargeInMode.silero": {
+    "en": "Silero (robust)",
+    "de": "Silero (robust)"
+  },
+  "settings.speech.hybridTtsBackend.azure": {
+    "en": "Azure Speech",
+    "de": "Azure Speech"
+  },
+  "settings.speech.hybridTtsBackend.edgeTts": {
+    "en": "Microsoft Edge (edge-tts, online)",
+    "de": "Microsoft Edge (edge-tts, online)"
+  },
+  "settings.speech.hybridTtsBackend.label": {
+    "en": "TTS (hybrid)",
+    "de": "TTS (Hybrid)"
+  },
+  "settings.speech.modelId.placeholder": {
+    "en": "gemini-2.5-flash-native-audio-preview-12-2025",
+    "de": "gemini-2.5-flash-native-audio-preview-12-2025"
+  },
+  "settings.speech.provider.gemini_live.title": {
+    "en": "Google Gemini Live",
+    "de": "Google Gemini Live"
+  },
+  "settings.speech.provider.hybrid.title": {
+    "en": "Hybrid",
+    "de": "Hybrid"
+  },
+  "settings.speech.subsection.provider": {
+    "en": "Provider",
+    "de": "Anbieter"
+  },
+  "settings.speech.subsection.tests": {
+    "en": "Tests & API",
+    "de": "Tests & API"
+  },
+  "settings.speech.ttsStatus.downloadHint": {
+    "en": "From project root: npm run download:speech-tts",
+    "de": "Im Projektordner: npm run download:speech-tts"
+  },
+  "settings.speech.voiceName.label": {
+    "en": "Gemini Voice",
+    "de": "Gemini-Stimme"
+  },
+  "settingsPreset.auragoLan.label": {
+    "en": "AuraGo LAN",
+    "de": "AuraGo LAN"
+  },
+  "settingsPreset.loopbackMock.label": {
+    "en": "Loopback (mock)",
+    "de": "Loopback (Mock)"
+  },
+  "shellApproval.stopSession": {
+    "en": "Stop session",
+    "de": "Session beenden"
+  },
+  "shellApproval.timeout": {
+    "en": "Timeout",
+    "de": "Timeout"
+  },
+  "shellApproval.timeoutValue": {
+    "en": "{seconds} s",
+    "de": "{seconds} s"
+  },
+  "speechBanner.mode.agent": {
+    "en": "Agent",
+    "de": "Agent"
+  },
+  "speechBanner.mode.autoSend": {
+    "en": "→ AuraGo",
+    "de": "→ AuraGo"
+  },
+  "speechBanner.provider.gemini_live": {
+    "en": "Google",
+    "de": "Google"
+  },
+  "speechBanner.provider.hybrid": {
+    "en": "Hybrid",
+    "de": "Hybrid"
+  },
+  "speechBanner.provider.offline": {
+    "en": "Offline",
+    "de": "Offline"
+  },
+  "statusBar.session.accepted": {
+    "en": "Session active",
+    "de": "Session aktiv"
+  },
+  "theme.system": {
+    "en": "System",
+    "de": "System"
+  },
+  "tray.tooltip": {
+    "en": "agodesk",
+    "de": "agodesk"
+  },
+  "uiSoundTheme.classic": {
+    "en": "Classic",
+    "de": "Classic"
+  },
+  "uiSoundTheme.modern": {
+    "en": "Modern",
+    "de": "Modern"
+  },
+  "uiSoundTheme.soft": {
+    "en": "Soft",
+    "de": "Soft"
+  },
+  "uiSoundTheme.warm": {
+    "en": "Warm",
+    "de": "Warm"
+  },
+  "update.banner.later": {
+    "en": "Later",
+    "de": "Später"
+  },
+  "warnings.severity.error": {
+    "en": "Error",
+    "de": "Fehler"
+  },
+  "warnings.severity.info": {
+    "en": "Info",
+    "de": "Info"
+  }
+}
