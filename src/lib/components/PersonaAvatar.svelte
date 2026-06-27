@@ -123,7 +123,7 @@
     object-fit: cover;
     display: block;
     opacity: 0;
-    transition: opacity 200ms ease;
+    transition: opacity var(--transition-base);
   }
 
   .persona-avatar img.loaded {

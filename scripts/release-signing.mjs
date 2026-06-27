@@ -45,7 +45,10 @@ export function normalizePrivateKey(raw) {
   return normalized;
 }
 
-export function validateTauriSigningKey(privateKey, password = process.env.TAURI_SIGNING_PRIVATE_KEY_PASSWORD) {
+export function validateTauriSigningKey(
+  privateKey,
+  password = process.env.TAURI_SIGNING_PRIVATE_KEY_PASSWORD,
+) {
   if (!privateKey) {
     return {
       ok: false,
@@ -54,7 +57,10 @@ export function validateTauriSigningKey(privateKey, password = process.env.TAURI
     };
   }
 
-  if (!privateKey.includes("minisign private key") && !privateKey.includes("rsign encrypted secret key")) {
+  if (
+    !privateKey.includes("minisign private key") &&
+    !privateKey.includes("rsign encrypted secret key")
+  ) {
     return {
       ok: false,
       reason:
@@ -71,8 +77,7 @@ export function validateTauriSigningKey(privateKey, password = process.env.TAURI
   }
 
   const isRsignCiKey = privateKey.includes("rsign encrypted secret key");
-  const looksEncrypted =
-    privateKey.includes("encrypted secret key") && !isRsignCiKey;
+  const looksEncrypted = privateKey.includes("encrypted secret key") && !isRsignCiKey;
   if (looksEncrypted && !password?.trim()) {
     return {
       ok: false,
@@ -92,7 +97,11 @@ export function toTauriKeyEnvValue(rawSecret, normalizedPrivateKey) {
   return Buffer.from(`${normalizedPrivateKey}\n`, "utf8").toString("base64");
 }
 
-export function buildSigningEnv(rawSecret, normalizedPrivateKey, password = process.env.TAURI_SIGNING_PRIVATE_KEY_PASSWORD) {
+export function buildSigningEnv(
+  rawSecret,
+  normalizedPrivateKey,
+  password = process.env.TAURI_SIGNING_PRIVATE_KEY_PASSWORD,
+) {
   const env = {
     TAURI_SIGNING_PRIVATE_KEY: toTauriKeyEnvValue(rawSecret, normalizedPrivateKey),
   };
@@ -154,8 +163,7 @@ function configure() {
 
 const command = process.argv[2] ?? "configure";
 const isMain =
-  process.argv[1] &&
-  path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url));
+  process.argv[1] && path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url));
 
 if (isMain) {
   if (command === "configure") {

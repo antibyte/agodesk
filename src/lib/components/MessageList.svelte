@@ -214,7 +214,7 @@
 
     .message-list :global(.message-row) {
       width: 100%;
-      max-width: 720px;
+      max-width: 820px;
     }
   }
 
@@ -253,7 +253,7 @@
     flex-direction: column;
     gap: var(--space-3);
     width: 100%;
-    max-width: 720px;
+    max-width: 820px;
     margin: 0 auto;
   }
 
@@ -271,7 +271,7 @@
     border-radius: var(--radius-full);
     background: var(--color-accent);
     opacity: 0.45;
-    animation: typing-bounce 1.2s ease-in-out infinite;
+    animation: typing-bounce 1.2s cubic-bezier(0.22, 1, 0.36, 1) infinite;
   }
 
   .typing span:nth-child(2) {

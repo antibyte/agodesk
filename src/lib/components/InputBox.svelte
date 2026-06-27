@@ -333,7 +333,7 @@
     <p class="attachment-error" role="alert">{attachmentError}</p>
   {/if}
 
-  <div class="composer glass-panel-subtle">
+  <div class="composer">
     <div class="row">
       {#if attachmentsEnabled}
         <input
@@ -544,15 +544,18 @@
   }
 
   .composer {
-    border-radius: var(--radius-xl);
-
-    padding: 0.35rem;
-
-    border: 1px solid var(--color-border);
-
+    border-radius: var(--radius-2xl);
+    padding: 5px;
+    background: color-mix(in srgb, var(--glass-surface) 35%, transparent);
+    border: 1px solid var(--color-border-subtle);
     transition:
       border-color var(--transition-fast),
       box-shadow var(--transition-fast);
+  }
+  .composer > :global(.row) {
+    border-radius: calc(var(--radius-2xl) - 5px);
+    background: var(--glass-surface);
+    box-shadow: inset 0 1px 0 var(--glass-highlight);
   }
 
   .row {

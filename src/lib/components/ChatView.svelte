@@ -1154,6 +1154,7 @@
     min-height: 0;
     color: var(--color-text-muted);
     font-size: 0.95rem;
+    animation: view-enter 400ms cubic-bezier(0.22, 1, 0.36, 1) both;
   }
 
   .app-shell {
@@ -1176,6 +1177,18 @@
     height: 100%;
     position: relative;
     overflow: hidden;
+    animation: view-enter 400ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  @keyframes view-enter {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
   }
 
   .chat-view > :not(.speech-bg) {
@@ -1206,5 +1219,12 @@
     border-left: none;
     border-right: none;
     border-top: none;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .chat-view,
+    .settings-loading {
+      animation: none;
+    }
   }
 </style>

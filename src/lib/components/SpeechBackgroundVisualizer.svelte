@@ -443,7 +443,7 @@
     overflow: hidden;
     pointer-events: none;
     opacity: 0;
-    transition: opacity 0.55s ease;
+    transition: opacity 0.55s cubic-bezier(0.22, 1, 0.36, 1);
   }
 
   .speech-bg.visible {

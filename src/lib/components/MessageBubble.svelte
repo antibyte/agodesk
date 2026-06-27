@@ -88,12 +88,12 @@
     display: flex;
     gap: var(--space-2);
     align-items: flex-end;
-    max-width: min(88%, 680px);
+    max-width: min(88%, 780px);
   }
 
   @media (min-width: 1024px) {
     .message-row {
-      max-width: min(88%, 720px);
+      max-width: min(88%, 820px);
     }
   }
 
@@ -179,8 +179,6 @@
     color: var(--color-assistant-text);
     border: 1px solid var(--color-assistant-border);
     box-shadow: var(--color-bubble-shadow);
-    backdrop-filter: blur(calc(var(--blur) * 0.4));
-    -webkit-backdrop-filter: blur(calc(var(--blur) * 0.4));
   }
 
   .assistant .bubble.tail-assistant {
@@ -204,8 +202,6 @@
     border-radius: var(--radius-lg);
     text-align: center;
     font-size: 0.8125rem;
-    backdrop-filter: blur(calc(var(--blur) * 0.4));
-    -webkit-backdrop-filter: blur(calc(var(--blur) * 0.4));
     box-shadow: var(--shadow-1);
   }
 

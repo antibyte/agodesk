@@ -71,6 +71,7 @@
 
 <style>
   .companion-card {
+    position: relative;
     display: flex;
     flex-direction: column;
     align-items: stretch;
@@ -165,6 +166,8 @@
     margin: 0;
     font-size: var(--font-size-sm);
     color: var(--color-text);
+    overflow-wrap: anywhere;
+    line-height: var(--line-height-normal);
   }
 
   @media (prefers-reduced-motion: no-preference) {
@@ -182,11 +185,7 @@
         color-mix(in srgb, var(--color-accent) 22%, transparent),
         transparent 70%
       );
-      animation: companion-aura 2.8s ease-in-out infinite;
-    }
-
-    .companion-card {
-      position: relative;
+      animation: companion-aura 2.8s cubic-bezier(0.22, 1, 0.36, 1) infinite;
     }
   }
 

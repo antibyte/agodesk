@@ -672,4 +672,19 @@
       max-width: 8rem;
     }
   }
+
+  @media (max-width: 560px) {
+    .status-pill .url {
+      display: none;
+    }
+
+    .status-pill {
+      padding: var(--space-1) var(--space-2);
+      gap: var(--space-2);
+    }
+
+    .actions {
+      gap: var(--space-1);
+    }
+  }
 </style>

@@ -152,7 +152,7 @@
   "messageBubble.sender.default": "AuraGo Agent",
   "messageBubble.sender.fallback": "AI",
   "messageBubble.userAvatar": "DU",
-  "messageList.empty.description": "Dein Desktop-Chat für AuraGo. Nach der Verbindung kann der Agent dir antworten — und mit deiner Freigabe Screenshots erstellen.",
+  "messageList.empty.description": "Dein Desktop-Chat für AuraGo. Nach der Verbindung antwortet der Agent im Chat und per Sprache. Mit deiner Freigabe kann er Screenshots erstellen, deinen Desktop steuern, Dateien durchsuchen, Shell-Befehle ausführen und Anhänge verarbeiten — nur in den von dir erlaubten Bereichen.",
   "messageList.empty.pairDevice": "Gerät koppeln",
   "messageList.empty.title": "Willkommen bei agodesk",
   "messageList.scrollBadge.overflow": "99+",
