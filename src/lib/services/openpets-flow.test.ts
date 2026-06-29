@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   deriveOpenPetsReaction,
   deriveOpenPetsStatusMessage,
+  resolveOpenPetsPetLabel,
   type OpenPetsLifecycleInput,
 } from "./openpets-flow.ts";
 
@@ -47,4 +48,16 @@ test("deriveOpenPetsStatusMessage liefert nur bei showMessages Text", () => {
     "Agent denkt nach",
   );
   assert.equal(deriveOpenPetsStatusMessage("thinking", baseInput()), null);
+});
+
+test("resolveOpenPetsPetLabel nutzt Katalog-Fallback", () => {
+  const pets = [{ id: "cloud-puff", displayName: "Cloud Puff", builtIn: false, broken: false }];
+  assert.equal(
+    resolveOpenPetsPetLabel({ petId: "cloud-puff", petName: null }, pets, "builtin"),
+    "Cloud Puff",
+  );
+  assert.equal(
+    resolveOpenPetsPetLabel({ petId: null, petName: null }, pets, "cloud-puff"),
+    "Cloud Puff",
+  );
 });

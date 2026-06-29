@@ -23,7 +23,7 @@ import type {
   WsMessage,
 } from "../types/protocol";
 import type { DesktopStreamStartParams, DesktopStreamStopParams } from "../types/protocol";
-import { resolveFileCommandPath } from "../types/protocol";
+import { isBrowserTabAction, resolveFileCommandPath } from "../types/protocol";
 import { settings } from "../stores/settings";
 import { resetDesktopStreamState, startDesktopStream, stopDesktopStream } from "./desktop-stream";
 import { listRemoteFiles, readRemoteFile, writeRemoteFile } from "./file-commands";
@@ -716,7 +716,7 @@ export async function executeDesktopCommand(
       }
       case "desktop_browser_action": {
         const action = String(params.action ?? "click");
-        const tabOnly = action === "select_tab" || action === "new_tab" || action === "close_tab";
+        const tabOnly = isBrowserTabAction({ action });
         if (!tabOnly) {
           const status = await controlPermissionStatus();
           if (!status.input_injection) {

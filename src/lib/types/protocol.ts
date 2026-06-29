@@ -1747,14 +1747,20 @@ export const DESKTOP_INPUT_OPERATIONS = [
   "desktop_browser_action",
 ] as const;
 
-const BROWSER_TAB_ACTIONS = new Set(["select_tab", "new_tab", "close_tab"]);
+const BROWSER_PASSIVE_ACTIONS = new Set([
+  "select_tab",
+  "new_tab",
+  "close_tab",
+  "wait_for_selector",
+  "wait_for_navigation",
+]);
 
 export function isBrowserTabAction(params?: unknown): boolean {
   if (!params || typeof params !== "object") {
     return false;
   }
   const action = (params as Record<string, unknown>).action;
-  return typeof action === "string" && BROWSER_TAB_ACTIONS.has(action);
+  return typeof action === "string" && BROWSER_PASSIVE_ACTIONS.has(action);
 }
 
 export const DESKTOP_STREAM_OPERATIONS: DesktopOperation[] = [

@@ -79,6 +79,7 @@
   import {
     fetchOpenPetsPets,
     fetchOpenPetsStatus,
+    resolveOpenPetsPetLabel,
     type OpenPetsPetListItem,
     type OpenPetsStatusResult,
   } from "../services/openpets-flow";
@@ -208,6 +209,7 @@
   let draftOpenPetsShowMessages = $state(false);
   let openPetsStatus = $state<OpenPetsStatusResult | null>(null);
   let openPetsPets = $state<OpenPetsPetListItem[]>([]);
+  let openPetsDefaultPetId = $state<string | null>(null);
   let openPetsCatalogBusy = $state(false);
   let draftSpeech = $state<SpeechSettings>({ ...DEFAULT_SPEECH_SETTINGS });
   let draftUiSoundEnabled = $state(true);
@@ -423,6 +425,7 @@
     try {
       const [status, catalog] = await Promise.all([fetchOpenPetsStatus(), fetchOpenPetsPets()]);
       openPetsStatus = status;
+      openPetsDefaultPetId = catalog.defaultPetId ?? null;
       openPetsPets = catalog.pets.filter((pet) => !pet.broken);
     } catch {
       openPetsStatus = {
@@ -431,6 +434,7 @@
         unavailableReason: "OpenPets desktop app or local IPC is unavailable.",
       };
       openPetsPets = [];
+      openPetsDefaultPetId = null;
     } finally {
       openPetsCatalogBusy = false;
     }
@@ -1320,7 +1324,11 @@
                   <p>
                     {$i18n("settings.openpets.status.reachable", {
                       version: openPetsStatus.appVersion ?? "?",
-                      pet: openPetsStatus.petName ?? openPetsStatus.petId ?? "?",
+                      pet: resolveOpenPetsPetLabel(
+                        openPetsStatus,
+                        openPetsPets,
+                        openPetsDefaultPetId,
+                      ),
                     })}
                   </p>
                 {:else}

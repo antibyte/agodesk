@@ -1,14 +1,14 @@
+use std::future::Future;
 use std::process::Child;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use base64::{engine::general_purpose::STANDARD, Engine as _};
-use chromiumoxide::browser::{Browser, BrowserConfig};
+use chromiumoxide::browser::Browser;
 use chromiumoxide::cdp::browser_protocol::page::CaptureScreenshotFormat;
 use chromiumoxide::cdp::browser_protocol::target::TargetId;
 use chromiumoxide::page::{Page, ScreenshotParams};
 use chromiumoxide::Handler;
 use futures_util::StreamExt;
-use image::GenericImageView;
 use image::ImageReader;
 use tokio::task::JoinHandle;
 
@@ -21,14 +21,16 @@ use super::endpoint::{ConnectPlan, ELEMENT_NOT_FOUND, INPUT_NOT_APPROVED};
 use super::launch;
 use super::state::BrowserState;
 
-const MAX_HTML_BYTES: usize = 512 * 1024;
-const ATTACH_RETRY_MS: u64 = 500;
-const ATTACH_RETRY_COUNT: usize = 10;
+const MAX_CONTENT_BYTES: usize = 512 * 1024;
+const ATTACH_POLL_MS: u64 = 200;
+const ATTACH_POLL_COUNT: usize = 50;
+const CDP_OPERATION_TIMEOUT: Duration = Duration::from_secs(60);
+const HEALTH_CHECK_TIMEOUT: Duration = Duration::from_secs(5);
+const DEFAULT_WAIT_MS: u64 = 30_000;
 
 pub struct CdpSession {
     #[allow(dead_code)]
     pub endpoint: String,
-    #[allow(dead_code)]
     pub launched: bool,
     #[allow(dead_code)]
     pub auto_launch: bool,
@@ -53,7 +55,9 @@ pub async fn connect(
             let (_binary, child) = launch::spawn_browser(plan.port, plan.url.as_deref())?;
             launched_child = Some(child);
             launched = true;
-            attach_with_retry(&plan.endpoint).await.map_err(|_| first_error)?
+            wait_and_attach(&plan.endpoint)
+                .await
+                .map_err(|_| first_error)?
         }
         Err(error) => return Err(error),
     };
@@ -63,7 +67,6 @@ pub async fn connect(
         .fetch_targets()
         .await
         .map_err(|error| map_connect_error(&plan.endpoint, error))?;
-    tokio::time::sleep(Duration::from_millis(300)).await;
 
     let page = select_page(&browser, plan.url.as_deref()).await?;
     let active_target_id = page.target_id().as_ref().to_string();
@@ -92,72 +95,80 @@ pub async fn connect(
 }
 
 pub async fn list_tabs(state: &BrowserState) -> Result<BrowserTabListResult, String> {
+    ensure_session_alive(state).await?;
     let guard = state.session.lock().await;
     let session = session_ref(&guard)?;
-    collect_tabs(session).await
+    collect_tabs(&session.browser, &session.active_target_id).await
 }
 
 pub async fn snapshot(
     state: &BrowserState,
     params: BrowserSnapshotParams,
 ) -> Result<BrowserSnapshotResult, String> {
-    let guard = state.session.lock().await;
-    let session = session_ref(&guard)?;
-    let page = resolve_page(session, params.tab_id.as_deref()).await?;
+    ensure_session_alive(state).await?;
+    let page = {
+        let guard = state.session.lock().await;
+        let session = session_ref(&guard)?;
+        resolve_page(session, params.tab_id.as_deref()).await?
+    };
     let tab_id = page.target_id().as_ref().to_string();
 
-    let url = page
-        .url()
-        .await
+    let url = with_cdp_timeout(page.url())
+        .await?
         .map_err(map_page_error)?
         .unwrap_or_default();
-    let title = page
-        .get_title()
-        .await
+    let title = with_cdp_timeout(page.get_title())
+        .await?
         .map_err(map_page_error)?
         .unwrap_or_default();
 
-    let text = if let Some(selector) = params.selector.as_deref() {
-        page.find_element(selector)
-            .await
+    let mut truncated = false;
+    let raw_text = if let Some(selector) = params.selector.as_deref() {
+        with_cdp_timeout(page.find_element(selector))
+            .await?
             .map_err(map_element_error)?
             .inner_text()
             .await
             .map_err(map_page_error)?
             .unwrap_or_default()
     } else {
-        page.evaluate("document.body ? document.body.innerText : ''")
-            .await
+        with_cdp_timeout(page.evaluate("document.body ? document.body.innerText : ''"))
+            .await?
             .map_err(map_page_error)?
             .into_value()
             .map_err(map_page_error)?
     };
+    let text = truncate_to_byte_limit(raw_text, MAX_CONTENT_BYTES, &mut truncated);
 
     let include_html = params.include_html.unwrap_or(false);
-    let mut truncated = false;
     let html = if include_html {
         let raw: String = if let Some(selector) = params.selector.as_deref() {
-            page.find_element(selector)
-                .await
+            with_cdp_timeout(page.find_element(selector))
+                .await?
                 .map_err(map_element_error)?
                 .inner_html()
                 .await
                 .map_err(map_page_error)?
                 .unwrap_or_default()
         } else {
-            page.evaluate("document.documentElement ? document.documentElement.outerHTML : ''")
-                .await
-                .map_err(map_page_error)?
-                .into_value()
-                .map_err(map_page_error)?
+            with_cdp_timeout(
+                page.evaluate("document.documentElement ? document.documentElement.outerHTML : ''"),
+            )
+            .await?
+            .map_err(map_page_error)?
+            .into_value()
+            .map_err(map_page_error)?
         };
-        Some(truncate_html(raw, &mut truncated))
+        Some(truncate_to_byte_limit(raw, MAX_CONTENT_BYTES, &mut truncated))
     } else {
         None
     };
 
     let screenshot = if params.include_screenshot.unwrap_or(false) {
-        Some(capture_page_screenshot(&page, &params).await?)
+        Some(
+            with_cdp_timeout(async { capture_page_screenshot(&page, &params).await })
+                .await??,
+        )
     } else {
         None
     };
@@ -185,6 +196,12 @@ pub async fn action(
         return tab_action(state, params).await;
     }
 
+    ensure_session_alive(state).await?;
+
+    if matches!(action.as_str(), "wait_for_navigation" | "wait_for_selector") {
+        return wait_action(state, params).await;
+    }
+
     let approved = crate::desktop::is_input_approved()?;
     if !approved {
         return Err(format!(
@@ -192,91 +209,162 @@ pub async fn action(
         ));
     }
 
-    let guard = state.session.lock().await;
-    let session = session_ref(&guard)?;
-    let page = resolve_page(session, params.tab_id.as_deref()).await?;
-    let selector = params
-        .selector
-        .clone()
-        .filter(|value| !value.trim().is_empty())
-        .ok_or_else(|| "Browser DOM actions require selector.".to_string())?;
+    let page = {
+        let guard = state.session.lock().await;
+        let session = session_ref(&guard)?;
+        resolve_page(session, params.tab_id.as_deref()).await?
+    };
 
     match action.as_str() {
-        "click" => {
-            page.find_element(&selector)
-                .await
-                .map_err(map_element_error)?
-                .click()
-                .await
+        "navigate" | "goto" => {
+            let url = params
+                .value
+                .clone()
+                .filter(|value| !value.trim().is_empty())
+                .ok_or_else(|| "Browser navigate requires value (URL).".to_string())?;
+            with_cdp_timeout(page.goto(url.as_str()))
+                .await?
                 .map_err(map_page_error)?;
+            Ok(serde_json::json!({
+                "action": params.action,
+                "url": url,
+                "success": true,
+            }))
         }
-        "focus" => {
-            page.find_element(&selector)
-                .await
-                .map_err(map_element_error)?
-                .click()
-                .await
-                .map_err(map_page_error)?;
-        }
-        "fill" | "set_value" => {
-            let value = params.value.unwrap_or_default();
-            let element = page
-                .find_element(&selector)
-                .await
-                .map_err(map_element_error)?;
-            element.click().await.map_err(map_page_error)?;
-            let script = format!(
-                "const el = document.querySelector({}); if (!el) throw new Error('missing'); el.focus(); el.value = {value_json}; el.dispatchEvent(new Event('input', {{ bubbles: true }})); el.dispatchEvent(new Event('change', {{ bubbles: true }}));",
-                serde_json::to_string(&selector).unwrap_or_else(|_| "\"\"".to_string()),
-                value_json = serde_json::to_string(&value).unwrap_or_else(|_| "\"\"".to_string())
-            );
-            page.evaluate(script.as_str())
-                .await
-                .map_err(map_page_error)?;
-        }
-        "type" => {
-            let value = params.value.unwrap_or_default();
-            page.find_element(&selector)
-                .await
-                .map_err(map_element_error)?
-                .type_str(&value)
-                .await
-                .map_err(map_page_error)?;
-        }
-        "press" => {
-            let key = params.value.unwrap_or_else(|| "Enter".to_string());
-            page.find_element(&selector)
-                .await
-                .map_err(map_element_error)?
-                .click()
-                .await
-                .map_err(map_page_error)?
-                .press_key(key.as_str())
-                .await
-                .map_err(map_page_error)?;
-        }
-        other => {
-            return Err(format!(
-                "DESKTOP_OPERATION_UNSUPPORTED: Unknown browser action '{other}'."
-            ));
-        }
-    }
+        "click" | "focus" | "fill" | "set_value" | "type" | "press" => {
+            let selector = params
+                .selector
+                .clone()
+                .filter(|value| !value.trim().is_empty())
+                .ok_or_else(|| "Browser DOM actions require selector.".to_string())?;
 
-    Ok(serde_json::json!({
-        "action": params.action,
-        "selector": selector,
-        "success": true,
-    }))
+            match action.as_str() {
+                "click" => {
+                    with_cdp_timeout(page.find_element(&selector))
+                        .await?
+                        .map_err(map_element_error)?
+                        .click()
+                        .await
+                        .map_err(map_page_error)?;
+                }
+                "focus" => {
+                    with_cdp_timeout(page.find_element(&selector))
+                        .await?
+                        .map_err(map_element_error)?
+                        .focus()
+                        .await
+                        .map_err(map_page_error)?;
+                }
+                "fill" | "set_value" => {
+                    let value = params.value.clone().unwrap_or_default();
+                    let element = with_cdp_timeout(page.find_element(&selector))
+                        .await?
+                        .map_err(map_element_error)?;
+                    element.focus().await.map_err(map_page_error)?;
+                    let script = format!(
+                        "const el = document.querySelector({}); if (!el) throw new Error('missing'); el.focus(); el.value = {value_json}; el.dispatchEvent(new Event('input', {{ bubbles: true }})); el.dispatchEvent(new Event('change', {{ bubbles: true }}));",
+                        serde_json::to_string(&selector).unwrap_or_else(|_| "\"\"".to_string()),
+                        value_json =
+                            serde_json::to_string(&value).unwrap_or_else(|_| "\"\"".to_string())
+                    );
+                    with_cdp_timeout(page.evaluate(script.as_str()))
+                        .await?
+                        .map_err(map_page_error)?;
+                }
+                "type" => {
+                    let value = params.value.clone().unwrap_or_default();
+                    with_cdp_timeout(page.find_element(&selector))
+                        .await?
+                        .map_err(map_element_error)?
+                        .type_str(&value)
+                        .await
+                        .map_err(map_page_error)?;
+                }
+                "press" => {
+                    let key = params
+                        .value
+                        .clone()
+                        .unwrap_or_else(|| "Enter".to_string());
+                    with_cdp_timeout(page.find_element(&selector))
+                        .await?
+                        .map_err(map_element_error)?
+                        .focus()
+                        .await
+                        .map_err(map_page_error)?
+                        .press_key(key.as_str())
+                        .await
+                        .map_err(map_page_error)?;
+                }
+                _ => unreachable!(),
+            }
+
+            Ok(serde_json::json!({
+                "action": params.action,
+                "selector": selector,
+                "success": true,
+            }))
+        }
+        other => Err(format!(
+            "DESKTOP_OPERATION_UNSUPPORTED: Unknown browser action '{other}'."
+        )),
+    }
 }
 
 pub async fn disconnect(state: &BrowserState) -> Result<(), String> {
     disconnect_inner(state).await
 }
 
+async fn wait_action(
+    state: &BrowserState,
+    params: BrowserActionParams,
+) -> Result<serde_json::Value, String> {
+    let action = params.action.to_ascii_lowercase();
+    let timeout_ms = parse_timeout_ms(&params.value, DEFAULT_WAIT_MS);
+    let page = {
+        let guard = state.session.lock().await;
+        let session = session_ref(&guard)?;
+        resolve_page(session, params.tab_id.as_deref()).await?
+    };
+
+    match action.as_str() {
+        "wait_for_navigation" => {
+            with_cdp_timeout_duration(
+                Duration::from_millis(timeout_ms),
+                page.wait_for_navigation(),
+            )
+            .await?
+            .map_err(map_page_error)?;
+            Ok(serde_json::json!({
+                "action": params.action,
+                "success": true,
+                "timeout_ms": timeout_ms,
+            }))
+        }
+        "wait_for_selector" => {
+            let selector = params
+                .selector
+                .clone()
+                .filter(|value| !value.trim().is_empty())
+                .ok_or_else(|| "wait_for_selector requires selector.".to_string())?;
+            wait_for_selector(&page, &selector, timeout_ms).await?;
+            Ok(serde_json::json!({
+                "action": params.action,
+                "selector": selector,
+                "success": true,
+                "timeout_ms": timeout_ms,
+            }))
+        }
+        other => Err(format!(
+            "DESKTOP_OPERATION_UNSUPPORTED: Unknown browser action '{other}'."
+        )),
+    }
+}
+
 async fn tab_action(
     state: &BrowserState,
     params: BrowserActionParams,
 ) -> Result<serde_json::Value, String> {
+    ensure_session_alive(state).await?;
     let action = params.action.to_ascii_lowercase();
     let mut guard = state.session.lock().await;
     let session = guard
@@ -305,7 +393,8 @@ async fn tab_action(
         "new_tab" => {
             let url = params
                 .value
-                .or(params.selector)
+                .clone()
+                .or_else(|| params.selector.clone())
                 .filter(|value| !value.trim().is_empty())
                 .unwrap_or_else(|| "about:blank".to_string());
             let page = session
@@ -338,12 +427,8 @@ async fn tab_action(
             };
             page.close().await.map_err(map_page_error)?;
             if tab_id == session.active_target_id {
-                let pages = session
-                    .browser
-                    .pages()
-                    .await
-                    .map_err(|error| map_connect_error("browser", error))?;
-                let Some(next) = pages.into_iter().last() else {
+                let pages = user_pages(&session.browser).await?;
+                let Some(next) = pick_best_page(pages, None) else {
                     return Err(
                         "DESKTOP_BROWSER_UNAVAILABLE: No browser tabs remain open.".to_string(),
                     );
@@ -368,14 +453,34 @@ async fn tab_action(
 async fn disconnect_inner(state: &BrowserState) -> Result<(), String> {
     let mut guard = state.session.lock().await;
     if let Some(mut session) = guard.take() {
-        let _ = session.browser.close().await;
-        session.handler_task.abort();
-        if let Some(mut child) = session.launched_child.take() {
-            let _ = child.kill();
-            let _ = child.wait();
+        if session.launched {
+            let _ = session.browser.close().await;
+            if let Some(mut child) = session.launched_child.take() {
+                let _ = child.kill();
+                let _ = child.wait();
+            }
         }
+        session.handler_task.abort();
     }
     Ok(())
+}
+
+async fn ensure_session_alive(state: &BrowserState) -> Result<(), String> {
+    let page = {
+        let guard = state.session.lock().await;
+        let session = session_ref(&guard)?;
+        session.page.clone()
+    };
+
+    match tokio::time::timeout(HEALTH_CHECK_TIMEOUT, page.url()).await {
+        Ok(Ok(_)) => Ok(()),
+        _ => {
+            disconnect_inner(state).await?;
+            Err(
+                "DESKTOP_BROWSER_UNAVAILABLE: Browser session is no longer alive.".to_string(),
+            )
+        }
+    }
 }
 
 async fn attach_browser(endpoint: &str) -> Result<(Browser, JoinHandle<()>), String> {
@@ -385,16 +490,32 @@ async fn attach_browser(endpoint: &str) -> Result<(Browser, JoinHandle<()>), Str
     Ok((browser, spawn_handler(handler)))
 }
 
-async fn attach_with_retry(endpoint: &str) -> Result<(Browser, JoinHandle<()>), String> {
+async fn wait_and_attach(endpoint: &str) -> Result<(Browser, JoinHandle<()>), String> {
     let mut last_error = String::from("DESKTOP_BROWSER_UNAVAILABLE: Attach failed.");
-    for _ in 0..ATTACH_RETRY_COUNT {
-        tokio::time::sleep(Duration::from_millis(ATTACH_RETRY_MS)).await;
-        match attach_browser(endpoint).await {
-            Ok(pair) => return Ok(pair),
-            Err(error) => last_error = error,
+    for _ in 0..ATTACH_POLL_COUNT {
+        if debugger_endpoint_ready(endpoint).await {
+            match attach_browser(endpoint).await {
+                Ok(pair) => return Ok(pair),
+                Err(error) => last_error = error,
+            }
         }
+        tokio::time::sleep(Duration::from_millis(ATTACH_POLL_MS)).await;
     }
     Err(last_error)
+}
+
+async fn debugger_endpoint_ready(endpoint: &str) -> bool {
+    let url = format!("{}/json/version", endpoint.trim_end_matches('/'));
+    tokio::task::spawn_blocking(move || {
+        reqwest::blocking::Client::builder()
+            .timeout(Duration::from_millis(500))
+            .build()
+            .ok()
+            .and_then(|client| client.get(&url).send().ok())
+            .is_some_and(|response| response.status().is_success())
+    })
+    .await
+    .unwrap_or(false)
 }
 
 fn spawn_handler(mut handler: Handler) -> JoinHandle<()> {
@@ -408,10 +529,7 @@ fn spawn_handler(mut handler: Handler) -> JoinHandle<()> {
 }
 
 async fn select_page(browser: &Browser, start_url: Option<&str>) -> Result<Page, String> {
-    let pages = browser
-        .pages()
-        .await
-        .map_err(|error| map_connect_error("browser", error))?;
+    let pages = user_pages(browser).await?;
 
     if let Some(url) = start_url.filter(|value| !value.trim().is_empty()) {
         for page in &pages {
@@ -428,7 +546,7 @@ async fn select_page(browser: &Browser, start_url: Option<&str>) -> Result<Page,
         }
     }
 
-    if let Some(page) = pages.into_iter().last() {
+    if let Some(page) = pick_best_page(pages, None) {
         return Ok(page);
     }
 
@@ -445,6 +563,37 @@ async fn select_page(browser: &Browser, start_url: Option<&str>) -> Result<Page,
         .map_err(|error| map_connect_error("about:blank", error))
 }
 
+async fn user_pages(browser: &Browser) -> Result<Vec<Page>, String> {
+    let pages = browser
+        .pages()
+        .await
+        .map_err(|error| map_connect_error("browser", error))?;
+    let mut filtered = Vec::new();
+    for page in pages {
+        let url = page.url().await.ok().flatten().unwrap_or_default();
+        if is_user_page_url(&url) {
+            filtered.push(page);
+        }
+    }
+    Ok(filtered)
+}
+
+fn is_user_page_url(url: &str) -> bool {
+    !url.starts_with("devtools://")
+        && !url.starts_with("chrome://")
+        && !url.starts_with("chrome-extension://")
+        && !url.starts_with("edge://")
+        && !url.starts_with("about:devtools")
+}
+
+fn pick_best_page(pages: Vec<Page>, prefer_url: Option<&str>) -> Option<Page> {
+    if let Some(url) = prefer_url.filter(|value| !value.trim().is_empty()) {
+        // Caller already matched by URL; keep last matching page semantics.
+        let _ = url;
+    }
+    pages.into_iter().last()
+}
+
 async fn resolve_page(session: &CdpSession, tab_id: Option<&str>) -> Result<Page, String> {
     match tab_id {
         None => Ok(session.page.clone()),
@@ -457,21 +606,15 @@ async fn resolve_page(session: &CdpSession, tab_id: Option<&str>) -> Result<Page
     }
 }
 
-async fn collect_tabs(session: &CdpSession) -> Result<BrowserTabListResult, String> {
-    let active = session.active_target_id.clone();
+async fn collect_tabs(browser: &Browser, active: &str) -> Result<BrowserTabListResult, String> {
     let mut tabs = Vec::new();
-    for page in session
-        .browser
-        .pages()
-        .await
-        .map_err(|error| map_connect_error("browser", error))?
-    {
+    for page in user_pages(browser).await? {
         let id = page.target_id().as_ref().to_string();
         tabs.push(tab_info_from_page(&page, id == active).await?);
     }
     Ok(BrowserTabListResult {
         tabs,
-        active_tab_id: active,
+        active_tab_id: active.to_string(),
     })
 }
 
@@ -545,10 +688,9 @@ fn image_dimensions(bytes: &[u8]) -> Result<(u32, u32), String> {
     let reader = ImageReader::new(std::io::Cursor::new(bytes))
         .with_guessed_format()
         .map_err(|error| format!("DESKTOP_BROWSER_UNAVAILABLE: Invalid screenshot: {error}"))?;
-    let image = reader
-        .decode()
-        .map_err(|error| format!("DESKTOP_BROWSER_UNAVAILABLE: Invalid screenshot: {error}"))?;
-    Ok(image.dimensions())
+    reader
+        .into_dimensions()
+        .map_err(|error| format!("DESKTOP_BROWSER_UNAVAILABLE: Invalid screenshot: {error}"))
 }
 
 fn screenshot_format(raw: Option<&str>) -> CaptureScreenshotFormat {
@@ -560,19 +702,16 @@ fn screenshot_format(raw: Option<&str>) -> CaptureScreenshotFormat {
 }
 
 fn resolve_tab_id(session: &CdpSession, params: &BrowserActionParams) -> Result<String, String> {
+    Ok(resolve_tab_id_from_params(&session.active_target_id, params))
+}
+
+fn resolve_tab_id_from_params(active_target_id: &str, params: &BrowserActionParams) -> String {
     params
         .tab_id
         .clone()
-        .or(params.value.clone())
+        .or_else(|| params.value.clone())
         .filter(|value| !value.trim().is_empty())
-        .or_else(|| {
-            params
-                .selector
-                .clone()
-                .filter(|value| !value.trim().is_empty())
-        })
-        .or_else(|| Some(session.active_target_id.clone()))
-        .ok_or_else(|| "DESKTOP_ELEMENT_NOT_FOUND: tab_id is required.".to_string())
+        .unwrap_or_else(|| active_target_id.to_string())
 }
 
 fn session_ref<'a>(
@@ -587,13 +726,63 @@ fn urls_match(current: &str, expected: &str) -> bool {
     current == expected || current.starts_with(expected)
 }
 
-fn truncate_html(mut html: String, truncated: &mut bool) -> String {
-    if html.len() <= MAX_HTML_BYTES {
-        return html;
+fn truncate_to_byte_limit(mut content: String, max_bytes: usize, truncated: &mut bool) -> String {
+    if content.len() <= max_bytes {
+        return content;
     }
-    html.truncate(MAX_HTML_BYTES);
+    let mut end = max_bytes;
+    while end > 0 && !content.is_char_boundary(end) {
+        end -= 1;
+    }
+    content.truncate(end);
     *truncated = true;
-    html
+    content
+}
+
+fn parse_timeout_ms(value: &Option<String>, default: u64) -> u64 {
+    value
+        .as_ref()
+        .and_then(|raw| raw.trim().parse::<u64>().ok())
+        .unwrap_or(default)
+        .clamp(100, 120_000)
+}
+
+async fn wait_for_selector(page: &Page, selector: &str, timeout_ms: u64) -> Result<(), String> {
+    let deadline = Instant::now() + Duration::from_millis(timeout_ms);
+    loop {
+        if page.find_element(selector).await.is_ok() {
+            return Ok(());
+        }
+        if Instant::now() >= deadline {
+            return Err(format!(
+                "{ELEMENT_NOT_FOUND}: Timed out waiting for selector after {timeout_ms} ms."
+            ));
+        }
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+}
+
+async fn with_cdp_timeout<T, F>(future: F) -> Result<T, String>
+where
+    F: Future<Output = T>,
+{
+    tokio::time::timeout(CDP_OPERATION_TIMEOUT, future)
+        .await
+        .map_err(|_| {
+            "DESKTOP_BROWSER_UNAVAILABLE: Browser operation timed out.".to_string()
+        })
+}
+
+async fn with_cdp_timeout_duration<T, F>(duration: Duration, future: F) -> Result<T, String>
+where
+    F: Future<Output = T>,
+{
+    tokio::time::timeout(duration, future)
+        .await
+        .map_err(|_| format!(
+            "DESKTOP_BROWSER_UNAVAILABLE: Browser operation timed out after {} ms.",
+            duration.as_millis()
+        ))
 }
 
 fn map_connect_error(endpoint: &str, error: impl std::fmt::Display) -> String {
@@ -606,18 +795,6 @@ fn map_page_error(error: impl std::fmt::Display) -> String {
 
 fn map_element_error(error: impl std::fmt::Display) -> String {
     format!("{ELEMENT_NOT_FOUND}: {error}")
-}
-
-#[allow(dead_code)]
-pub async fn launch_and_connect(endpoint: &str, port: u16) -> Result<(Browser, JoinHandle<()>), String> {
-    let config = BrowserConfig::builder()
-        .arg(format!("--remote-debugging-port={port}"))
-        .build()
-        .map_err(|error| map_connect_error(endpoint, error))?;
-    let (browser, handler) = Browser::launch(config)
-        .await
-        .map_err(|error| map_connect_error(endpoint, error))?;
-    Ok((browser, spawn_handler(handler)))
 }
 
 #[cfg(test)]
@@ -633,13 +810,59 @@ mod tests {
 
     #[test]
     fn screenshot_format_defaults_to_jpeg() {
-        assert_eq!(
-            screenshot_format(None),
-            CaptureScreenshotFormat::Jpeg
-        );
+        assert_eq!(screenshot_format(None), CaptureScreenshotFormat::Jpeg);
         assert_eq!(
             screenshot_format(Some("png")),
             CaptureScreenshotFormat::Png
+        );
+    }
+
+    #[test]
+    fn truncate_respects_utf8_char_boundary() {
+        let input = "ä".repeat(300_000);
+        let mut truncated = false;
+        let output = truncate_to_byte_limit(input, MAX_CONTENT_BYTES, &mut truncated);
+        assert!(truncated);
+        assert!(output.len() <= MAX_CONTENT_BYTES);
+        assert!(std::str::from_utf8(output.as_bytes()).is_ok());
+    }
+
+    #[test]
+    fn is_user_page_url_filters_internal_schemes() {
+        assert!(!is_user_page_url("devtools://devtools/bundled/inspector.html"));
+        assert!(!is_user_page_url("chrome://newtab/"));
+        assert!(is_user_page_url("https://example.com"));
+    }
+
+    #[test]
+    fn parse_timeout_ms_clamps_and_defaults() {
+        assert_eq!(parse_timeout_ms(&None, 5_000), 5_000);
+        assert_eq!(parse_timeout_ms(&Some("999999".to_string()), 5_000), 120_000);
+        assert_eq!(parse_timeout_ms(&Some("1500".to_string()), 5_000), 1_500);
+    }
+
+    #[test]
+    fn resolve_tab_id_ignores_selector() {
+        let params = BrowserActionParams {
+            action: "select_tab".to_string(),
+            selector: Some("#not-a-tab".to_string()),
+            tab_id: Some("tab-123".to_string()),
+            value: None,
+        };
+        assert_eq!(
+            resolve_tab_id_from_params("tab-active", &params),
+            "tab-123"
+        );
+
+        let fallback = BrowserActionParams {
+            action: "close_tab".to_string(),
+            selector: Some("#still-not-a-tab".to_string()),
+            tab_id: None,
+            value: None,
+        };
+        assert_eq!(
+            resolve_tab_id_from_params("tab-active", &fallback),
+            "tab-active"
         );
     }
 }

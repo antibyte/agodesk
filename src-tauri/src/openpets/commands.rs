@@ -58,32 +58,28 @@ pub async fn openpets_status(state: State<'_, OpenPetsState>) -> Result<OpenPets
                 params["leaseId"] = json!(lease_id);
             }
             match send_discovered_request("status", params, SendRequestOptions::default()).await {
-                Ok(result) => Ok(OpenPetsStatusResponse {
-                    reachable: result
-                        .get("appRunning")
-                        .and_then(|value| value.as_bool())
-                        .unwrap_or(true),
-                    enabled,
-                    app_version: Some(discovery.app_version),
-                    pet_id: result
-                        .get("actualTargetPetId")
-                        .or_else(|| result.get("defaultPetId"))
-                        .and_then(|value| value.as_str())
-                        .map(str::to_string)
-                        .or(configured_pet_id),
-                    pet_name: result
-                        .get("actualTargetPetName")
-                        .and_then(|value| value.as_str())
-                        .map(str::to_string),
-                    fallback_reason: result
-                        .get("fallbackReason")
-                        .and_then(|value| value.as_str())
-                        .map(str::to_string),
-                    unavailable_reason: result
-                        .get("unavailableReason")
-                        .and_then(|value| value.as_str())
-                        .map(str::to_string),
-                }),
+                Ok(result) => {
+                    let (pet_id, pet_name) =
+                        resolve_pet_identity(&result, configured_pet_id.clone()).await;
+                    Ok(OpenPetsStatusResponse {
+                        reachable: result
+                            .get("appRunning")
+                            .and_then(|value| value.as_bool())
+                            .unwrap_or(true),
+                        enabled,
+                        app_version: Some(discovery.app_version),
+                        pet_id,
+                        pet_name,
+                        fallback_reason: result
+                            .get("fallbackReason")
+                            .and_then(|value| value.as_str())
+                            .map(str::to_string),
+                        unavailable_reason: result
+                            .get("unavailableReason")
+                            .and_then(|value| value.as_str())
+                            .map(str::to_string),
+                    })
+                }
                 Err(error) => Ok(unavailable_status(enabled, configured_pet_id, error)),
             }
         }
@@ -222,8 +218,8 @@ fn parse_pet_list(value: Option<&Value>) -> Vec<OpenPetsPetListItem> {
             Some(OpenPetsPetListItem {
                 id: entry.get("id")?.as_str()?.to_string(),
                 display_name: entry.get("displayName")?.as_str()?.to_string(),
-                built_in: entry.get("builtIn")?.as_bool()?,
-                broken: entry.get("broken")?.as_bool()?,
+                built_in: entry.get("builtIn").and_then(|value| value.as_bool()).unwrap_or(false),
+                broken: entry.get("broken").and_then(|value| value.as_bool()).unwrap_or(false),
             })
         })
         .collect()
@@ -261,5 +257,143 @@ fn sanitize_error_message(error: &OpenPetsClientError) -> String {
         "OpenPets desktop app or local IPC is unavailable.".to_string()
     } else {
         error.message.clone()
+    }
+}
+
+fn json_string_field(value: &Value, keys: &[&str]) -> Option<String> {
+    for key in keys {
+        if let Some(text) = value.get(key).and_then(Value::as_str) {
+            let trimmed = text.trim();
+            if !trimmed.is_empty() {
+                return Some(trimmed.to_string());
+            }
+        }
+    }
+    None
+}
+
+fn extract_status_pet_id(result: &Value, configured: Option<String>) -> Option<String> {
+    json_string_field(
+        result,
+        &[
+            "actualTargetPetId",
+            "activePetId",
+            "runningPetId",
+            "visiblePetId",
+            "targetPetId",
+            "defaultPetId",
+            "configuredPetId",
+        ],
+    )
+    .or(configured)
+}
+
+fn extract_status_pet_name(result: &Value) -> Option<String> {
+    json_string_field(
+        result,
+        &[
+            "actualTargetPetName",
+            "activePetName",
+            "runningPetName",
+            "visiblePetName",
+            "targetPetName",
+            "defaultPetName",
+        ],
+    )
+    .or_else(|| {
+        result.get("lease").and_then(|lease| {
+            json_string_field(lease, &["actualTargetPetName", "targetPetName"])
+        })
+    })
+}
+
+fn lookup_pet_display_name(pets: &[OpenPetsPetListItem], pet_id: &str) -> Option<String> {
+    pets.iter()
+        .find(|pet| pet.id == pet_id)
+        .map(|pet| pet.display_name.clone())
+}
+
+async fn resolve_pet_identity(
+    status: &Value,
+    configured_pet_id: Option<String>,
+) -> (Option<String>, Option<String>) {
+    let mut pet_id = extract_status_pet_id(status, configured_pet_id);
+    let mut pet_name = extract_status_pet_name(status);
+
+    if pet_name.is_some() {
+        return (pet_id, pet_name);
+    }
+
+    let Ok(list) =
+        send_discovered_request("pets.list", json!({}), SendRequestOptions::default()).await
+    else {
+        return (pet_id, pet_name);
+    };
+
+    let pets = parse_pet_list(list.get("pets"));
+    let default_pet_id = json_string_field(&list, &["defaultPetId"]);
+
+    if pet_id.is_none() {
+        pet_id = default_pet_id.clone();
+    }
+
+    if let Some(id) = pet_id.as_deref() {
+        pet_name = lookup_pet_display_name(&pets, id);
+    }
+
+    if pet_name.is_none() {
+        if let Some(default_id) = default_pet_id.as_deref() {
+            pet_name = lookup_pet_display_name(&pets, default_id);
+            if pet_id.is_none() {
+                pet_id = Some(default_id.to_string());
+            }
+        }
+    }
+
+    (pet_id, pet_name)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn extract_status_pet_id_prefers_actual_target() {
+        let status = json!({
+            "actualTargetPetId": "cloud-puff",
+            "defaultPetId": "builtin"
+        });
+        assert_eq!(
+            extract_status_pet_id(&status, None),
+            Some("cloud-puff".to_string())
+        );
+    }
+
+    #[test]
+    fn extract_status_pet_name_reads_nested_lease() {
+        let status = json!({
+            "lease": {
+                "actualTargetPetName": "Cloud Puff"
+            }
+        });
+        assert_eq!(
+            extract_status_pet_name(&status),
+            Some("Cloud Puff".to_string())
+        );
+    }
+
+    #[test]
+    fn lookup_pet_display_name_finds_catalog_entry() {
+        let pets = vec![OpenPetsPetListItem {
+            id: "cloud-puff".to_string(),
+            display_name: "Cloud Puff".to_string(),
+            built_in: false,
+            broken: false,
+        }];
+        assert_eq!(
+            lookup_pet_display_name(&pets, "cloud-puff"),
+            Some("Cloud Puff".to_string())
+        );
     }
 }

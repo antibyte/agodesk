@@ -4,12 +4,12 @@ Dieses Dokument beschreibt, wie der **agodesk-Client** Computer-Use implementier
 
 **Verwandte Docs**
 
-| Dokument | Inhalt |
-|----------|--------|
-| [BACKEND_PROTOCOL.md](./BACKEND_PROTOCOL.md) | Vollständiger WS-Vertrag (Pairing, Chat, Desktop v1) |
-| [aurago/README.md](./aurago/README.md) | Referenz-Typen, JSON-Beispiele, Agent-Worker-Skizze |
-| [aurago/protocol-examples.json](./aurago/protocol-examples.json) | Kopierbare Payloads |
-| `src/lib/types/protocol.ts` | Kanonische TypeScript-Typen (Client) |
+| Dokument                                                         | Inhalt                                               |
+| ---------------------------------------------------------------- | ---------------------------------------------------- |
+| [BACKEND_PROTOCOL.md](./BACKEND_PROTOCOL.md)                     | Vollständiger WS-Vertrag (Pairing, Chat, Desktop v1) |
+| [aurago/README.md](./aurago/README.md)                           | Referenz-Typen, JSON-Beispiele, Agent-Worker-Skizze  |
+| [aurago/protocol-examples.json](./aurago/protocol-examples.json) | Kopierbare Payloads                                  |
+| `src/lib/types/protocol.ts`                                      | Kanonische TypeScript-Typen (Client)                 |
 
 ---
 
@@ -42,12 +42,12 @@ sequenceDiagram
 
 Bei `session.start` sendet agodesk `client_capabilities` (gebaut in `session-start.ts` → `agodeskClientCapabilities()`):
 
-| Client-Einstellung | Capability-Strings |
-|--------------------|-------------------|
-| Immer | `chat.full_response`, `persona.assets` |
-| `desktopControlEnabled` | `remote.desktop.capture`, `remote.desktop.permission_request`, `remote.desktop.input`, `remote.desktop.discovery`, `remote.desktop.ui_automation` |
-| + `browserControlEnabled` | `remote.desktop.browser` |
-| Dateizugriff konfiguriert | `remote.files.read`, `remote.files.write` |
+| Client-Einstellung        | Capability-Strings                                                                                                                                |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Immer                     | `chat.full_response`, `persona.assets`                                                                                                            |
+| `desktopControlEnabled`   | `remote.desktop.capture`, `remote.desktop.permission_request`, `remote.desktop.input`, `remote.desktop.discovery`, `remote.desktop.ui_automation` |
+| + `browserControlEnabled` | `remote.desktop.browser`                                                                                                                          |
+| Dateizugriff konfiguriert | `remote.files.read`, `remote.files.write`                                                                                                         |
 
 Beispiel-Payload:
 
@@ -104,25 +104,25 @@ Zusätzlich zu agodesk-internen Bannern muss das **agodesk-Gerät in AuraGo Remo
 
 ## 4. Freigabe-Modell im agodesk-Frontend
 
-| Operation | Remote-Control-Banner | Setting |
-|-----------|----------------------|---------|
-| `desktop_screenshot` | **Nein** | `desktopControlEnabled` |
-| `desktop_list_*`, `desktop_active_window`, `desktop_host_info` | **Nein** | `desktopControlEnabled` |
-| `desktop_ui_tree` | **Nein** | `desktopControlEnabled` |
-| `desktop_permission_request` | Banner anzeigen (kein Block) | — |
-| `desktop_input` | **Ja** | `desktopControlEnabled` |
-| `desktop_ui_action` | **Ja** | `desktopControlEnabled` |
-| `desktop_browser_*` | Connect/Snapshot/Disconnect: nein; **Action: Ja** | `browserControlEnabled` |
+| Operation                                                      | Remote-Control-Banner                             | Setting                 |
+| -------------------------------------------------------------- | ------------------------------------------------- | ----------------------- |
+| `desktop_screenshot`                                           | **Nein**                                          | `desktopControlEnabled` |
+| `desktop_list_*`, `desktop_active_window`, `desktop_host_info` | **Nein**                                          | `desktopControlEnabled` |
+| `desktop_ui_tree`                                              | **Nein**                                          | `desktopControlEnabled` |
+| `desktop_permission_request`                                   | Banner anzeigen (kein Block)                      | —                       |
+| `desktop_input`                                                | **Ja**                                            | `desktopControlEnabled` |
+| `desktop_ui_action`                                            | **Ja**                                            | `desktopControlEnabled` |
+| `desktop_browser_*`                                            | Connect/Snapshot/Disconnect: nein; **Action: Ja** | `browserControlEnabled` |
 
 **Client-Implementierung**
 
-| Schicht | Datei | Funktion |
-|---------|--------|----------|
-| WS-Eingang | `ChatView.svelte` | `handleIncomingMessage` → `handleIncomingDesktopCommand` |
-| Policy | `desktop-flow.ts` | `handleIncomingDesktopCommand`, `flushPendingInputCommands` |
-| Banner-UI | `RemoteControlBanner.svelte` | Approve/Deny/Stop |
-| Ausführung | `desktop.ts` | `executeDesktopCommand` |
-| Settings | `SettingsView.svelte` | `desktopControlEnabled`, `browserControlEnabled` |
+| Schicht    | Datei                        | Funktion                                                    |
+| ---------- | ---------------------------- | ----------------------------------------------------------- |
+| WS-Eingang | `ChatView.svelte`            | `handleIncomingMessage` → `handleIncomingDesktopCommand`    |
+| Policy     | `desktop-flow.ts`            | `handleIncomingDesktopCommand`, `flushPendingInputCommands` |
+| Banner-UI  | `RemoteControlBanner.svelte` | Approve/Deny/Stop                                           |
+| Ausführung | `desktop.ts`                 | `executeDesktopCommand`                                     |
+| Settings   | `SettingsView.svelte`        | `desktopControlEnabled`, `browserControlEnabled`            |
 
 **Input-Queue:** Wenn `desktop_input`, `desktop_ui_action` oder `desktop_browser_action` ankommen und der Banner nicht aktiv ist, werden Commands in `pendingInputCommands` gequeue't. Nach Klick auf „Freigeben“ ruft `flushPendingInputCommands()` die Queue ab.
 
@@ -143,7 +143,7 @@ Zusätzlich zu agodesk-internen Bannern muss das **agodesk-Gerät in AuraGo Remo
   "id": "<uuid>",
   "type": "desktop.command",
   "timestamp": "2026-06-04T12:00:00.000Z",
-  "payload": { }
+  "payload": {}
 }
 ```
 
@@ -168,7 +168,7 @@ Snake_case und camelCase werden im Client normalisiert (`command_id` / `commandI
   "status": "ok",
   "session_id": "sess-acc-…",
   "device_id": "dev-…",
-  "data": { },
+  "data": {},
   "error": null,
   "error_code": null
 }
@@ -182,12 +182,12 @@ Bei Fehler: `success: false`, `status: "error"`, `error_code` gesetzt (maschinen
 
 ### 6.1 Discovery (`remote.desktop.discovery`)
 
-| Operation | params | `data` bei Erfolg |
-|-----------|--------|-------------------|
-| `desktop_list_displays` | `{}` | `{ "displays": DisplayInfo[] }` |
-| `desktop_list_windows` | `{}` | `{ "windows": WindowInfo[] }` |
-| `desktop_active_window` | `{}` | `ActiveWindowInfo` (flach) |
-| `desktop_host_info` | `{}` | `{ hostname, platform, arch, … }` |
+| Operation               | params | `data` bei Erfolg                 |
+| ----------------------- | ------ | --------------------------------- |
+| `desktop_list_displays` | `{}`   | `{ "displays": DisplayInfo[] }`   |
+| `desktop_list_windows`  | `{}`   | `{ "windows": WindowInfo[] }`     |
+| `desktop_active_window` | `{}`   | `ActiveWindowInfo` (flach)        |
+| `desktop_host_info`     | `{}`   | `{ hostname, platform, arch, … }` |
 
 **DisplayInfo:** `id` (`display-0`, …), `width`, `height`, `x`, `y`, `primary`, `scale_factor`
 
@@ -216,15 +216,15 @@ Default: JPEG quality 75, max. Kantenlänge ~1280 px (Payload-Größe).
 
 **`desktop_input`** — `params.kind`:
 
-| kind | params |
-|------|--------|
-| `mouse_move` | `{ x, y, absolute?: true }` |
-| `mouse_click` | `{ x, y, button: "left"\|"right"\|"middle", action: "click"\|"down"\|"up" }` |
-| `mouse_scroll` | `{ x, y, delta?, direction?: "up"\|"down"\|"left"\|"right" }` |
-| `mouse_drag` | `{ from_x, from_y, to_x, to_y, button? }` |
-| `key_combo` | `{ keys: ["ctrl", "c"] }` |
-| `key_down` / `key_up` | `{ key }` oder `{ code }` |
-| `text` | `{ text }` |
+| kind                  | params                                                                       |
+| --------------------- | ---------------------------------------------------------------------------- |
+| `mouse_move`          | `{ x, y, absolute?: true }`                                                  |
+| `mouse_click`         | `{ x, y, button: "left"\|"right"\|"middle", action: "click"\|"down"\|"up" }` |
+| `mouse_scroll`        | `{ x, y, delta?, direction?: "up"\|"down"\|"left"\|"right" }`                |
+| `mouse_drag`          | `{ from_x, from_y, to_x, to_y, button? }`                                    |
+| `key_combo`           | `{ keys: ["ctrl", "c"] }`                                                    |
+| `key_down` / `key_up` | `{ key }` oder `{ code }`                                                    |
+| `text`                | `{ text }`                                                                   |
 
 Implementierung: **enigo** in `src-tauri/src/computer_use/input.rs`.
 
@@ -276,23 +276,23 @@ Actions: `click`, `invoke`, `focus`, `set_value`
 
 **Plattformen**
 
-| OS | UI-Tree | Hinweis |
-|----|---------|---------|
-| Windows | uiautomation | Vollständig |
-| Linux | AT-SPI (echter Accessibility-Baum) | Wayland/X11-Einschränkungen je Desktop; AT-SPI muss aktiv sein |
-| macOS | AXUIElement (Accessibility API) | Berechtigung unter Systemeinstellungen → Datenschutz → Bedienungshilfen erforderlich |
+| OS      | UI-Tree                            | Hinweis                                                                              |
+| ------- | ---------------------------------- | ------------------------------------------------------------------------------------ |
+| Windows | uiautomation                       | Vollständig                                                                          |
+| Linux   | AT-SPI (echter Accessibility-Baum) | Wayland/X11-Einschränkungen je Desktop; AT-SPI muss aktiv sein                       |
+| macOS   | AXUIElement (Accessibility API)    | Berechtigung unter Systemeinstellungen → Datenschutz → Bedienungshilfen erforderlich |
 
 ### 6.5 Browser CDP (`remote.desktop.browser`)
 
 Erfordert Client-Setting **`browserControlEnabled`** und Capability `remote.desktop.browser`.
 
-| Operation | params | Banner |
-|-----------|--------|--------|
-| `desktop_browser_connect` | `{ endpoint?, port?, auto_launch?, url? }` | Nein |
-| `desktop_browser_list_tabs` | `{}` | Nein |
-| `desktop_browser_snapshot` | `{ selector?, include_html?, include_screenshot?, screenshot_format?, quality?, full_page?, tab_id? }` | Nein |
-| `desktop_browser_action` | `{ action, selector?, tab_id?, value? }` | **Ja** (Tab-Actions `select_tab`/`new_tab`/`close_tab` ohne Banner) |
-| `desktop_browser_disconnect` | `{}` | Nein |
+| Operation                    | params                                                                                                 | Banner                                                                                                                         |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------ |
+| `desktop_browser_connect`    | `{ endpoint?, port?, auto_launch?, url? }`                                                             | Nein                                                                                                                           |
+| `desktop_browser_list_tabs`  | `{}`                                                                                                   | Nein                                                                                                                           |
+| `desktop_browser_snapshot`   | `{ selector?, include_html?, include_screenshot?, screenshot_format?, quality?, full_page?, tab_id? }` | Nein                                                                                                                           |
+| `desktop_browser_action`     | `{ action, selector?, tab_id?, value? }`                                                               | **Ja** (Tab-Actions `select_tab`/`new_tab`/`close_tab` und Wait-Actions `wait_for_selector`/`wait_for_navigation` ohne Banner) |
+| `desktop_browser_disconnect` | `{}`                                                                                                   | Nein                                                                                                                           |
 
 **Connect-Parameter:**
 
@@ -301,13 +301,13 @@ Erfordert Client-Setting **`browserControlEnabled`** und Capability `remote.desk
 - `auto_launch` — Default `true`: bei fehlgeschlagem Attach startet agodesk Chrome/Edge mit `--remote-debugging-port`
 - `url` — Start-URL beim Auto-Launch
 
-**Actions (v2):** `click`, `focus`, `fill` / `set_value`, `type`, `press` (value = Taste, Default `Enter`); Tab-Steuerung: `select_tab` (`tab_id`), `new_tab` (`value` = URL, optional), `close_tab` (`tab_id`)
+**Actions (v2):** `click`, `focus`, `fill` / `set_value`, `type`, `press` (value = Taste, Default `Enter`); Navigation: `navigate` / `goto` (value = URL, kein selector); Warten: `wait_for_selector` (selector erforderlich, value = Timeout ms, Default 30000), `wait_for_navigation` (value = Timeout ms); Tab-Steuerung: `select_tab` (`tab_id`), `new_tab` (`value` = URL, optional), `close_tab` (`tab_id`)
 
-**Snapshot:** `text`, optional `html` (max. ~512 KiB, dann `truncated: true`); optional CDP-Screenshot via `include_screenshot: true` mit `screenshot_format` (`jpeg`\|`png`\|`webp`), `quality` (40–90), `full_page`, `tab_id`
+**Snapshot:** `text` und optional `html` (jeweils max. ~512 KiB, dann `truncated: true`); optional CDP-Screenshot via `include_screenshot: true` mit `screenshot_format` (`jpeg`\|`png`\|`webp`), `quality` (40–90), `full_page`, `tab_id`
 
 **Tabs:** `desktop_browser_list_tabs` → `{ tabs: [{ id, url, title, active }], active_tab_id }`. Connect-Response enthält `active_tab_id`.
 
-**Disconnect:** Beendet bei Auto-Launch den gestarteten Browser-Prozess.
+**Disconnect:** Beendet bei Auto-Launch (`launched: true`) den gestarteten Browser-Prozess. Bei Attach an einen bereits laufenden Browser wird nur die CDP-Verbindung getrennt — der Browser bleibt offen.
 
 CDP: Cargo-Feature `browser-automation` (chromiumoxide, standardmäßig aktiv). Manuell: `chrome.exe --remote-debugging-port=9222`
 
@@ -319,10 +319,10 @@ CDP: Cargo-Feature `browser-automation` (chromiumoxide, standardmäßig aktiv). 
 
 Erfordert Capability **`remote.desktop.stream`** in `session.start` (agodesk advertised automatisch bei aktivierter Desktop-Steuerung).
 
-| Operation | params | Antwort |
-|-----------|--------|---------|
+| Operation              | params                                                                                               | Antwort                                                                                  |
+| ---------------------- | ---------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
 | `desktop_stream_start` | `display_id?`, `window_id?`, `format?` (`jpeg`\|`png`), `quality?` (40–90), `fps?` (1–10, Default 2) | `desktop.result` mit `{ stream_id, active: true, fps, format, display_id?, window_id? }` |
-| `desktop_stream_stop` | `stream_id?` (optional; ohne ID stoppt den aktiven Stream) | `desktop.result` mit `{ stream_id, active: false, frames_sent }` |
+| `desktop_stream_stop`  | `stream_id?` (optional; ohne ID stoppt den aktiven Stream)                                           | `desktop.result` mit `{ stream_id, active: false, frames_sent }`                         |
 
 Während ein Stream aktiv ist, sendet agodesk **unsolicited** WebSocket-Nachrichten:
 
@@ -372,18 +372,18 @@ Während ein Stream aktiv ist, sendet agodesk **unsolicited** WebSocket-Nachrich
 
 ## 7. Fehlercodes (AuraGo-Handling)
 
-| Code | Bedeutung | Agent-Aktion |
-|------|-----------|--------------|
-| `SESSION_NOT_ACCEPTED` | Vor Pairing | Warten / Pairing |
-| `DESKTOP_CONTROL_DISABLED` | User hat Desktop aus | User informieren |
-| `DESKTOP_BROWSER_UNAVAILABLE` | Browser-Setting aus | User informieren |
-| `DESKTOP_INPUT_NOT_APPROVED` | Banner nicht freigegeben | Permission + Retry |
-| `DESKTOP_INPUT_DENIED` | User abgelehnt | Abbrechen |
-| `DESKTOP_UI_UNAVAILABLE` | Keine Accessibility | Fallback: Screenshot + `desktop_input` |
-| `DESKTOP_ELEMENT_NOT_FOUND` | `element_id` ungültig | UI-Tree neu laden |
-| `DESKTOP_ACCESSIBILITY_DENIED` | OS-Berechtigung fehlt | User informieren |
-| `DESKTOP_OPERATION_UNSUPPORTED` | Op/Plattform | Anderen Pfad wählen |
-| `DESKTOP_STREAM_NOT_ACTIVE` | `desktop_stream_stop` ohne laufenden Stream | Erst `desktop_stream_start` |
+| Code                            | Bedeutung                                   | Agent-Aktion                           |
+| ------------------------------- | ------------------------------------------- | -------------------------------------- |
+| `SESSION_NOT_ACCEPTED`          | Vor Pairing                                 | Warten / Pairing                       |
+| `DESKTOP_CONTROL_DISABLED`      | User hat Desktop aus                        | User informieren                       |
+| `DESKTOP_BROWSER_UNAVAILABLE`   | Browser-Setting aus                         | User informieren                       |
+| `DESKTOP_INPUT_NOT_APPROVED`    | Banner nicht freigegeben                    | Permission + Retry                     |
+| `DESKTOP_INPUT_DENIED`          | User abgelehnt                              | Abbrechen                              |
+| `DESKTOP_UI_UNAVAILABLE`        | Keine Accessibility                         | Fallback: Screenshot + `desktop_input` |
+| `DESKTOP_ELEMENT_NOT_FOUND`     | `element_id` ungültig                       | UI-Tree neu laden                      |
+| `DESKTOP_ACCESSIBILITY_DENIED`  | OS-Berechtigung fehlt                       | User informieren                       |
+| `DESKTOP_OPERATION_UNSUPPORTED` | Op/Plattform                                | Anderen Pfad wählen                    |
+| `DESKTOP_STREAM_NOT_ACTIVE`     | `desktop_stream_stop` ohne laufenden Stream | Erst `desktop_stream_start`            |
 
 ---
 
@@ -446,11 +446,11 @@ Der Mock spiegelt `client_capabilities` → `advertised_capabilities` wie Produk
 
 ## 10. Rust-Seite (nur zur Einordnung)
 
-| Modul | Rolle |
-|-------|--------|
-| `src-tauri/src/desktop/` | Capture, Fensterliste, Permission |
-| `src-tauri/src/computer_use/` | UI-Tree, Input (enigo), Browser, Context |
-| `src-tauri/src/commands.rs` | Tauri invoke bridge |
+| Modul                                 | Rolle                                               |
+| ------------------------------------- | --------------------------------------------------- |
+| `src-tauri/src/desktop/`              | Capture, Fensterliste, Permission                   |
+| `src-tauri/src/computer_use/`         | UI-Tree, Input (enigo), Browser, Context            |
+| `src-tauri/src/commands.rs`           | Tauri invoke bridge                                 |
 | `src-tauri/src/bin/agodesk_worker.rs` | Optional Sidecar (`AGODESK_COMPUTER_USE_SIDECAR=1`) |
 
 AuraGo kommuniziert **nur** über WebSocket — nicht direkt mit Rust.
@@ -465,4 +465,4 @@ AuraGo kommuniziert **nur** über WebSocket — nicht direkt mit Rust.
 
 ---
 
-*Stand: agodesk 0.1.0 — Computer-Use (Windows voll, Linux AT-SPI, macOS AX)*
+_Stand: agodesk 0.1.0 — Computer-Use (Windows voll, Linux AT-SPI, macOS AX)_

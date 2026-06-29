@@ -129,6 +129,32 @@ export function hasActiveChatPlan(plan: Parameters<typeof isChatPlanPanelVisible
   return isChatPlanPanelVisible(plan);
 }
 
+export function resolveOpenPetsPetLabel(
+  status: Pick<OpenPetsStatusResult, "petId" | "petName">,
+  pets: OpenPetsPetListItem[],
+  defaultPetId?: string | null,
+): string {
+  if (status.petName && status.petName.trim().length > 0) {
+    return status.petName.trim();
+  }
+  const petId = status.petId?.trim();
+  if (petId) {
+    const match = pets.find((pet) => pet.id === petId);
+    if (match?.displayName) {
+      return match.displayName;
+    }
+    return petId;
+  }
+  const fallbackId = defaultPetId?.trim();
+  if (fallbackId) {
+    const match = pets.find((pet) => pet.id === fallbackId);
+    if (match?.displayName) {
+      return match.displayName;
+    }
+  }
+  return "?";
+}
+
 export async function fetchOpenPetsStatus(): Promise<OpenPetsStatusResult> {
   return invoke<OpenPetsStatusResult>("openpets_status");
 }
