@@ -606,9 +606,9 @@ dependencies = [
 
 [[package]]
 name = "axuielement"
-version = "0.9.0"
+version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "34c2e294a417eb15dcf44be845a070894bee4ac70f21137234ab7592ab58e974"
+checksum = "7b73f5695be92296c35c332cfd287d2fce87d8d205306ee2e56659f6ae6386df"
 dependencies = [
  "apple-cf",
 ]
