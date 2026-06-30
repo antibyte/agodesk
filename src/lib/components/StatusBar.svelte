@@ -549,6 +549,13 @@
     white-space: nowrap;
   }
 
+  .status-pill .ui-chip {
+    flex-shrink: 0;
+    justify-content: center;
+    text-align: center;
+    white-space: nowrap;
+  }
+
   .actions {
     display: flex;
     align-items: center;
