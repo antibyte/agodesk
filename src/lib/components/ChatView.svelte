@@ -42,7 +42,7 @@
   import { applyOpenPetsSettings } from "../services/openpets-flow";
   import { openPetsContext } from "../stores/openpets-context";
   import { cycleTheme, destroyThemeListener } from "../services/theme";
-  import { saveTrustedCertificate } from "../services/tls";
+  import { saveTrustedCertificateForServer } from "../services/tls";
   import { openExternalUrl } from "../services/open-external-url";
   import { applyMinimizeToTraySetting } from "../services/tray";
   import { applyShowWindowHotkey } from "../services/show-window-hotkey";
@@ -559,16 +559,14 @@
   }
 
   async function handleTrustCertificate(probe: CertificateProbeResult): Promise<void> {
-    await saveTrustedCertificate(probe.origin, {
+    await saveTrustedCertificateForServer($settings.serverUrl, {
       sha256_fingerprint: probe.sha256_fingerprint,
       trusted_at: new Date().toISOString(),
       subject: probe.subject,
     });
     certModalOpen = false;
     tlsErrorCode = null;
-    await connect($settings.serverUrl, {
-      pinnedFingerprint: probe.sha256_fingerprint,
-    });
+    await connect($settings.serverUrl);
   }
 
   function handleOpenBrowser(url: string): void {

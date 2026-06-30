@@ -1,3 +1,4 @@
+use crate::ws::origin::canonical_host;
 use crate::ws::types::{ClientErrorCode, ParsedWsUrl, TlsMode};
 use chrono::Utc;
 use native_tls::{Protocol, TlsConnector};
@@ -14,10 +15,10 @@ pub fn parse_ws_url(raw: &str) -> Result<ParsedWsUrl, String> {
         return Err("Only ws:// and wss:// URLs are supported.".to_string());
     }
 
-    let host = url
-        .host_str()
-        .ok_or_else(|| "Missing host in server URL.".to_string())?
-        .to_string();
+    let host = canonical_host(
+        url.host_str()
+            .ok_or_else(|| "Missing host in server URL.".to_string())?,
+    );
     let is_loopback = is_loopback_host(&host);
     let insecure_loopback_requested =
         is_loopback && url.query_pairs().any(|(k, v)| k == "insecure_loopback" && v == "1");

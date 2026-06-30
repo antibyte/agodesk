@@ -29,12 +29,21 @@ export async function saveTrustedCertificate(
   await invoke("save_trusted_certificate", { origin, entry });
 }
 
+export async function saveTrustedCertificateForServer(
+  serverUrl: string,
+  entry: TrustedCertificateEntry,
+): Promise<void> {
+  const { invoke } = await import("@tauri-apps/api/core");
+  await invoke("save_trusted_certificate_for_server", { serverUrl, entry });
+}
+
 export async function getPinnedFingerprint(serverUrl: string): Promise<string | null> {
   const { invoke } = await import("@tauri-apps/api/core");
-  const store = await invoke<{ trusted_certificates: Record<string, TrustedCertificateEntry> }>(
-    "get_trusted_certificates",
-  );
-  return store.trusted_certificates[getWsOrigin(serverUrl)]?.sha256_fingerprint ?? null;
+  try {
+    return await invoke<string | null>("get_pinned_fingerprint", { serverUrl });
+  } catch {
+    return null;
+  }
 }
 
 export async function getPinnedFingerprintForHttpUrl(url: string): Promise<string | null> {
@@ -43,19 +52,14 @@ export async function getPinnedFingerprintForHttpUrl(url: string): Promise<strin
     return null;
   }
 
-  let origin = "";
+  const { invoke } = await import("@tauri-apps/api/core");
   try {
-    const parsed = new URL(trimmed);
-    origin = `${parsed.protocol}//${parsed.host}`;
+    return await invoke<string | null>("get_pinned_fingerprint_for_http_url", {
+      assetUrl: trimmed,
+    });
   } catch {
     return null;
   }
-
-  const { invoke } = await import("@tauri-apps/api/core");
-  const store = await invoke<{ trusted_certificates: Record<string, TrustedCertificateEntry> }>(
-    "get_trusted_certificates",
-  );
-  return store.trusted_certificates[origin]?.sha256_fingerprint ?? null;
 }
 
 export function browserOrigin(url: string): string {

@@ -32,3 +32,10 @@ test("normalisiert /api/agodesk/ auf /api/agodesk/ws", () => {
 test("origin wird ohne Pfad extrahiert", () => {
   assert.equal(getWsOrigin("wss://192.168.6.238:8443/api/agodesk/ws"), "wss://192.168.6.238:8443");
 });
+
+test("origin normalisiert fuehrende nullen in IPv4", () => {
+  assert.equal(
+    getWsOrigin("wss://192.168.006.238:8443/api/agodesk/ws"),
+    "wss://192.168.6.238:8443",
+  );
+});

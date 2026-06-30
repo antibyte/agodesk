@@ -177,6 +177,40 @@ pub async fn save_trusted_certificate(
     crate::ws::store::save_trusted_certificate(&app, origin, entry)
 }
 
+#[tauri::command(rename_all = "camelCase")]
+pub async fn save_trusted_certificate_for_server(
+    app: AppHandle,
+    server_url: String,
+    entry: TrustedCertificateEntry,
+) -> Result<(), String> {
+    if server_url.trim().is_empty() {
+        return Err("serverUrl is required.".to_string());
+    }
+    crate::ws::store::save_trusted_certificate_for_server(&app, &server_url, entry)
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn get_pinned_fingerprint(
+    app: AppHandle,
+    server_url: String,
+) -> Result<Option<String>, String> {
+    if server_url.trim().is_empty() {
+        return Ok(None);
+    }
+    pinned_fingerprint_for_url(&app, &server_url)
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn get_pinned_fingerprint_for_http_url(
+    app: AppHandle,
+    asset_url: String,
+) -> Result<Option<String>, String> {
+    if asset_url.trim().is_empty() {
+        return Ok(None);
+    }
+    crate::ws::store::pinned_fingerprint_for_http_url(&app, &asset_url)
+}
+
 #[tauri::command]
 pub async fn get_trusted_certificates(
     app: AppHandle,
@@ -213,11 +247,7 @@ pub async fn agodesk_connect(
     };
 
     let parsed = parse_ws_url(&server_url)?;
-    let pinned = config
-        .pinned_fingerprint
-        .or(pinned_fingerprint_for_url(&app, &server_url)?);
-    let tls_mode = determine_tls_mode(&parsed, pinned.as_deref(), config.tls_mode);
-    let tls_mode_label = format!("{tls_mode:?}");
+    let tls_mode_override = config.tls_mode.clone();
 
     state.cancel.store(false, Ordering::SeqCst);
     emit_state(&app, "connecting");
@@ -232,6 +262,10 @@ pub async fn agodesk_connect(
     let handle = tokio::spawn(async move {
         let mut reconnect_attempt = 0usize;
         while !cancel.load(Ordering::SeqCst) {
+            let pinned = pinned_fingerprint_for_url(&app_handle, &server_url).ok().flatten();
+            let tls_mode = determine_tls_mode(&parsed, pinned.as_deref(), tls_mode_override.clone());
+            let tls_mode_label = format!("{tls_mode:?}");
+
             match connect_and_run(
                 &app_handle,
                 &server_url,

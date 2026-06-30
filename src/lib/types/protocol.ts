@@ -2498,9 +2498,34 @@ export function appendInsecureLoopbackIfNeeded(url: string): string {
   }
 }
 
+export function normalizeTlsHost(host: string): string {
+  const trimmed = host.trim().replace(/\.$/, "");
+  if (!trimmed) {
+    return "";
+  }
+
+  const unbracketed =
+    trimmed.startsWith("[") && trimmed.endsWith("]") ? trimmed.slice(1, -1) : trimmed;
+
+  if (/^\d{1,3}(?:\.\d{1,3}){3}$/.test(unbracketed)) {
+    return unbracketed
+      .split(".")
+      .map((part) => String(Number(part)))
+      .join(".");
+  }
+
+  if (unbracketed.includes(":")) {
+    return `[${unbracketed}]`;
+  }
+
+  return unbracketed.toLowerCase();
+}
+
 export function getWsOrigin(url: string): string {
   const parsed = new URL(url);
-  return `${parsed.protocol}//${parsed.host}`;
+  const normalizedHost = normalizeTlsHost(parsed.hostname);
+  const host = parsed.port ? `${normalizedHost}:${parsed.port}` : normalizedHost;
+  return `${parsed.protocol}//${host}`;
 }
 
 /** HTTP(S)-Origin for asset fetches — maps ws/wss server URLs to http/https. */
@@ -2508,7 +2533,9 @@ export function getHttpOrigin(url: string): string {
   const parsed = new URL(url);
   const protocol =
     parsed.protocol === "wss:" ? "https:" : parsed.protocol === "ws:" ? "http:" : parsed.protocol;
-  return `${protocol}//${parsed.host}`;
+  const normalizedHost = normalizeTlsHost(parsed.hostname);
+  const host = parsed.port ? `${normalizedHost}:${parsed.port}` : normalizedHost;
+  return `${protocol}//${host}`;
 }
 
 export function isPairingRequired(payload: SystemConnectedPayload): boolean {

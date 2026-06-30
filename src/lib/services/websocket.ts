@@ -8,7 +8,6 @@ import {
   setDisconnected,
 } from "../stores/connection";
 import { prepareServerUrl } from "./server-url";
-import { getPinnedFingerprint } from "./tls";
 import { formatInvokeError } from "./errors";
 
 export type MessageHandler = (message: WsMessage) => void;
@@ -29,25 +28,15 @@ export class NativeWebSocketService {
     this.errorHandler = handler;
   }
 
-  async connect(url: string, options?: { pinnedFingerprint?: string }): Promise<void> {
+  async connect(url: string, _options?: { pinnedFingerprint?: string }): Promise<void> {
     this.url = prepareServerUrl(url);
     await this.setupListeners();
     setConnecting();
-
-    let pinnedFingerprint = options?.pinnedFingerprint ?? null;
-    if (!pinnedFingerprint) {
-      try {
-        pinnedFingerprint = await getPinnedFingerprint(this.url);
-      } catch {
-        pinnedFingerprint = null;
-      }
-    }
 
     try {
       await invoke("agodesk_connect", {
         config: {
           serverUrl: this.url,
-          ...(pinnedFingerprint ? { pinnedFingerprint } : {}),
         },
       });
     } catch (error) {
