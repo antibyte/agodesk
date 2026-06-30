@@ -1749,7 +1749,6 @@ export const DESKTOP_INPUT_OPERATIONS = [
 
 const BROWSER_PASSIVE_ACTIONS = new Set([
   "select_tab",
-  "new_tab",
   "close_tab",
   "wait_for_selector",
   "wait_for_navigation",
@@ -1759,8 +1758,26 @@ export function isBrowserTabAction(params?: unknown): boolean {
   if (!params || typeof params !== "object") {
     return false;
   }
-  const action = (params as Record<string, unknown>).action;
-  return typeof action === "string" && BROWSER_PASSIVE_ACTIONS.has(action);
+  const record = params as Record<string, unknown>;
+  const action = record.action;
+  if (typeof action !== "string") {
+    return false;
+  }
+  const normalizedAction = action.toLowerCase();
+  if (normalizedAction === "new_tab") {
+    const target = browserNewTabTarget(record);
+    return !target || target.toLowerCase() === "about:blank";
+  }
+  return BROWSER_PASSIVE_ACTIONS.has(normalizedAction);
+}
+
+function browserNewTabTarget(params: Record<string, unknown>): string | null {
+  const value = typeof params.value === "string" ? params.value.trim() : "";
+  if (value) {
+    return value;
+  }
+  const selector = typeof params.selector === "string" ? params.selector.trim() : "";
+  return selector || null;
 }
 
 export const DESKTOP_STREAM_OPERATIONS: DesktopOperation[] = [

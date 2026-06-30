@@ -463,6 +463,27 @@ test("browser tab actions brauchen keine lokale Freigabe", () => {
   );
   assert.equal(requiresRemoteControlBanner("desktop_browser_action", { action: "new_tab" }), false);
   assert.equal(
+    requiresLocalDesktopApproval("desktop_browser_action", {
+      action: "new_tab",
+      value: "about:blank",
+    }),
+    false,
+  );
+  assert.equal(
+    requiresLocalDesktopApproval("desktop_browser_action", {
+      action: "new_tab",
+      value: "https://example.com",
+    }),
+    true,
+  );
+  assert.equal(
+    requiresRemoteControlBanner("desktop_browser_action", {
+      action: "new_tab",
+      value: "https://example.com",
+    }),
+    true,
+  );
+  assert.equal(
     requiresLocalDesktopApproval("desktop_browser_action", { action: "wait_for_selector" }),
     false,
   );

@@ -52,12 +52,18 @@ pub async fn connect(
     let (browser, handler_task) = match attach_browser(&plan.endpoint).await {
         Ok(pair) => pair,
         Err(first_error) if plan.auto_launch => {
-            let (_binary, child) = launch::spawn_browser(plan.port, plan.url.as_deref())?;
-            launched_child = Some(child);
+            let (_binary, mut child) = launch::spawn_browser(plan.port, plan.url.as_deref())?;
             launched = true;
-            wait_and_attach(&plan.endpoint)
-                .await
-                .map_err(|_| first_error)?
+            match wait_and_attach(&plan.endpoint).await {
+                Ok(pair) => {
+                    launched_child = Some(child);
+                    pair
+                }
+                Err(_) => {
+                    terminate_launched_child(&mut child);
+                    return Err(first_error);
+                }
+            }
         }
         Err(error) => return Err(error),
     };
@@ -106,11 +112,7 @@ pub async fn snapshot(
     params: BrowserSnapshotParams,
 ) -> Result<BrowserSnapshotResult, String> {
     ensure_session_alive(state).await?;
-    let page = {
-        let guard = state.session.lock().await;
-        let session = session_ref(&guard)?;
-        resolve_page(session, params.tab_id.as_deref()).await?
-    };
+    let page = resolve_page_from_state(state, params.tab_id.as_deref()).await?;
     let tab_id = page.target_id().as_ref().to_string();
 
     let url = with_cdp_timeout(page.url())
@@ -159,16 +161,17 @@ pub async fn snapshot(
             .into_value()
             .map_err(map_page_error)?
         };
-        Some(truncate_to_byte_limit(raw, MAX_CONTENT_BYTES, &mut truncated))
+        Some(truncate_to_byte_limit(
+            raw,
+            MAX_CONTENT_BYTES,
+            &mut truncated,
+        ))
     } else {
         None
     };
 
     let screenshot = if params.include_screenshot.unwrap_or(false) {
-        Some(
-            with_cdp_timeout(async { capture_page_screenshot(&page, &params).await })
-                .await??,
-        )
+        Some(with_cdp_timeout(async { capture_page_screenshot(&page, &params).await }).await??)
     } else {
         None
     };
@@ -192,7 +195,9 @@ pub async fn action(
     params: BrowserActionParams,
 ) -> Result<serde_json::Value, String> {
     let action = params.action.to_ascii_lowercase();
-    if matches!(action.as_str(), "select_tab" | "new_tab" | "close_tab") {
+    if matches!(action.as_str(), "select_tab" | "close_tab")
+        || (action == "new_tab" && !browser_action_requires_input_approval(&params))
+    {
         return tab_action(state, params).await;
     }
 
@@ -202,18 +207,20 @@ pub async fn action(
         return wait_action(state, params).await;
     }
 
-    let approved = crate::desktop::is_input_approved()?;
-    if !approved {
-        return Err(format!(
-            "{INPUT_NOT_APPROVED}: Browser actions require approved desktop input."
-        ));
+    if browser_action_requires_input_approval(&params) {
+        let approved = crate::desktop::is_input_approved()?;
+        if !approved {
+            return Err(format!(
+                "{INPUT_NOT_APPROVED}: Browser actions require approved desktop input."
+            ));
+        }
     }
 
-    let page = {
-        let guard = state.session.lock().await;
-        let session = session_ref(&guard)?;
-        resolve_page(session, params.tab_id.as_deref()).await?
-    };
+    if action == "new_tab" {
+        return tab_action(state, params).await;
+    }
+
+    let page = resolve_page_from_state(state, params.tab_id.as_deref()).await?;
 
     match action.as_str() {
         "navigate" | "goto" => {
@@ -281,10 +288,7 @@ pub async fn action(
                         .map_err(map_page_error)?;
                 }
                 "press" => {
-                    let key = params
-                        .value
-                        .clone()
-                        .unwrap_or_else(|| "Enter".to_string());
+                    let key = params.value.clone().unwrap_or_else(|| "Enter".to_string());
                     with_cdp_timeout(page.find_element(&selector))
                         .await?
                         .map_err(map_element_error)?
@@ -320,11 +324,7 @@ async fn wait_action(
 ) -> Result<serde_json::Value, String> {
     let action = params.action.to_ascii_lowercase();
     let timeout_ms = parse_timeout_ms(&params.value, DEFAULT_WAIT_MS);
-    let page = {
-        let guard = state.session.lock().await;
-        let session = session_ref(&guard)?;
-        resolve_page(session, params.tab_id.as_deref()).await?
-    };
+    let page = resolve_page_from_state(state, params.tab_id.as_deref()).await?;
 
     match action.as_str() {
         "wait_for_navigation" => {
@@ -374,12 +374,12 @@ async fn tab_action(
     match action.as_str() {
         "select_tab" => {
             let tab_id = resolve_tab_id(session, &params)?;
-            let page = session
-                .browser
-                .get_page(TargetId::new(tab_id.clone()))
-                .await
+            let page = with_cdp_timeout(session.browser.get_page(TargetId::new(tab_id.clone())))
+                .await?
                 .map_err(map_page_error)?;
-            page.bring_to_front().await.map_err(map_page_error)?;
+            with_cdp_timeout(page.bring_to_front())
+                .await?
+                .map_err(map_page_error)?;
             session.page = page.clone();
             session.active_target_id = tab_id.clone();
             let info = tab_info_from_page(&page, true).await?;
@@ -397,12 +397,12 @@ async fn tab_action(
                 .or_else(|| params.selector.clone())
                 .filter(|value| !value.trim().is_empty())
                 .unwrap_or_else(|| "about:blank".to_string());
-            let page = session
-                .browser
-                .new_page(url.as_str())
-                .await
+            let page = with_cdp_timeout(session.browser.new_page(url.as_str()))
+                .await?
                 .map_err(|error| map_connect_error(&url, error))?;
-            page.bring_to_front().await.map_err(map_page_error)?;
+            with_cdp_timeout(page.bring_to_front())
+                .await?
+                .map_err(map_page_error)?;
             let tab_id = page.target_id().as_ref().to_string();
             session.page = page.clone();
             session.active_target_id = tab_id.clone();
@@ -419,21 +419,23 @@ async fn tab_action(
             let page = if tab_id == session.active_target_id {
                 session.page.clone()
             } else {
-                session
-                    .browser
-                    .get_page(TargetId::new(tab_id.clone()))
-                    .await
+                with_cdp_timeout(session.browser.get_page(TargetId::new(tab_id.clone())))
+                    .await?
                     .map_err(map_page_error)?
             };
-            page.close().await.map_err(map_page_error)?;
+            with_cdp_timeout(page.close())
+                .await?
+                .map_err(map_page_error)?;
             if tab_id == session.active_target_id {
                 let pages = user_pages(&session.browser).await?;
                 let Some(next) = pick_best_page(pages, None) else {
                     return Err(
-                        "DESKTOP_BROWSER_UNAVAILABLE: No browser tabs remain open.".to_string(),
+                        "DESKTOP_BROWSER_UNAVAILABLE: No browser tabs remain open.".to_string()
                     );
                 };
-                next.bring_to_front().await.map_err(map_page_error)?;
+                with_cdp_timeout(next.bring_to_front())
+                    .await?
+                    .map_err(map_page_error)?;
                 session.active_target_id = next.target_id().as_ref().to_string();
                 session.page = next;
             }
@@ -456,8 +458,7 @@ async fn disconnect_inner(state: &BrowserState) -> Result<(), String> {
         if session.launched {
             let _ = session.browser.close().await;
             if let Some(mut child) = session.launched_child.take() {
-                let _ = child.kill();
-                let _ = child.wait();
+                terminate_launched_child(&mut child);
             }
         }
         session.handler_task.abort();
@@ -476,9 +477,7 @@ async fn ensure_session_alive(state: &BrowserState) -> Result<(), String> {
         Ok(Ok(_)) => Ok(()),
         _ => {
             disconnect_inner(state).await?;
-            Err(
-                "DESKTOP_BROWSER_UNAVAILABLE: Browser session is no longer alive.".to_string(),
-            )
+            Err("DESKTOP_BROWSER_UNAVAILABLE: Browser session is no longer alive.".to_string())
         }
     }
 }
@@ -564,13 +563,17 @@ async fn select_page(browser: &Browser, start_url: Option<&str>) -> Result<Page,
 }
 
 async fn user_pages(browser: &Browser) -> Result<Vec<Page>, String> {
-    let pages = browser
-        .pages()
-        .await
+    let pages = with_cdp_timeout(browser.pages())
+        .await?
         .map_err(|error| map_connect_error("browser", error))?;
     let mut filtered = Vec::new();
     for page in pages {
-        let url = page.url().await.ok().flatten().unwrap_or_default();
+        let url = with_cdp_timeout(page.url())
+            .await
+            .ok()
+            .and_then(|result| result.ok())
+            .flatten()
+            .unwrap_or_default();
         if is_user_page_url(&url) {
             filtered.push(page);
         }
@@ -594,14 +597,17 @@ fn pick_best_page(pages: Vec<Page>, prefer_url: Option<&str>) -> Option<Page> {
     pages.into_iter().last()
 }
 
-async fn resolve_page(session: &CdpSession, tab_id: Option<&str>) -> Result<Page, String> {
+async fn resolve_page_from_state(
+    state: &BrowserState,
+    tab_id: Option<&str>,
+) -> Result<Page, String> {
+    let guard = state.session.lock().await;
+    let session = session_ref(&guard)?;
     match tab_id {
         None => Ok(session.page.clone()),
         Some(id) if id == session.active_target_id => Ok(session.page.clone()),
-        Some(id) => session
-            .browser
-            .get_page(TargetId::new(id.to_string()))
-            .await
+        Some(id) => with_cdp_timeout(session.browser.get_page(TargetId::new(id.to_string())))
+            .await?
             .map_err(map_page_error),
     }
 }
@@ -621,14 +627,12 @@ async fn collect_tabs(browser: &Browser, active: &str) -> Result<BrowserTabListR
 async fn tab_info_from_page(page: &Page, active: bool) -> Result<BrowserTabInfo, String> {
     Ok(BrowserTabInfo {
         id: page.target_id().as_ref().to_string(),
-        url: page
-            .url()
-            .await
+        url: with_cdp_timeout(page.url())
+            .await?
             .map_err(map_page_error)?
             .unwrap_or_default(),
-        title: page
-            .get_title()
-            .await
+        title: with_cdp_timeout(page.get_title())
+            .await?
             .map_err(map_page_error)?
             .unwrap_or_default(),
         active,
@@ -702,7 +706,31 @@ fn screenshot_format(raw: Option<&str>) -> CaptureScreenshotFormat {
 }
 
 fn resolve_tab_id(session: &CdpSession, params: &BrowserActionParams) -> Result<String, String> {
-    Ok(resolve_tab_id_from_params(&session.active_target_id, params))
+    Ok(resolve_tab_id_from_params(
+        &session.active_target_id,
+        params,
+    ))
+}
+
+fn browser_action_requires_input_approval(params: &BrowserActionParams) -> bool {
+    match params.action.to_ascii_lowercase().as_str() {
+        "select_tab" | "close_tab" | "wait_for_selector" | "wait_for_navigation" => false,
+        "new_tab" => new_tab_target(params).is_some_and(|target| !is_blank_tab_target(target)),
+        _ => true,
+    }
+}
+
+fn new_tab_target(params: &BrowserActionParams) -> Option<&str> {
+    params
+        .value
+        .as_deref()
+        .or(params.selector.as_deref())
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+}
+
+fn is_blank_tab_target(target: &str) -> bool {
+    target.eq_ignore_ascii_case("about:blank")
 }
 
 fn resolve_tab_id_from_params(active_target_id: &str, params: &BrowserActionParams) -> String {
@@ -768,21 +796,19 @@ where
 {
     tokio::time::timeout(CDP_OPERATION_TIMEOUT, future)
         .await
-        .map_err(|_| {
-            "DESKTOP_BROWSER_UNAVAILABLE: Browser operation timed out.".to_string()
-        })
+        .map_err(|_| "DESKTOP_BROWSER_UNAVAILABLE: Browser operation timed out.".to_string())
 }
 
 async fn with_cdp_timeout_duration<T, F>(duration: Duration, future: F) -> Result<T, String>
 where
     F: Future<Output = T>,
 {
-    tokio::time::timeout(duration, future)
-        .await
-        .map_err(|_| format!(
+    tokio::time::timeout(duration, future).await.map_err(|_| {
+        format!(
             "DESKTOP_BROWSER_UNAVAILABLE: Browser operation timed out after {} ms.",
             duration.as_millis()
-        ))
+        )
+    })
 }
 
 fn map_connect_error(endpoint: &str, error: impl std::fmt::Display) -> String {
@@ -797,13 +823,21 @@ fn map_element_error(error: impl std::fmt::Display) -> String {
     format!("{ELEMENT_NOT_FOUND}: {error}")
 }
 
+fn terminate_launched_child(child: &mut Child) {
+    let _ = child.kill();
+    let _ = child.wait();
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
     fn urls_match_allows_prefix() {
-        assert!(urls_match("https://example.com/path", "https://example.com"));
+        assert!(urls_match(
+            "https://example.com/path",
+            "https://example.com"
+        ));
         assert!(urls_match("https://example.com", "https://example.com"));
         assert!(!urls_match("https://other.com", "https://example.com"));
     }
@@ -811,10 +845,7 @@ mod tests {
     #[test]
     fn screenshot_format_defaults_to_jpeg() {
         assert_eq!(screenshot_format(None), CaptureScreenshotFormat::Jpeg);
-        assert_eq!(
-            screenshot_format(Some("png")),
-            CaptureScreenshotFormat::Png
-        );
+        assert_eq!(screenshot_format(Some("png")), CaptureScreenshotFormat::Png);
     }
 
     #[test]
@@ -829,7 +860,9 @@ mod tests {
 
     #[test]
     fn is_user_page_url_filters_internal_schemes() {
-        assert!(!is_user_page_url("devtools://devtools/bundled/inspector.html"));
+        assert!(!is_user_page_url(
+            "devtools://devtools/bundled/inspector.html"
+        ));
         assert!(!is_user_page_url("chrome://newtab/"));
         assert!(is_user_page_url("https://example.com"));
     }
@@ -837,7 +870,10 @@ mod tests {
     #[test]
     fn parse_timeout_ms_clamps_and_defaults() {
         assert_eq!(parse_timeout_ms(&None, 5_000), 5_000);
-        assert_eq!(parse_timeout_ms(&Some("999999".to_string()), 5_000), 120_000);
+        assert_eq!(
+            parse_timeout_ms(&Some("999999".to_string()), 5_000),
+            120_000
+        );
         assert_eq!(parse_timeout_ms(&Some("1500".to_string()), 5_000), 1_500);
     }
 
@@ -849,10 +885,7 @@ mod tests {
             tab_id: Some("tab-123".to_string()),
             value: None,
         };
-        assert_eq!(
-            resolve_tab_id_from_params("tab-active", &params),
-            "tab-123"
-        );
+        assert_eq!(resolve_tab_id_from_params("tab-active", &params), "tab-123");
 
         let fallback = BrowserActionParams {
             action: "close_tab".to_string(),
@@ -864,5 +897,55 @@ mod tests {
             resolve_tab_id_from_params("tab-active", &fallback),
             "tab-active"
         );
+    }
+
+    #[test]
+    fn new_tab_with_url_requires_input_approval() {
+        let blank_tab = BrowserActionParams {
+            action: "new_tab".to_string(),
+            selector: None,
+            tab_id: None,
+            value: None,
+        };
+        assert!(!browser_action_requires_input_approval(&blank_tab));
+
+        let url_tab = BrowserActionParams {
+            action: "new_tab".to_string(),
+            selector: None,
+            tab_id: None,
+            value: Some("https://example.com".to_string()),
+        };
+        assert!(browser_action_requires_input_approval(&url_tab));
+
+        let explicit_blank_tab = BrowserActionParams {
+            action: "new_tab".to_string(),
+            selector: None,
+            tab_id: None,
+            value: Some("about:blank".to_string()),
+        };
+        assert!(!browser_action_requires_input_approval(&explicit_blank_tab));
+    }
+
+    #[test]
+    fn terminate_launched_child_stops_child_process() {
+        let mut child = spawn_sleeping_child();
+        terminate_launched_child(&mut child);
+        assert!(child.try_wait().expect("child status").is_some());
+    }
+
+    #[cfg(windows)]
+    fn spawn_sleeping_child() -> Child {
+        std::process::Command::new("cmd")
+            .args(["/C", "ping -n 30 127.0.0.1 > NUL"])
+            .spawn()
+            .expect("sleeping child")
+    }
+
+    #[cfg(not(windows))]
+    fn spawn_sleeping_child() -> Child {
+        std::process::Command::new("sh")
+            .args(["-c", "sleep 30"])
+            .spawn()
+            .expect("sleeping child")
     }
 }
