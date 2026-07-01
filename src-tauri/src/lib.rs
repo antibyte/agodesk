@@ -4,6 +4,7 @@ pub mod computer_use;
 mod desktop;
 mod files;
 mod integration_embed;
+mod oauth;
 mod openpets;
 pub mod speech;
 mod shell;
@@ -28,6 +29,7 @@ pub fn run() {
         .manage(TrayState::default())
         .manage(computer_use::browser::BrowserState::default())
         .manage(openpets::OpenPetsState::default())
+        .manage(oauth::OAuthListenerState::default())
         .setup(|app| {
             speech::runtime::init_sherpa_runtime();
             speech::asr::normalize_legacy_model_layouts();
@@ -136,6 +138,8 @@ pub fn run() {
             openpets::commands::openpets_react,
             openpets::commands::openpets_say,
             openpets::commands::openpets_list_pets,
+            oauth::oauth_start_listener,
+            oauth::oauth_stop_listener,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

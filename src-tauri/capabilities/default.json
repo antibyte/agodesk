@@ -28,6 +28,7 @@
         "agodesk:connection-state",
         "agodesk:message",
         "agodesk:error",
+        "agodesk:oauth-callback",
         "integration-embed-closed"
       ]
     }

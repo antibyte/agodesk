@@ -973,6 +973,7 @@
         onOpenTlsTrust={() => {
           certModalOpen = true;
         }}
+        wsSend={(message: WsMessage) => wsService.send(message)}
       />
     {:else}
       <div class="settings-loading" aria-busy="true">

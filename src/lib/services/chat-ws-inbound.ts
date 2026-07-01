@@ -37,6 +37,14 @@ import {
 import { clearAttachmentPathCache } from "./chat-attachment-paths";
 import { bootstrapAgodeskFeatures } from "./agodesk-features-bootstrap";
 import { handleIntegrationsWebhostsMessage } from "./integrations-flow";
+import {
+  handleConfigProviderCatalogMessage,
+  handleConfigProviderMessage,
+  handleConfigProviderOauthStartedMessage,
+  handleConfigProviderOauthStatusMessage,
+  handleConfigProvidersMessage,
+  handleConfigProviderTestResultMessage,
+} from "./providers-flow";
 import { handleSystemWarningsMessage } from "./system-warnings-flow";
 import { shouldUseFrontendTtsForSettings } from "./chat-tts-policy";
 import { syncAuraGoVoiceOutputStatus } from "./chat-voice-output-status";
@@ -57,6 +65,12 @@ import {
   isChatVoiceOutputStatus,
   isDesktopCommand,
   isIntegrationsWebhosts,
+  isConfigProviders,
+  isConfigProvider,
+  isConfigProviderCatalog,
+  isConfigProviderTestResult,
+  isConfigProviderOauthStarted,
+  isConfigProviderOauthStatus,
   isPersonaAssets,
   isSessionAccepted,
   isSessionClear,
@@ -292,6 +306,36 @@ export async function handleChatWsMessage(
 
   if (isIntegrationsWebhosts(message)) {
     handleIntegrationsWebhostsMessage(message.payload);
+    return;
+  }
+
+  if (isConfigProviders(message)) {
+    handleConfigProvidersMessage(message, message.payload);
+    return;
+  }
+
+  if (isConfigProvider(message)) {
+    handleConfigProviderMessage(message, message.payload);
+    return;
+  }
+
+  if (isConfigProviderCatalog(message)) {
+    handleConfigProviderCatalogMessage(message, message.payload);
+    return;
+  }
+
+  if (isConfigProviderTestResult(message)) {
+    handleConfigProviderTestResultMessage(message, message.payload);
+    return;
+  }
+
+  if (isConfigProviderOauthStarted(message)) {
+    handleConfigProviderOauthStartedMessage(message, message.payload);
+    return;
+  }
+
+  if (isConfigProviderOauthStatus(message)) {
+    handleConfigProviderOauthStatusMessage(message, message.payload);
     return;
   }
 

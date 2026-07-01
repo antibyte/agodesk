@@ -62,6 +62,18 @@ import {
   requiresLocalDesktopApproval,
   requiresRemoteControlBanner,
   resolvePersonaAssetUrl,
+  normalizeConfigProvider,
+  normalizeConfigProvidersPayload,
+  normalizeConfigProviderCatalogPayload,
+  normalizeConfigProviderTestResultPayload,
+  normalizeConfigProviderOauthStartedPayload,
+  normalizeConfigProviderOauthStatusPayload,
+  hasAdvertisedConfigProvidersRead,
+  hasAdvertisedConfigProvidersWrite,
+  hasAdvertisedConfigProvidersOauth,
+  AGODESK_CONFIG_PROVIDERS_READ_CAPABILITY,
+  AGODESK_CONFIG_PROVIDERS_WRITE_CAPABILITY,
+  AGODESK_CONFIG_PROVIDERS_OAUTH_CAPABILITY,
 } from "./protocol.ts";
 
 test("normalizeSessionAcceptedPayload akzeptiert snake_case", () => {
@@ -1037,4 +1049,92 @@ test("normalizeShellExecParams normalisiert snake_case und camelCase", () => {
   assert.equal(params.command, "git status");
   assert.equal(params.cwd_id, "workspace");
   assert.equal(params.timeout_ms, 15000);
+});
+
+test("normalizeConfigProvider accepts safe provider shape", () => {
+  const provider = normalizeConfigProvider({
+    id: "openrouter",
+    name: "OpenRouter",
+    type: "openrouter",
+    auth_type: "api_key",
+    secrets: { api_key: { present: true } },
+    oauth: { authorized: false, missing_fields: ["api_key"] },
+    references: [{ path: "llm.primary", role: "primary_llm" }],
+  });
+  assert.ok(provider);
+  assert.equal(provider?.secrets?.api_key?.present, true);
+  assert.deepEqual(provider?.oauth?.missing_fields, ["api_key"]);
+  assert.equal(provider?.references?.[0]?.role, "primary_llm");
+});
+
+test("normalizeConfigProvidersPayload reads snake_case list", () => {
+  const payload = normalizeConfigProvidersPayload({
+    session_id: "sess-1",
+    providers: [{ id: "p1", name: "P1", type: "custom" }],
+  });
+  assert.equal(payload?.providers.length, 1);
+});
+
+test("normalizeConfigProviderCatalogPayload reads catalog entries", () => {
+  const payload = normalizeConfigProviderCatalogPayload({
+    session_id: "sess-1",
+    enabled: true,
+    providers: [
+      {
+        id: "google",
+        name: "Google",
+        oauth_setup: { auth_url: "https://example.com/auth", scopes: ["email"] },
+      },
+    ],
+  });
+  assert.equal(payload?.providers[0]?.oauth_setup?.auth_url, "https://example.com/auth");
+});
+
+test("normalizeConfigProviderTestResultPayload requires ok boolean", () => {
+  assert.ok(
+    normalizeConfigProviderTestResultPayload({
+      session_id: "sess-1",
+      provider_id: "p1",
+      ok: true,
+      message: "ok",
+    }),
+  );
+});
+
+test("normalizeConfigProviderOauthStartedPayload reads auth_url", () => {
+  const payload = normalizeConfigProviderOauthStartedPayload({
+    session_id: "sess-1",
+    provider_id: "google",
+    auth_url: "https://example.com/oauth",
+    fallback_modes: ["manual_paste"],
+  });
+  assert.equal(payload?.fallback_modes?.[0], "manual_paste");
+});
+
+test("normalizeConfigProviderOauthStatusPayload reads authorization flags", () => {
+  const payload = normalizeConfigProviderOauthStatusPayload({
+    session_id: "sess-1",
+    provider_id: "google",
+    authorized: true,
+    has_refresh_token: true,
+  });
+  assert.equal(payload?.authorized, true);
+});
+
+test("hasAdvertisedConfigProviders helpers match capability strings", () => {
+  const caps = [
+    AGODESK_CONFIG_PROVIDERS_READ_CAPABILITY,
+    AGODESK_CONFIG_PROVIDERS_WRITE_CAPABILITY,
+    AGODESK_CONFIG_PROVIDERS_OAUTH_CAPABILITY,
+  ];
+  assert.equal(hasAdvertisedConfigProvidersRead(caps), true);
+  assert.equal(hasAdvertisedConfigProvidersWrite(caps), true);
+  assert.equal(hasAdvertisedConfigProvidersOauth(caps), true);
+});
+
+test("agodeskClientCapabilities advertises config.providers.* caps", () => {
+  const caps = agodeskClientCapabilities();
+  assert.equal(caps.includes(AGODESK_CONFIG_PROVIDERS_READ_CAPABILITY), true);
+  assert.equal(caps.includes(AGODESK_CONFIG_PROVIDERS_WRITE_CAPABILITY), true);
+  assert.equal(caps.includes(AGODESK_CONFIG_PROVIDERS_OAUTH_CAPABILITY), true);
 });

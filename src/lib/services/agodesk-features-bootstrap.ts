@@ -1,7 +1,12 @@
 import { get } from "svelte/store";
 import { sessionState } from "../stores/session";
 import type { WsMessage } from "../types/protocol";
-import { hasAdvertisedIntegrationsWebhosts, hasAdvertisedSystemWarnings } from "../types/protocol";
+import {
+  hasAdvertisedConfigProvidersRead,
+  hasAdvertisedIntegrationsWebhosts,
+  hasAdvertisedSystemWarnings,
+} from "../types/protocol";
+import { buildConfigProvidersListMessage, fetchConfigProvidersList } from "./providers-flow";
 import type { NativeWebSocketService } from "./websocket";
 
 export function buildIntegrationsWebhostsListMessage(sessionId: string): WsMessage {
@@ -32,6 +37,9 @@ export async function bootstrapAgodeskFeatures(
   if (hasAdvertisedIntegrationsWebhosts(caps)) {
     tasks.push(ws.send(buildIntegrationsWebhostsListMessage(sessionId)));
   }
+  if (hasAdvertisedConfigProvidersRead(caps)) {
+    tasks.push(ws.send(buildConfigProvidersListMessage(sessionId)));
+  }
   if (hasAdvertisedSystemWarnings(caps)) {
     tasks.push(ws.send(buildSystemWarningsListMessage(sessionId)));
   }
@@ -45,6 +53,14 @@ export async function refreshIntegrationsWebhosts(ws: NativeWebSocketService): P
     return;
   }
   await ws.send(buildIntegrationsWebhostsListMessage(session.sessionId));
+}
+
+export async function refreshConfigProviders(ws: NativeWebSocketService): Promise<void> {
+  const session = get(sessionState);
+  if (!session.sessionId || !hasAdvertisedConfigProvidersRead(session.advertisedCapabilities)) {
+    return;
+  }
+  await fetchConfigProvidersList((message) => ws.send(message), session.sessionId);
 }
 
 export async function refreshSystemWarnings(ws: NativeWebSocketService): Promise<void> {

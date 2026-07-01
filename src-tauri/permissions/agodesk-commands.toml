@@ -63,5 +63,7 @@ commands.allow = [
   "openpets_set_enabled",
   "openpets_react",
   "openpets_say",
-  "openpets_list_pets"
+  "openpets_list_pets",
+  "oauth_start_listener",
+  "oauth_stop_listener"
 ]

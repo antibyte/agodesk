@@ -7,6 +7,7 @@ import {
   setConnectionError,
   setDisconnected,
 } from "../stores/connection";
+import { rejectAnyPendingProviderWaiters } from "./providers-flow";
 import { prepareServerUrl } from "./server-url";
 import { formatInvokeError } from "./errors";
 
@@ -90,10 +91,12 @@ export class NativeWebSocketService {
               break;
             case "disconnected":
               this.clearPingTimer();
+              rejectAnyPendingProviderWaiters(new Error("WebSocket disconnected."));
               setDisconnected();
               break;
             case "error":
               this.clearPingTimer();
+              rejectAnyPendingProviderWaiters(new Error("WebSocket connection error."));
               setConnectionError();
               break;
           }
@@ -220,6 +223,42 @@ export function isIntegrationsWebhosts(
   message: WsMessage,
 ): message is WsMessage<import("../types/protocol").IntegrationsWebhostsPayload> {
   return message.type === "integrations.webhosts";
+}
+
+export function isConfigProviders(
+  message: WsMessage,
+): message is WsMessage<import("../types/protocol").ConfigProvidersPayload> {
+  return message.type === "config.providers";
+}
+
+export function isConfigProvider(
+  message: WsMessage,
+): message is WsMessage<import("../types/protocol").ConfigProviderPayload> {
+  return message.type === "config.provider";
+}
+
+export function isConfigProviderCatalog(
+  message: WsMessage,
+): message is WsMessage<import("../types/protocol").ConfigProviderCatalogPayload> {
+  return message.type === "config.provider.catalog";
+}
+
+export function isConfigProviderTestResult(
+  message: WsMessage,
+): message is WsMessage<import("../types/protocol").ConfigProviderTestResultPayload> {
+  return message.type === "config.provider.test_result";
+}
+
+export function isConfigProviderOauthStarted(
+  message: WsMessage,
+): message is WsMessage<import("../types/protocol").ConfigProviderOauthStartedPayload> {
+  return message.type === "config.provider.oauth.started";
+}
+
+export function isConfigProviderOauthStatus(
+  message: WsMessage,
+): message is WsMessage<import("../types/protocol").ConfigProviderOauthStatusPayload> {
+  return message.type === "config.provider.oauth.status";
 }
 
 export function isSystemWarnings(

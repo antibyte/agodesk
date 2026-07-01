@@ -1,4 +1,11 @@
 import type { UiLocaleSetting } from "../i18n/locales";
+import {
+  AGODESK_CONFIG_PROVIDERS_OAUTH_CAPABILITY,
+  AGODESK_CONFIG_PROVIDERS_READ_CAPABILITY,
+  AGODESK_CONFIG_PROVIDERS_WRITE_CAPABILITY,
+} from "./providers-protocol";
+
+export * from "./providers-protocol";
 
 export type ConnectionStatus = "connecting" | "connected" | "disconnected" | "error";
 
@@ -42,6 +49,22 @@ export type MessageType =
   | "chat.voice_output.status"
   | "integrations.webhosts.list"
   | "integrations.webhosts"
+  | "config.providers.list"
+  | "config.providers"
+  | "config.provider.get"
+  | "config.provider"
+  | "config.provider.upsert"
+  | "config.provider.delete"
+  | "config.provider.test"
+  | "config.provider.test_result"
+  | "config.provider.catalog.list"
+  | "config.provider.catalog.detail"
+  | "config.provider.catalog"
+  | "config.provider.oauth.start"
+  | "config.provider.oauth.started"
+  | "config.provider.oauth.complete"
+  | "config.provider.oauth.status"
+  | "config.provider.oauth.revoke"
   | "system.warnings.list"
   | "system.warnings"
   | "system.warning.acknowledge"
@@ -2434,6 +2457,11 @@ export const AGODESK_CHAT_MEDIA_UPLOAD_CAPABILITY = "chat.media_upload";
 export const AGODESK_CHAT_ATTACHMENTS_CAPABILITY = "chat.attachments";
 export const AGODESK_INTEGRATIONS_WEBHOSTS_CAPABILITY = "integrations.webhosts";
 export const AGODESK_SYSTEM_WARNINGS_CAPABILITY = "system.warnings";
+export {
+  AGODESK_CONFIG_PROVIDERS_READ_CAPABILITY,
+  AGODESK_CONFIG_PROVIDERS_WRITE_CAPABILITY,
+  AGODESK_CONFIG_PROVIDERS_OAUTH_CAPABILITY,
+} from "./providers-protocol";
 
 export const AGODESK_BASE_CAPABILITIES = [
   "chat.full_response",
@@ -2851,6 +2879,9 @@ export function agodeskClientCapabilities(
     AGODESK_CHAT_ATTACHMENTS_CAPABILITY,
     AGODESK_INTEGRATIONS_WEBHOSTS_CAPABILITY,
     AGODESK_SYSTEM_WARNINGS_CAPABILITY,
+    AGODESK_CONFIG_PROVIDERS_READ_CAPABILITY,
+    AGODESK_CONFIG_PROVIDERS_WRITE_CAPABILITY,
+    AGODESK_CONFIG_PROVIDERS_OAUTH_CAPABILITY,
   ];
 
   if (desktopControlEnabled) {

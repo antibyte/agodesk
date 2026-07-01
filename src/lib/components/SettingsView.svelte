@@ -41,6 +41,8 @@
     saveGeminiApiKey,
   } from "../services/gemini-credentials";
   import { testGeminiConnection, testLocalSpeechTts } from "../services/speech-flow";
+  import LlmProvidersSection from "./LlmProvidersSection.svelte";
+  import type { WsMessage } from "../types/protocol";
   import {
     speechAsrStatus,
     speechTtsStatus,
@@ -123,6 +125,7 @@
     | "files"
     | "shell"
     | "speech"
+    | "llmProviders"
     | "about";
 
   type SpeechSubSection = "provider" | "asr" | "tts" | "tests";
@@ -155,6 +158,7 @@
     onRetryPairing?: () => void;
     onUnpair?: () => void;
     onOpenTlsTrust?: () => void;
+    wsSend?: (message: WsMessage) => Promise<void>;
   }
 
   let {
@@ -185,6 +189,7 @@
     onRetryPairing,
     onUnpair,
     onOpenTlsTrust,
+    wsSend,
   }: Props = $props();
 
   let activeSection = $state<SettingsSection>("connection");
@@ -246,6 +251,11 @@
         ["files", "settings.section.files.label", "settings.section.files.hint"],
         ["shell", "settings.section.shell.label", "settings.section.shell.hint"],
         ["speech", "settings.section.speech.label", "settings.section.speech.hint"],
+        [
+          "llmProviders",
+          "settings.section.llmProviders.label",
+          "settings.section.llmProviders.hint",
+        ],
         ["about", "settings.section.about.label", "settings.section.about.hint"],
       ] as const
     ).map(([id, labelKey, hintKey]) => ({
@@ -2283,6 +2293,10 @@
                 </div>
               </section>
             {/if}
+          {/if}
+
+          {#if activeSection === "llmProviders"}
+            <LlmProvidersSection {sessionId} {advertisedCapabilities} {wsSend} />
           {/if}
 
           {#if activeSection === "about"}
