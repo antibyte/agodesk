@@ -415,6 +415,8 @@
   "settings.llmProviders.fields.clearOauthSecret": "Remove stored client secret",
   "settings.llmProviders.editor.createTitle": "Add provider",
   "settings.llmProviders.editor.editTitle": "Edit provider",
+  "settings.llmProviders.editor.fromCatalog": "From catalog: {name}",
+  "settings.llmProviders.editor.loading": "Loading provider details…",
   "settings.llmProviders.editor.save": "Save provider",
   "settings.llmProviders.catalog.title": "Provider catalog",
   "settings.llmProviders.catalog.description": "Choose a catalog provider to prefill OAuth and model defaults.",

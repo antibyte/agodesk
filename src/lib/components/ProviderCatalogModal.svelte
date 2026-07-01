@@ -12,19 +12,18 @@
   }
 
   let { open = false, entries = [], busy = false, onClose, onSelect }: Props = $props();
-
-  let modalEl = $state<HTMLDialogElement | null>(null);
 </script>
 
 {#if open}
-  <div class="catalog-backdrop" role="presentation">
-    <dialog
-      bind:this={modalEl}
-      class="catalog-modal ui-card"
-      open
-      use:focusTrap
-      aria-labelledby="catalog-title"
-    >
+  <div class="catalog-backdrop" role="presentation" onclick={() => onClose?.()}></div>
+  <dialog
+    class="catalog-modal ui-card glass-panel"
+    open
+    use:focusTrap
+    aria-modal="true"
+    aria-labelledby="catalog-title"
+    onclick={(event) => event.stopPropagation()}
+  >
       <header class="catalog-header">
         <h2 id="catalog-title">{$i18n("settings.llmProviders.catalog.title")}</h2>
         <p>{$i18n("settings.llmProviders.catalog.description")}</p>
@@ -68,7 +67,6 @@
         </button>
       </div>
     </dialog>
-  </div>
 {/if}
 
 <style>
@@ -76,13 +74,16 @@
     position: fixed;
     inset: 0;
     z-index: 1150;
-    display: grid;
-    place-items: center;
     background: rgba(0, 0, 0, 0.45);
     backdrop-filter: blur(6px);
   }
 
   .catalog-modal {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    z-index: 1160;
+    transform: translate(-50%, -50%);
     width: min(560px, calc(100vw - 2rem));
     max-height: min(80vh, 720px);
     overflow: auto;

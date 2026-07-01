@@ -50,6 +50,7 @@
 
   let editorOpen = $state(false);
   let editorMode = $state<"create" | "edit">("create");
+  let editorLoadingDetail = $state(false);
   let editingProvider = $state<ConfigProvider | null>(null);
   let selectedCatalogEntry = $state<ConfigProviderCatalogEntry | null>(null);
   let catalogOpen = $state(false);
@@ -91,27 +92,23 @@
     await fetchConfigProvidersList(wsSend, sessionId);
   }
 
-  async function openCreateEditor(): Promise<void> {
-    editorMode = "create";
-    editingProvider = null;
-    selectedCatalogEntry = null;
-    editorOpen = true;
-  }
-
   async function openEditEditor(provider: ConfigProvider): Promise<void> {
     if (!wsSend || !sessionId) {
       return;
     }
     editorMode = "edit";
+    editingProvider = provider;
+    selectedCatalogEntry = null;
     editorOpen = true;
-    busy = true;
+    editorLoadingDetail = true;
     try {
       editingProvider = await fetchConfigProviderDetail(wsSend, sessionId, provider.id);
     } catch (error) {
       setFeedback(error instanceof Error ? error.message : String(error), "error");
       editorOpen = false;
+      editingProvider = null;
     } finally {
-      busy = false;
+      editorLoadingDetail = false;
     }
   }
 
@@ -138,16 +135,18 @@
     catalogOpen = false;
     editorMode = "create";
     editorOpen = true;
-    busy = true;
+    editorLoadingDetail = true;
+    selectedCatalogEntry = entry;
+    editingProvider = null;
     try {
       const detail = await fetchConfigProviderCatalogDetail(wsSend, sessionId, entry.id);
       selectedCatalogEntry = detail.providers[0] ?? entry;
-      editingProvider = null;
     } catch (error) {
       setFeedback(error instanceof Error ? error.message : String(error), "error");
       editorOpen = false;
+      selectedCatalogEntry = null;
     } finally {
-      busy = false;
+      editorLoadingDetail = false;
     }
   }
 
@@ -329,14 +328,6 @@
       {#if canWrite}
         <button
           type="button"
-          class="ui-btn"
-          disabled={busy}
-          onclick={() => void openCreateEditor()}
-        >
-          {$i18n("settings.llmProviders.addCustom")}
-        </button>
-        <button
-          type="button"
           class="ui-btn primary"
           disabled={busy}
           onclick={() => void openCatalog()}
@@ -359,105 +350,85 @@
     {#if $providersState.providers.length === 0}
       <p class="empty">{$i18n("settings.llmProviders.empty")}</p>
     {:else}
-      <ul class="provider-list">
-        {#each $providersState.providers as provider (provider.id)}
-          <li class="provider-card ui-card">
-            <div class="provider-head">
-              <div>
-                <h3>{provider.name}</h3>
-                <p class="provider-meta">
-                  {provider.type}{provider.model ? ` · ${provider.model}` : ""}
-                </p>
+      <div class="provider-list-wrap">
+        <ul class="provider-list">
+          {#each $providersState.providers as provider (provider.id)}
+            <li class="provider-card ui-card">
+              <div class="provider-head">
+                <div class="provider-summary">
+                  <h3>{provider.name}</h3>
+                  <p class="provider-meta">
+                    <span class="ui-chip compact" data-tone="idle">{provider.type}</span>
+                    {#if provider.model}
+                      <span>{provider.model}</span>
+                    {/if}
+                    {#if provider.auth_type}
+                      <span class="ui-chip compact" data-tone="connected">{provider.auth_type}</span
+                      >
+                    {/if}
+                    {#if provider.oauth?.authorized}
+                      <span class="ui-chip compact" data-tone="accepted">
+                        {$i18n("settings.llmProviders.oauth.authorized")}
+                      </span>
+                    {/if}
+                  </p>
+                </div>
+                <div class="provider-actions">
+                  <button
+                    type="button"
+                    class="ui-btn ghost compact"
+                    disabled={busy || $providersState.testLoadingProviderId === provider.id}
+                    onclick={() => void handleTest(provider)}
+                  >
+                    {$i18n("settings.llmProviders.test")}
+                  </button>
+                  <button
+                    type="button"
+                    class="ui-btn ghost compact"
+                    disabled={busy}
+                    onclick={() => void openEditEditor(provider)}
+                  >
+                    {$i18n("settings.llmProviders.edit")}
+                  </button>
+                  {#if canWrite}
+                    <button
+                      type="button"
+                      class="ui-btn ghost compact danger"
+                      disabled={busy}
+                      onclick={() => void handleDelete(provider)}
+                    >
+                      {$i18n("settings.llmProviders.delete")}
+                    </button>
+                  {/if}
+                </div>
               </div>
-              <div class="chip-row">
-                {#if provider.auth_type}
-                  <span class="ui-chip" data-tone="idle">{provider.auth_type}</span>
-                {/if}
-                {#if provider.oauth?.authorized}
-                  <span class="ui-chip" data-tone="accepted">
-                    {$i18n("settings.llmProviders.oauth.authorized")}
-                  </span>
-                {/if}
-              </div>
-            </div>
-
-            <dl class="info-grid compact">
-              {#if provider.base_url}
-                <div>
-                  <dt>{$i18n("settings.llmProviders.fields.baseUrl")}</dt>
-                  <dd>{provider.base_url}</dd>
-                </div>
-              {/if}
-              {#if provider.oauth?.missing_fields?.length}
-                <div class="full">
-                  <dt>{$i18n("settings.llmProviders.missingFields")}</dt>
-                  <dd>{provider.oauth.missing_fields.join(", ")}</dd>
-                </div>
-              {/if}
-              {#if provider.references?.length}
-                <div class="full">
-                  <dt>{$i18n("settings.llmProviders.references")}</dt>
-                  <dd class="chip-row">
-                    {#each provider.references as ref (ref.path + ref.role)}
-                      <span class="ui-chip" data-tone="connected">{ref.role}</span>
-                    {/each}
-                  </dd>
-                </div>
-              {/if}
-            </dl>
-
-            <div class="provider-actions">
-              <button
-                type="button"
-                class="ui-btn ghost compact"
-                disabled={busy || $providersState.testLoadingProviderId === provider.id}
-                onclick={() => void handleTest(provider)}
-              >
-                {$i18n("settings.llmProviders.test")}
-              </button>
-              <button
-                type="button"
-                class="ui-btn ghost compact"
-                disabled={busy}
-                onclick={() => void openEditEditor(provider)}
-              >
-                {$i18n("settings.llmProviders.edit")}
-              </button>
-              {#if canWrite}
-                <button
-                  type="button"
-                  class="ui-btn ghost compact danger"
-                  disabled={busy}
-                  onclick={() => void handleDelete(provider)}
-                >
-                  {$i18n("settings.llmProviders.delete")}
-                </button>
-              {/if}
-            </div>
-          </li>
-        {/each}
-      </ul>
+            </li>
+          {/each}
+        </ul>
+      </div>
     {/if}
-
-    <ProviderEditorPanel
-      open={editorOpen}
-      mode={editorMode}
-      provider={editingProvider}
-      catalogEntry={selectedCatalogEntry}
-      {canWrite}
-      {canOauth}
-      busy={busy || $providersState.detailLoading}
-      onClose={() => {
-        editorOpen = false;
-        editingProvider = null;
-        selectedCatalogEntry = null;
-      }}
-      onSave={(payload) => void handleSave(payload)}
-      onStartOauth={(providerId) => void handleStartOauth(providerId)}
-      onRevokeOauth={(providerId) => void handleRevokeOauth(providerId)}
-    />
   {/if}
 </section>
+
+<ProviderEditorPanel
+  open={editorOpen}
+  mode={editorMode}
+  provider={editingProvider}
+  catalogEntry={selectedCatalogEntry}
+  {canWrite}
+  {canOauth}
+  {busy}
+  loadingDetail={editorLoadingDetail}
+  onClose={() => {
+    editorOpen = false;
+    editingProvider = null;
+    selectedCatalogEntry = null;
+    editorLoadingDetail = false;
+  }}
+  onSave={(payload) => void handleSave(payload)}
+  onStartOauth={(providerId) => void handleStartOauth(providerId)}
+  onRevokeOauth={(providerId) => void handleRevokeOauth(providerId)}
+/>
 
 <ProviderCatalogModal
   open={catalogOpen}
@@ -488,46 +459,55 @@
     margin-bottom: 1rem;
   }
 
+  .provider-list-wrap {
+    max-height: min(52vh, 520px);
+    overflow-y: auto;
+    padding-right: 0.15rem;
+  }
+
   .provider-list {
     list-style: none;
     margin: 0;
     padding: 0;
     display: grid;
-    gap: 0.75rem;
+    gap: 0.5rem;
   }
 
   .provider-card {
-    padding: 1rem;
+    padding: 0.75rem 0.9rem;
   }
 
   .provider-head {
     display: flex;
     justify-content: space-between;
     gap: 0.75rem;
-    align-items: flex-start;
+    align-items: center;
+  }
+
+  .provider-summary {
+    min-width: 0;
   }
 
   .provider-head h3 {
     margin: 0;
+    font-size: 0.98rem;
   }
 
   .provider-meta {
-    margin: 0.2rem 0 0;
-    opacity: 0.75;
-    font-size: 0.9rem;
-  }
-
-  .chip-row {
+    margin: 0.35rem 0 0;
     display: flex;
     flex-wrap: wrap;
     gap: 0.35rem;
+    align-items: center;
+    opacity: 0.85;
+    font-size: 0.82rem;
   }
 
   .provider-actions {
     display: flex;
     flex-wrap: wrap;
     gap: 0.35rem;
-    margin-top: 0.75rem;
+    flex-shrink: 0;
   }
 
   .feedback[data-tone="success"] {
@@ -542,9 +522,5 @@
   .readonly-note,
   .empty {
     opacity: 0.85;
-  }
-
-  .info-grid.compact .full {
-    grid-column: 1 / -1;
   }
 </style>

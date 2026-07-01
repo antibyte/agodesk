@@ -415,6 +415,8 @@
   "settings.llmProviders.fields.clearOauthSecret": "Gespeichertes Client-Secret entfernen",
   "settings.llmProviders.editor.createTitle": "Provider hinzufügen",
   "settings.llmProviders.editor.editTitle": "Provider bearbeiten",
+  "settings.llmProviders.editor.fromCatalog": "Aus Katalog: {name}",
+  "settings.llmProviders.editor.loading": "Provider-Details werden geladen…",
   "settings.llmProviders.editor.save": "Provider speichern",
   "settings.llmProviders.catalog.title": "Provider-Katalog",
   "settings.llmProviders.catalog.description": "Katalog-Provider wählen, um OAuth- und Modell-Defaults vorzubelegen.",
