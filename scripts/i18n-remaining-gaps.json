@@ -1,17 +1,56 @@
 {
-  "cs": [],
-  "da": [],
-  "de": [],
-  "el": [],
-  "es": [],
-  "fr": [],
-  "hi": [],
-  "it": [],
-  "ja": [],
-  "nl": [],
-  "no": [],
-  "pl": [],
-  "pt": [],
-  "sv": [],
-  "zh": []
+  "cs": [
+    "settings.llmProviders.auth.oauth",
+    "settings.llmProviders.fields.model"
+  ],
+  "da": [
+    "settings.llmProviders.test",
+    "settings.llmProviders.auth.oauth",
+    "settings.llmProviders.fields.model"
+  ],
+  "de": [
+    "settings.llmProviders.auth.oauth",
+    "settings.llmProviders.fields.name"
+  ],
+  "el": [
+    "settings.llmProviders.auth.oauth"
+  ],
+  "es": [
+    "settings.llmProviders.auth.oauth"
+  ],
+  "fr": [
+    "settings.llmProviders.auth.oauth"
+  ],
+  "hi": [
+    "settings.llmProviders.auth.oauth",
+    "settings.llmProviders.fields.oauthScopes"
+  ],
+  "it": [
+    "settings.llmProviders.test",
+    "settings.llmProviders.auth.oauth"
+  ],
+  "ja": [
+    "settings.llmProviders.auth.oauth"
+  ],
+  "nl": [
+    "settings.llmProviders.auth.oauth",
+    "settings.llmProviders.fields.model"
+  ],
+  "no": [
+    "settings.llmProviders.test",
+    "settings.llmProviders.auth.oauth"
+  ],
+  "pl": [
+    "settings.llmProviders.auth.oauth",
+    "settings.llmProviders.fields.model"
+  ],
+  "pt": [
+    "settings.llmProviders.auth.oauth"
+  ],
+  "sv": [
+    "settings.llmProviders.auth.oauth"
+  ],
+  "zh": [
+    "settings.llmProviders.auth.oauth"
+  ]
 }

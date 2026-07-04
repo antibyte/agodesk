@@ -1,3 +1,4 @@
+import { get } from "svelte/store";
 import type {
   ConfigProvider,
   ConfigProviderCatalogPayload,
@@ -10,6 +11,8 @@ import type {
   WsMessage,
 } from "../types/protocol";
 import {
+  buildConfigProviderOauthCompletePayload,
+  isProviderTestResponsePayload,
   normalizeConfigProviderCatalogPayload,
   normalizeConfigProviderOauthStartedPayload,
   normalizeConfigProviderOauthStatusPayload,
@@ -75,6 +78,46 @@ function resolveWaiter<T>(requestId: string, kind: WaiterKind, value: T): boolea
   return false;
 }
 
+function rejectWaiterByKind(kind: WaiterKind, error: Error): boolean {
+  for (const requestId of [...waiters.keys()]) {
+    const pending = waiters.get(requestId);
+    if (pending?.kind !== kind) {
+      continue;
+    }
+    if (kind === "test_result") {
+      providersState.setTestLoadingProviderId(null);
+    }
+    rejectWaiter(requestId, error);
+    return true;
+  }
+  return false;
+}
+
+export function rejectProviderWaiterByRequestId(
+  requestId: string | undefined,
+  message: string,
+): boolean {
+  if (!requestId || !waiters.has(requestId)) {
+    return false;
+  }
+  const kind = waiters.get(requestId)?.kind;
+  if (kind === "test_result") {
+    providersState.setTestLoadingProviderId(null);
+  }
+  rejectWaiter(requestId, new Error(message));
+  return true;
+}
+
+export function isProviderTestResponseMessage(message: WsMessage): boolean {
+  if (message.type === "config.provider.test_result") {
+    return true;
+  }
+  if (message.type === "config.provider.test") {
+    return isProviderTestResponsePayload(message.payload);
+  }
+  return false;
+}
+
 function rejectWaiter(requestId: string, error: Error): void {
   const waiter = waiters.get(requestId);
   if (!waiter) {
@@ -94,7 +137,6 @@ export function rejectAnyPendingProviderWaiters(error: Error): boolean {
   }
   providersState.setLoading(false);
   providersState.setCatalogLoading(false);
-  providersState.setDetailLoading(false);
   providersState.setTestLoadingProviderId(null);
   providersState.setOauthPending(null);
   return true;
@@ -124,20 +166,24 @@ export function buildConfigProviderCatalogListMessage(sessionId: string): WsMess
     id: crypto.randomUUID(),
     type: "config.provider.catalog.list",
     timestamp: new Date().toISOString(),
-    payload: { session_id: sessionId },
+    payload: { session_id: sessionId, include_models: false },
   };
 }
 
 export function buildConfigProviderCatalogDetailMessage(
   sessionId: string,
-  catalogId: string,
+  providerId: string,
 ): WsMessage {
   const id = crypto.randomUUID();
   return {
     id,
     type: "config.provider.catalog.detail",
     timestamp: new Date().toISOString(),
-    payload: { session_id: sessionId, catalog_id: catalogId },
+    payload: {
+      session_id: sessionId,
+      provider_id: providerId,
+      include_models: true,
+    },
   };
 }
 
@@ -151,13 +197,21 @@ export function buildConfigProviderUpsertMessage(payload: ConfigProviderUpsertPa
   };
 }
 
-export function buildConfigProviderDeleteMessage(sessionId: string, providerId: string): WsMessage {
+export function buildConfigProviderDeleteMessage(
+  sessionId: string,
+  providerId: string,
+  force = false,
+): WsMessage {
   const id = crypto.randomUUID();
   return {
     id,
     type: "config.provider.delete",
     timestamp: new Date().toISOString(),
-    payload: { session_id: sessionId, provider_id: providerId },
+    payload: {
+      session_id: sessionId,
+      provider_id: providerId,
+      ...(force ? { force: true } : {}),
+    },
   };
 }
 
@@ -199,11 +253,20 @@ export function buildConfigProviderOauthCompleteMessage(
     id,
     type: "config.provider.oauth.complete",
     timestamp: new Date().toISOString(),
-    payload: {
-      session_id: sessionId,
-      provider_id: providerId,
-      redirect_url: redirectUrl,
-    },
+    payload: buildConfigProviderOauthCompletePayload(sessionId, providerId, redirectUrl),
+  };
+}
+
+export function buildConfigProviderOauthStatusMessage(
+  sessionId: string,
+  providerId: string,
+): WsMessage {
+  const id = crypto.randomUUID();
+  return {
+    id,
+    type: "config.provider.oauth.status",
+    timestamp: new Date().toISOString(),
+    payload: { session_id: sessionId, provider_id: providerId },
   };
 }
 
@@ -242,7 +305,6 @@ export function handleConfigProviderMessage(
     return null;
   }
   providersState.upsertProviderInList(normalized.provider);
-  providersState.setSelectedProvider(normalized.provider);
   resolveWaiter(message.id, "provider", normalized);
   return normalized;
 }
@@ -255,7 +317,7 @@ export function handleConfigProviderCatalogMessage(
   if (!normalized) {
     return null;
   }
-  providersState.setCatalog(normalized.providers, normalized.enabled ?? true);
+  providersState.setCatalogPayload(normalized);
   resolveWaiter(message.id, "catalog", normalized);
   return normalized;
 }
@@ -264,8 +326,14 @@ export function handleConfigProviderTestResultMessage(
   message: WsMessage,
   payload: unknown,
 ): ConfigProviderTestResultPayload | null {
-  const normalized = normalizeConfigProviderTestResultPayload(payload);
+  const fallbackProviderId = get(providersState).testLoadingProviderId ?? undefined;
+  const normalized = normalizeConfigProviderTestResultPayload(payload, { fallbackProviderId });
   if (!normalized) {
+    providersState.setTestLoadingProviderId(null);
+    rejectWaiterByKind(
+      "test_result",
+      new Error("Unexpected provider test response from AuraGo."),
+    );
     return null;
   }
   providersState.setTestLoadingProviderId(null);
@@ -302,10 +370,13 @@ export function handleConfigProviderOauthStatusMessage(
 export async function fetchConfigProvidersList(
   wsSend: (message: WsMessage) => Promise<void>,
   sessionId: string,
-): Promise<void> {
+): Promise<ConfigProvidersPayload> {
   providersState.setLoading(true);
   providersState.setError("");
-  await wsSend(buildConfigProvidersListMessage(sessionId));
+  const message = buildConfigProvidersListMessage(sessionId);
+  const waitPromise = registerWaiter<ConfigProvidersPayload>(message.id, "providers");
+  await wsSend(message);
+  return waitPromise;
 }
 
 export async function fetchConfigProviderDetail(
@@ -313,7 +384,6 @@ export async function fetchConfigProviderDetail(
   sessionId: string,
   providerId: string,
 ): Promise<ConfigProvider> {
-  providersState.setDetailLoading(true);
   const message = buildConfigProviderGetMessage(sessionId, providerId);
   const waitPromise = registerWaiter<ConfigProviderPayload>(message.id, "provider");
   await wsSend(message);
@@ -335,10 +405,10 @@ export async function fetchConfigProviderCatalogList(
 export async function fetchConfigProviderCatalogDetail(
   wsSend: (message: WsMessage) => Promise<void>,
   sessionId: string,
-  catalogId: string,
+  providerId: string,
 ): Promise<ConfigProviderCatalogPayload> {
   providersState.setCatalogLoading(true);
-  const message = buildConfigProviderCatalogDetailMessage(sessionId, catalogId);
+  const message = buildConfigProviderCatalogDetailMessage(sessionId, providerId);
   const waitPromise = registerWaiter<ConfigProviderCatalogPayload>(message.id, "catalog");
   await wsSend(message);
   return waitPromise;
@@ -359,8 +429,9 @@ export async function deleteConfigProvider(
   wsSend: (message: WsMessage) => Promise<void>,
   sessionId: string,
   providerId: string,
+  options: { force?: boolean } = {},
 ): Promise<ConfigProvidersPayload> {
-  const message = buildConfigProviderDeleteMessage(sessionId, providerId);
+  const message = buildConfigProviderDeleteMessage(sessionId, providerId, options.force ?? false);
   const waitPromise = registerWaiter<ConfigProvidersPayload>(message.id, "providers");
   await wsSend(message);
   const result = await waitPromise;
@@ -376,8 +447,13 @@ export async function testConfigProvider(
   providersState.setTestLoadingProviderId(providerId);
   const message = buildConfigProviderTestMessage(sessionId, providerId);
   const waitPromise = registerWaiter<ConfigProviderTestResultPayload>(message.id, "test_result");
-  await wsSend(message);
-  return waitPromise;
+  try {
+    await wsSend(message);
+    return await waitPromise;
+  } catch (error) {
+    providersState.setTestLoadingProviderId(null);
+    throw error;
+  }
 }
 
 export async function startConfigProviderOauth(
@@ -386,7 +462,15 @@ export async function startConfigProviderOauth(
   providerId: string,
   redirectUri: string,
 ): Promise<ConfigProviderOauthStartedPayload> {
-  const message = buildConfigProviderOauthStartMessage(sessionId, providerId, redirectUri);
+  const normalizedRedirectUri = redirectUri.trim();
+  if (!normalizedRedirectUri) {
+    throw new Error("redirect_uri is required");
+  }
+  const message = buildConfigProviderOauthStartMessage(
+    sessionId,
+    providerId,
+    normalizedRedirectUri,
+  );
   const waitPromise = registerWaiter<ConfigProviderOauthStartedPayload>(
     message.id,
     "oauth_started",
@@ -402,6 +486,17 @@ export async function completeConfigProviderOauth(
   redirectUrl: string,
 ): Promise<ConfigProviderOauthStatusPayload> {
   const message = buildConfigProviderOauthCompleteMessage(sessionId, providerId, redirectUrl);
+  const waitPromise = registerWaiter<ConfigProviderOauthStatusPayload>(message.id, "oauth_status");
+  await wsSend(message);
+  return waitPromise;
+}
+
+export async function fetchConfigProviderOauthStatus(
+  wsSend: (message: WsMessage) => Promise<void>,
+  sessionId: string,
+  providerId: string,
+): Promise<ConfigProviderOauthStatusPayload> {
+  const message = buildConfigProviderOauthStatusMessage(sessionId, providerId);
   const waitPromise = registerWaiter<ConfigProviderOauthStatusPayload>(message.id, "oauth_status");
   await wsSend(message);
   return waitPromise;

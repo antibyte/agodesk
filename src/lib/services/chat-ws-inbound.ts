@@ -44,6 +44,8 @@ import {
   handleConfigProviderOauthStatusMessage,
   handleConfigProvidersMessage,
   handleConfigProviderTestResultMessage,
+  isProviderTestResponseMessage,
+  rejectProviderWaiterByRequestId,
 } from "./providers-flow";
 import { handleSystemWarningsMessage } from "./system-warnings-flow";
 import { shouldUseFrontendTtsForSettings } from "./chat-tts-policy";
@@ -68,7 +70,6 @@ import {
   isConfigProviders,
   isConfigProvider,
   isConfigProviderCatalog,
-  isConfigProviderTestResult,
   isConfigProviderOauthStarted,
   isConfigProviderOauthStatus,
   isPersonaAssets,
@@ -324,7 +325,7 @@ export async function handleChatWsMessage(
     return;
   }
 
-  if (isConfigProviderTestResult(message)) {
+  if (isProviderTestResponseMessage(message)) {
     handleConfigProviderTestResultMessage(message, message.payload);
     return;
   }
@@ -416,6 +417,13 @@ export async function handleChatWsMessage(
 
     const attachmentErrorText =
       message.payload.message.trim() || message.payload.code || "Attachment error";
+
+    if (rejectProviderWaiterByRequestId(message.payload.request_id, attachmentErrorText)) {
+      return;
+    }
+    if (rejectProviderWaiterByRequestId(message.id, attachmentErrorText)) {
+      return;
+    }
 
     if (rejectAttachmentPrepareByRequestId(message.payload.request_id, attachmentErrorText)) {
       return;

@@ -353,7 +353,7 @@ async fn connect_and_run(
             Some(Connector::NativeTls(connector)),
         )
         .await
-        .map_err(|error| map_wss_connect_error(error, tls_mode_label))?;
+        .map_err(|error| map_wss_connect_error(error, tls_mode, tls_mode_label))?;
 
         if response.status().as_u16() != 101 {
             return Err((
@@ -398,21 +398,40 @@ async fn connect_and_run(
 
 fn map_wss_connect_error(
     error: tokio_tungstenite::tungstenite::Error,
+    tls_mode: &TlsMode,
     tls_mode_label: &str,
 ) -> (ClientErrorCode, String) {
     let message = error.to_string();
+    let code = classify_wss_connect_message(&message, tls_mode);
+    (code, format!("WSS connect failed ({tls_mode_label}): {message}"))
+}
+
+/// Classify a WSS connect-phase failure into a client error code.
+///
+/// Only the `System` TLS mode validates the peer certificate against the OS trust store
+/// during the handshake, so only there does a certificate/handshake failure legitimately
+/// mean "this self-signed certificate is not trusted yet".
+///
+/// In `PinnedSelfSignedDev` / `InsecureLoopbackDev` we intentionally accept invalid
+/// certificates at the TLS layer and verify the pinned fingerprint separately, *after* a
+/// successful handshake (see `verify_pinned_ws_stream`). A failure while merely
+/// establishing the connection there is a transient connectivity problem (server restart,
+/// dropped connection, TLS reset) — NOT a trust problem. Treating it as
+/// `TlsUntrustedCertificate` would pop the certificate-trust dialog and force the user to
+/// re-confirm an already-trusted certificate on every reconnect hiccup.
+fn classify_wss_connect_message(message: &str, tls_mode: &TlsMode) -> ClientErrorCode {
+    if tls_mode != &TlsMode::System {
+        return ClientErrorCode::ConnectionFailed;
+    }
+
     let lower = message.to_ascii_lowercase();
-    let code = if message.contains("CertificateExpired") {
+    if message.contains("CertificateExpired") {
         ClientErrorCode::CertificateExpired
     } else if lower.contains("certificate") || lower.contains("handshake") {
         ClientErrorCode::TlsUntrustedCertificate
     } else {
         ClientErrorCode::WebSocketUpgradeFailed
-    };
-    (
-        code,
-        format!("WSS connect failed ({tls_mode_label}): {message}"),
-    )
+    }
 }
 
 fn verify_pinned_ws_stream(
@@ -536,4 +555,45 @@ pub async fn agodesk_send(
 pub async fn agodesk_disconnect(state: State<'_, WsTransportState>) -> Result<(), String> {
     reset_transport(&state).await;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // A representative TLS handshake failure message as produced by native-tls/tungstenite.
+    const HANDSHAKE_ERR: &str =
+        "IO error: the handshake failed: certificate verify failed (self-signed certificate)";
+
+    #[test]
+    fn pinned_mode_connect_error_is_retryable_not_untrusted() {
+        // An already-trusted (pinned) certificate must never be forced back into the
+        // trust dialog because of a transient handshake/connection failure. The pinned
+        // fingerprint is verified after the handshake, so a connect-phase failure here is
+        // purely a connectivity issue and should be retried.
+        let code = classify_wss_connect_message(HANDSHAKE_ERR, &TlsMode::PinnedSelfSignedDev);
+        assert!(matches!(code, ClientErrorCode::ConnectionFailed));
+        assert!(!is_fatal_tls_code(&code));
+    }
+
+    #[test]
+    fn insecure_loopback_connect_error_is_retryable() {
+        let code = classify_wss_connect_message(HANDSHAKE_ERR, &TlsMode::InsecureLoopbackDev);
+        assert!(matches!(code, ClientErrorCode::ConnectionFailed));
+        assert!(!is_fatal_tls_code(&code));
+    }
+
+    #[test]
+    fn system_mode_handshake_error_still_prompts_trust() {
+        // First-time self-signed connections in System mode should still surface the
+        // untrusted-certificate flow so the user can choose to trust the certificate.
+        let code = classify_wss_connect_message(HANDSHAKE_ERR, &TlsMode::System);
+        assert!(matches!(code, ClientErrorCode::TlsUntrustedCertificate));
+    }
+
+    #[test]
+    fn system_mode_non_tls_error_is_upgrade_failure() {
+        let code = classify_wss_connect_message("connection refused", &TlsMode::System);
+        assert!(matches!(code, ClientErrorCode::WebSocketUpgradeFailed));
+    }
 }

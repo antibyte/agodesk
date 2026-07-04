@@ -46,6 +46,7 @@ export interface ConfigProvider {
   model?: string;
   account_id?: string;
   auth_type?: ConfigProviderAuthType;
+  oauth_provider?: string;
   oauth_auth_url?: string;
   oauth_token_url?: string;
   oauth_client_id?: string;
@@ -84,12 +85,21 @@ export interface ConfigProviderCatalogEntry {
   aura_provider_type?: string;
   name: string;
   default_model?: string;
+  base_url?: string;
+  auth_type?: ConfigProviderAuthType;
   oauth_provider?: string;
   oauth_setup?: ConfigProviderOauthSetup;
   available?: boolean;
   availability?: string;
+  missing_credentials?: string[];
   models_count?: number;
   [key: string]: unknown;
+}
+
+export interface ConfigProviderCatalogModel {
+  id: string;
+  name?: string;
+  provider_id?: string;
 }
 
 export interface ConfigProviderCatalogPayload {
@@ -98,7 +108,7 @@ export interface ConfigProviderCatalogPayload {
   enabled?: boolean;
   metadata?: Record<string, unknown>;
   providers: ConfigProviderCatalogEntry[];
-  models?: unknown[];
+  models?: ConfigProviderCatalogModel[];
 }
 
 export interface ConfigProviderTestResultPayload {
@@ -153,10 +163,26 @@ export interface ConfigProviderUpsertProviderInput {
   model?: string;
   account_id?: string;
   auth_type?: ConfigProviderAuthType;
+  oauth_provider?: string;
   oauth_auth_url?: string;
   oauth_token_url?: string;
   oauth_client_id?: string;
   oauth_scopes?: string;
+}
+
+export interface ConfigProviderOauthCompletePayload {
+  session_id: string;
+  provider_id: string;
+  redirect_url?: string;
+  redirect_uri?: string;
+  code?: string;
+  state?: string;
+}
+
+export interface ConfigProviderDeletePayload {
+  session_id: string;
+  provider_id: string;
+  force?: boolean;
 }
 
 export interface ConfigProviderUpsertPayload {
@@ -186,6 +212,37 @@ function readBoolean(record: Record<string, unknown>, ...keys: string[]): boolea
     if (typeof value === "boolean") {
       return value;
     }
+  }
+  return undefined;
+}
+
+function readBooleanLoose(record: Record<string, unknown>, ...keys: string[]): boolean | undefined {
+  for (const key of keys) {
+    const value = record[key];
+    if (typeof value === "boolean") {
+      return value;
+    }
+    if (value === "true" || value === "1" || value === 1) {
+      return true;
+    }
+    if (value === "false" || value === "0" || value === 0) {
+      return false;
+    }
+  }
+  return undefined;
+}
+
+function readProviderTestOk(record: Record<string, unknown>): boolean | undefined {
+  const direct = readBooleanLoose(record, "ok", "success", "passed");
+  if (direct !== undefined) {
+    return direct;
+  }
+  const status = readString(record, "status");
+  if (status === "ok" || status === "success") {
+    return true;
+  }
+  if (status && status !== "ok" && status !== "success") {
+    return false;
   }
   return undefined;
 }
@@ -288,8 +345,10 @@ export function normalizeConfigProvider(raw: unknown): ConfigProvider | null {
   }
   const record = raw as Record<string, unknown>;
   const id = readString(record, "id");
-  const name = readString(record, "name");
-  const type = readString(record, "type");
+  const name =
+    readString(record, "name", "label", "display_name", "displayName") ??
+    readString(record, "id");
+  const type = readString(record, "type", "aura_provider_type", "auraProviderType");
   if (!id || !name || !type) {
     return null;
   }
@@ -299,6 +358,8 @@ export function normalizeConfigProvider(raw: unknown): ConfigProvider | null {
         .map((entry) => normalizeReference(entry))
         .filter((entry): entry is ConfigProviderReference => entry !== null)
     : undefined;
+  const model =
+    readString(record, "model") ?? readString(record, "default_model", "defaultModel");
 
   return {
     id,
@@ -307,12 +368,15 @@ export function normalizeConfigProvider(raw: unknown): ConfigProvider | null {
     ...(readString(record, "base_url", "baseUrl")
       ? { base_url: readString(record, "base_url", "baseUrl") }
       : {}),
-    ...(readString(record, "model") ? { model: readString(record, "model") } : {}),
+    ...(model ? { model } : {}),
     ...(readString(record, "account_id", "accountId")
       ? { account_id: readString(record, "account_id", "accountId") }
       : {}),
     ...(readString(record, "auth_type", "authType")
       ? { auth_type: readString(record, "auth_type", "authType") }
+      : {}),
+    ...(readString(record, "oauth_provider", "oauthProvider")
+      ? { oauth_provider: readString(record, "oauth_provider", "oauthProvider") }
       : {}),
     ...(readString(record, "oauth_auth_url", "oauthAuthUrl")
       ? { oauth_auth_url: readString(record, "oauth_auth_url", "oauthAuthUrl") }
@@ -357,10 +421,19 @@ export function normalizeConfigProvidersPayload(payload: unknown): ConfigProvide
   const providers = rawProviders
     .map((entry) => normalizeConfigProvider(entry))
     .filter((entry): entry is ConfigProvider => entry !== null);
+  const dedupedProviders: ConfigProvider[] = [];
+  const seenIds = new Set<string>();
+  for (const provider of providers) {
+    if (seenIds.has(provider.id)) {
+      continue;
+    }
+    seenIds.add(provider.id);
+    dedupedProviders.push(provider);
+  }
   return {
     session_id: sessionId,
     ...(readString(record, "status") ? { status: readString(record, "status") } : {}),
-    providers,
+    providers: dedupedProviders,
   };
 }
 
@@ -379,6 +452,20 @@ export function normalizeConfigProviderPayload(payload: unknown): ConfigProvider
     ...(readString(record, "status") ? { status: readString(record, "status") } : {}),
     provider,
   };
+}
+
+function normalizeAuthType(raw: unknown): ConfigProviderAuthType | undefined {
+  if (typeof raw !== "string") {
+    return undefined;
+  }
+  const value = raw.trim().toLowerCase();
+  if (value === "oauth") {
+    return "oauth";
+  }
+  if (value === "api_key" || value === "apikey" || value === "api-key") {
+    return "api_key";
+  }
+  return undefined;
 }
 
 function normalizeOauthSetup(raw: unknown): ConfigProviderOauthSetup | undefined {
@@ -418,28 +505,129 @@ function normalizeCatalogEntry(raw: unknown): ConfigProviderCatalogEntry | null 
     return null;
   }
   const modelsCount = record.models_count ?? record.modelsCount;
+  const missingCredentials = readStringArray(record, "missing_credentials", "missingCredentials");
+  const authType = normalizeAuthType(record.auth_type ?? record.authType);
+  let oauthSetup = normalizeOauthSetup(record.oauth_setup ?? record.oauthSetup);
+  if (!oauthSetup) {
+    oauthSetup = normalizeOauthSetup({
+      auth_url: record.oauth_auth_url ?? record.oauthAuthUrl,
+      token_url: record.oauth_token_url ?? record.oauthTokenUrl,
+      scopes: record.oauth_scopes ?? record.oauthScopes,
+      callback_port: record.callback_port ?? record.callbackPort,
+      callback_path: record.callback_path ?? record.callbackPath,
+    });
+  }
+  const resolvedAuthType =
+    authType ??
+    (oauthSetup?.auth_url || oauthSetup?.token_url ? ("oauth" as const) : undefined);
   return {
     id,
     name,
+    ...(resolvedAuthType ? { auth_type: resolvedAuthType } : {}),
     ...(readString(record, "aura_provider_type", "auraProviderType")
       ? { aura_provider_type: readString(record, "aura_provider_type", "auraProviderType") }
       : {}),
     ...(readString(record, "default_model", "defaultModel")
       ? { default_model: readString(record, "default_model", "defaultModel") }
       : {}),
+    ...(readString(
+      record,
+      "base_url",
+      "baseUrl",
+      "endpoint",
+      "api_url",
+      "apiUrl",
+      "default_base_url",
+      "defaultBaseUrl",
+      "provider_base_url",
+      "providerBaseUrl",
+    )
+      ? {
+          base_url: readString(
+            record,
+            "base_url",
+            "baseUrl",
+            "endpoint",
+            "api_url",
+            "apiUrl",
+            "default_base_url",
+            "defaultBaseUrl",
+            "provider_base_url",
+            "providerBaseUrl",
+          ),
+        }
+      : {}),
     ...(readString(record, "oauth_provider", "oauthProvider")
       ? { oauth_provider: readString(record, "oauth_provider", "oauthProvider") }
       : {}),
-    ...(normalizeOauthSetup(record.oauth_setup ?? record.oauthSetup)
-      ? { oauth_setup: normalizeOauthSetup(record.oauth_setup ?? record.oauthSetup) }
-      : {}),
+    ...(oauthSetup ? { oauth_setup: oauthSetup } : {}),
     ...(readBoolean(record, "available") !== undefined
       ? { available: readBoolean(record, "available") }
       : {}),
     ...(readString(record, "availability")
       ? { availability: readString(record, "availability") }
       : {}),
+    ...(missingCredentials ? { missing_credentials: missingCredentials } : {}),
     ...(typeof modelsCount === "number" ? { models_count: modelsCount } : {}),
+  };
+}
+
+function normalizeCatalogModel(raw: unknown): ConfigProviderCatalogModel | null {
+  if (typeof raw === "string" && raw.trim()) {
+    return { id: raw.trim() };
+  }
+  if (!raw || typeof raw !== "object") {
+    return null;
+  }
+  const record = raw as Record<string, unknown>;
+  const id = readString(record, "id", "model", "model_id", "modelId");
+  if (!id) {
+    return null;
+  }
+  const name = readString(record, "name", "label", "display_name", "displayName");
+  const providerId = readString(record, "provider_id", "providerId");
+  return {
+    id,
+    ...(name ? { name } : {}),
+    ...(providerId ? { provider_id: providerId } : {}),
+  };
+}
+
+export function normalizeConfigProviderCatalogModels(raw: unknown): ConfigProviderCatalogModel[] {
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+  return raw
+    .map((entry) => normalizeCatalogModel(entry))
+    .filter((entry): entry is ConfigProviderCatalogModel => entry !== null);
+}
+
+export function buildConfigProviderOauthCompletePayload(
+  sessionId: string,
+  providerId: string,
+  redirectUrl: string,
+): ConfigProviderOauthCompletePayload {
+  const trimmed = redirectUrl.trim();
+  try {
+    const url = new URL(trimmed);
+    const code = url.searchParams.get("code");
+    if (code) {
+      const state = url.searchParams.get("state");
+      return {
+        session_id: sessionId,
+        provider_id: providerId,
+        redirect_uri: `${url.origin}${url.pathname}`,
+        code,
+        ...(state ? { state } : {}),
+      };
+    }
+  } catch {
+    // fall through to redirect_url
+  }
+  return {
+    session_id: sessionId,
+    provider_id: providerId,
+    redirect_url: trimmed,
   };
 }
 
@@ -462,6 +650,7 @@ export function normalizeConfigProviderCatalogPayload(
     record.metadata && typeof record.metadata === "object"
       ? (record.metadata as Record<string, unknown>)
       : undefined;
+  const models = normalizeConfigProviderCatalogModels(record.models);
   return {
     session_id: sessionId,
     ...(readString(record, "status") ? { status: readString(record, "status") } : {}),
@@ -470,30 +659,57 @@ export function normalizeConfigProviderCatalogPayload(
       : {}),
     ...(metadata ? { metadata } : {}),
     providers,
-    ...(Array.isArray(record.models) ? { models: record.models } : {}),
+    ...(models.length > 0 ? { models } : {}),
   };
 }
 
 export function normalizeConfigProviderTestResultPayload(
   payload: unknown,
+  options: { fallbackProviderId?: string; fallbackSessionId?: string } = {},
 ): ConfigProviderTestResultPayload | null {
   if (!payload || typeof payload !== "object") {
     return null;
   }
   const record = payload as Record<string, unknown>;
-  const sessionId = readString(record, "session_id", "sessionId");
-  const providerId = readString(record, "provider_id", "providerId");
-  const okRaw = record.ok;
-  if (!sessionId || !providerId || typeof okRaw !== "boolean") {
+  const nested = record.result ?? record.test_result ?? record.testResult;
+  if (nested && typeof nested === "object" && nested !== payload) {
+    const nestedResult = normalizeConfigProviderTestResultPayload(nested, options);
+    if (nestedResult) {
+      return nestedResult;
+    }
+  }
+
+  const sessionId =
+    readString(record, "session_id", "sessionId") ?? options.fallbackSessionId ?? "";
+  const providerId =
+    readString(record, "provider_id", "providerId") ?? options.fallbackProviderId ?? "";
+  const ok = readProviderTestOk(record);
+
+  if (!providerId || ok === undefined) {
     return null;
   }
+
   return {
     session_id: sessionId,
     provider_id: providerId,
-    ok: okRaw,
+    ok,
     ...(readString(record, "status") ? { status: readString(record, "status") } : {}),
-    ...(readString(record, "message") ? { message: readString(record, "message") } : {}),
+    ...(readString(record, "message", "error", "detail")
+      ? { message: readString(record, "message", "error", "detail") }
+      : {}),
   };
+}
+
+export function isProviderTestResponsePayload(payload: unknown): boolean {
+  if (!payload || typeof payload !== "object") {
+    return false;
+  }
+  const record = payload as Record<string, unknown>;
+  return (
+    readProviderTestOk(record) !== undefined ||
+    Boolean(readString(record, "provider_id", "providerId")) ||
+    Boolean(record.result ?? record.test_result ?? record.testResult)
+  );
 }
 
 export function normalizeConfigProviderOauthStartedPayload(

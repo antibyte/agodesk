@@ -1075,6 +1075,30 @@ test("normalizeConfigProvidersPayload reads snake_case list", () => {
   assert.equal(payload?.providers.length, 1);
 });
 
+test("normalizeConfigProvidersPayload dedupes providers by id", () => {
+  const payload = normalizeConfigProvidersPayload({
+    session_id: "sess-1",
+    providers: [
+      { id: "p1", name: "First", type: "custom" },
+      { id: "p1", name: "Duplicate", type: "custom" },
+      { id: "p2", name: "Second", type: "openai" },
+    ],
+  });
+  assert.equal(payload?.providers.length, 2);
+  assert.equal(payload?.providers[0]?.name, "First");
+});
+
+test("normalizeConfigProvider accepts aura_provider_type and default_model", () => {
+  const provider = normalizeConfigProvider({
+    id: "google",
+    name: "Google",
+    aura_provider_type: "google",
+    default_model: "gemini-2.5-flash",
+  });
+  assert.equal(provider?.type, "google");
+  assert.equal(provider?.model, "gemini-2.5-flash");
+});
+
 test("normalizeConfigProviderCatalogPayload reads catalog entries", () => {
   const payload = normalizeConfigProviderCatalogPayload({
     session_id: "sess-1",
@@ -1083,21 +1107,56 @@ test("normalizeConfigProviderCatalogPayload reads catalog entries", () => {
       {
         id: "google",
         name: "Google",
+        auth_type: "oauth",
         oauth_setup: { auth_url: "https://example.com/auth", scopes: ["email"] },
       },
     ],
   });
+  assert.equal(payload?.providers[0]?.auth_type, "oauth");
   assert.equal(payload?.providers[0]?.oauth_setup?.auth_url, "https://example.com/auth");
 });
 
-test("normalizeConfigProviderTestResultPayload requires ok boolean", () => {
-  assert.ok(
+test("normalizeConfigProviderTestResultPayload accepts ok boolean and status fallback", () => {
+  assert.deepEqual(
     normalizeConfigProviderTestResultPayload({
       session_id: "sess-1",
       provider_id: "p1",
       ok: true,
       message: "ok",
     }),
+    {
+      session_id: "sess-1",
+      provider_id: "p1",
+      ok: true,
+      message: "ok",
+    },
+  );
+  assert.deepEqual(
+    normalizeConfigProviderTestResultPayload({
+      provider_id: "p1",
+      status: "ok",
+      message: "Provider configuration looks usable.",
+    }),
+    {
+      session_id: "",
+      provider_id: "p1",
+      ok: true,
+      status: "ok",
+      message: "Provider configuration looks usable.",
+    },
+  );
+  assert.deepEqual(
+    normalizeConfigProviderTestResultPayload(
+      { status: "failed", message: "missing api key" },
+      { fallbackProviderId: "main" },
+    ),
+    {
+      session_id: "",
+      provider_id: "main",
+      ok: false,
+      status: "failed",
+      message: "missing api key",
+    },
   );
 });
 

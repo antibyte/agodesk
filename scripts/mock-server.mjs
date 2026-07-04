@@ -20,7 +20,9 @@ const deviceKeys = new Map();
 
 /** @typedef {{ id: string; preview: string; created_at: string; last_active_at: string; messages: Array<{ role: string; content: string; timestamp: string }> }} MockConversation */
 
-/** @type {WeakMap<import('ws').WebSocket, { connectionSessionId: string; sessionId: string; deviceId: string | null; chatAccepted: boolean; speakerMode: boolean; clientCapabilities: string[]; activeStreamId: string | null; streamFramesSeen: number; conversations: Map<string, MockConversation>; activeRequests: Map<string, { timeout: ReturnType<typeof setTimeout> | null; conversationId: string | null }>; mockWarnings: Array<{ id: string; severity: string; title: string; description?: string; category?: string; timestamp: string; acknowledged: boolean }> }>} */
+/** @typedef {{ id: string; name: string; type: string; auth_type?: string; oauth_provider?: string; base_url?: string; model?: string; account_id?: string; oauth_auth_url?: string; oauth_token_url?: string; oauth_client_id?: string; oauth_scopes?: string; secrets?: { api_key?: { present: boolean }; oauth_client_secret?: { present: boolean } }; oauth?: { configured?: boolean; authorized?: boolean; expired?: boolean; has_refresh_token?: boolean; missing_fields?: string[] }; references?: Array<{ path: string; role: string }> }} MockProvider */
+
+/** @type {WeakMap<import('ws').WebSocket, { connectionSessionId: string; sessionId: string; deviceId: string | null; chatAccepted: boolean; speakerMode: boolean; clientCapabilities: string[]; activeStreamId: string | null; streamFramesSeen: number; conversations: Map<string, MockConversation>; activeRequests: Map<string, { timeout: ReturnType<typeof setTimeout> | null; conversationId: string | null }>; mockWarnings: Array<{ id: string; severity: string; title: string; description?: string; category?: string; timestamp: string; acknowledged: boolean }>; providers: Map<string, MockProvider> }>} */
 const socketSessions = new WeakMap();
 
 const DEFAULT_ADVERTISED_CAPABILITIES = [
@@ -42,6 +44,9 @@ const DEFAULT_ADVERTISED_CAPABILITIES = [
   "remote.desktop.discovery",
   "remote.desktop.ui_automation",
   "persona.assets",
+  "config.providers.read",
+  "config.providers.write",
+  "config.providers.oauth",
 ];
 
 const wss = new WebSocketServer({ noServer: true });
@@ -214,6 +219,22 @@ const server = http.createServer((req, res) => {
     res.end("Not found");
     return;
   }
+
+  if (requestUrl.pathname === "/api/agodesk/oauth/mock-auth") {
+    const redirectUri = requestUrl.searchParams.get("redirect_uri") ?? "";
+    const state = requestUrl.searchParams.get("state") ?? "mock-state";
+    const providerId = requestUrl.searchParams.get("provider_id") ?? "";
+    const target = new URL(redirectUri || "http://127.0.0.1:8765/oauth/callback");
+    target.searchParams.set("code", `mock-code-${randomUUID().slice(0, 8)}`);
+    target.searchParams.set("state", state);
+    if (providerId) {
+      target.searchParams.set("provider_id", providerId);
+    }
+    const html = `<!doctype html><html><head><meta charset="utf-8"><title>Mock OAuth</title></head><body><p>Mock-Autorisierung läuft…</p><script>window.location.replace(${JSON.stringify(target.toString())});</script></body></html>`;
+    res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+    res.end(html);
+    return;
+  }
   res.writeHead(404, { "Content-Type": "text/plain" });
   res.end("Not found");
 });
@@ -254,6 +275,7 @@ wss.on("connection", (socket, request) => {
     streamFramesSeen: 0,
     conversations: new Map(),
     activeRequests: new Map(),
+    providers: new Map(),
     mockWarnings: [
       {
         id: "warn-mock-1",
@@ -301,6 +323,9 @@ wss.on("connection", (socket, request) => {
         "integrations.webhosts",
         "system.warnings",
         "persona.assets",
+        "config.providers.read",
+        "config.providers.write",
+        "config.providers.oauth",
       ],
     },
   });
@@ -391,6 +416,50 @@ wss.on("connection", (socket, request) => {
 
       case "persona.assets.request":
         sendPersonaAssets(session, send);
+        break;
+
+      case "config.providers.list":
+        sendConfigProvidersList(message, session, send);
+        break;
+
+      case "config.provider.get":
+        sendConfigProviderGet(message, session, send);
+        break;
+
+      case "config.provider.upsert":
+        handleConfigProviderUpsert(message, session, send);
+        break;
+
+      case "config.provider.delete":
+        handleConfigProviderDelete(message, session, send);
+        break;
+
+      case "config.provider.test":
+        sendConfigProviderTestResult(message, session, send);
+        break;
+
+      case "config.provider.catalog.list":
+        sendConfigProviderCatalog(message, session, send, false);
+        break;
+
+      case "config.provider.catalog.detail":
+        sendConfigProviderCatalog(message, session, send, true);
+        break;
+
+      case "config.provider.oauth.start":
+        handleConfigProviderOauthStart(message, session, send);
+        break;
+
+      case "config.provider.oauth.complete":
+        handleConfigProviderOauthComplete(message, session, send);
+        break;
+
+      case "config.provider.oauth.status":
+        sendConfigProviderOauthStatus(message, session, send);
+        break;
+
+      case "config.provider.oauth.revoke":
+        handleConfigProviderOauthRevoke(message, session, send);
         break;
 
       case "desktop.result":
@@ -1568,6 +1637,350 @@ function sendMockChatMedia(send, session, requestId, conversationId) {
       },
     },
   });
+}
+
+const MOCK_PROVIDER_CATALOG = [
+  {
+    id: "google",
+    name: "Google",
+    aura_provider_type: "google",
+    default_model: "gemini-2.5-flash",
+    base_url: "https://generativelanguage.googleapis.com/v1beta",
+    auth_type: "oauth",
+    oauth_provider: "google",
+    oauth_setup: {
+      flow: "authorization_code_pkce",
+      auth_url: "https://accounts.google.com/o/oauth2/v2/auth",
+      token_url: "https://oauth2.googleapis.com/token",
+      scopes: ["openid", "email", "https://www.googleapis.com/auth/generative-language.retriever"],
+      callback_path: "/oauth/callback",
+      callback_port: 8765,
+    },
+    available: false,
+    availability: "missing_credentials",
+    missing_credentials: ["oauth_client_secret"],
+    models_count: 3,
+  },
+  {
+    id: "openai",
+    name: "OpenAI",
+    aura_provider_type: "openai",
+    default_model: "gpt-4o",
+    base_url: "https://api.openai.com/v1",
+    auth_type: "api_key",
+    oauth_provider: "openai",
+    oauth_setup: {
+      flow: "authorization_code_pkce",
+      auth_url: "https://auth.openai.com/oauth/authorize",
+      token_url: "https://auth.openai.com/oauth/token",
+      scopes: ["openid", "profile", "model.request"],
+      callback_path: "/oauth/callback",
+      callback_port: 8765,
+    },
+    available: true,
+    availability: "available",
+    models_count: 4,
+  },
+  {
+    id: "anthropic",
+    name: "Anthropic",
+    aura_provider_type: "anthropic",
+    default_model: "claude-opus-4-8",
+    base_url: "https://api.anthropic.com/v1",
+    auth_type: "api_key",
+    available: true,
+    availability: "available",
+    models_count: 2,
+  },
+];
+
+const MOCK_CATALOG_MODELS = [
+  { id: "gemini-2.5-flash", name: "Gemini 2.5 Flash", provider_id: "google" },
+  { id: "gemini-2.5-pro", name: "Gemini 2.5 Pro", provider_id: "google" },
+  { id: "gemini-2.5-flash-native-audio", name: "Gemini 2.5 Flash Native Audio", provider_id: "google" },
+  { id: "gpt-4o", name: "GPT-4o", provider_id: "openai" },
+  { id: "gpt-4o-mini", name: "GPT-4o mini", provider_id: "openai" },
+  { id: "o3", name: "o3", provider_id: "openai" },
+  { id: "gpt-4.1", name: "GPT-4.1", provider_id: "openai" },
+  { id: "claude-opus-4-8", name: "Claude Opus 4.8", provider_id: "anthropic" },
+  { id: "claude-sonnet-5", name: "Claude Sonnet 5", provider_id: "anthropic" },
+];
+
+function providerToSafe(provider) {
+  const oauthAuthorized = Boolean(provider.oauth?.authorized);
+  const oauthConfigured = Boolean(provider.oauth?.configured);
+  return {
+    id: provider.id,
+    name: provider.name,
+    type: provider.type,
+    ...(provider.base_url ? { base_url: provider.base_url } : {}),
+    ...(provider.model ? { model: provider.model } : {}),
+    ...(provider.account_id ? { account_id: provider.account_id } : {}),
+    auth_type: provider.auth_type ?? "api_key",
+    ...(provider.oauth_provider ? { oauth_provider: provider.oauth_provider } : {}),
+    ...(provider.oauth_auth_url ? { oauth_auth_url: provider.oauth_auth_url } : {}),
+    ...(provider.oauth_token_url ? { oauth_token_url: provider.oauth_token_url } : {}),
+    ...(provider.oauth_client_id ? { oauth_client_id: provider.oauth_client_id } : {}),
+    ...(provider.oauth_scopes ? { oauth_scopes: provider.oauth_scopes } : {}),
+    secrets: {
+      api_key: { present: Boolean(provider.secrets?.api_key?.present) },
+      oauth_client_secret: { present: Boolean(provider.secrets?.oauth_client_secret?.present) },
+    },
+    oauth: {
+      provider_id: provider.id,
+      configured: oauthConfigured,
+      authorized: oauthAuthorized,
+      expired: false,
+      has_refresh_token: oauthAuthorized,
+      missing_fields: provider.oauth?.missing_fields ?? [],
+    },
+    references: provider.references ?? [],
+  };
+}
+
+function sendConfigProvidersList(message, session, send) {
+  const providers = [...session.providers.values()].map(providerToSafe);
+  send({
+    id: message.id,
+    type: "config.providers",
+    timestamp: new Date().toISOString(),
+    payload: {
+      session_id: session.sessionId,
+      providers,
+    },
+  });
+}
+
+function sendConfigProviderGet(message, session, send) {
+  const providerId = String(message.payload?.provider_id ?? "");
+  const provider = session.providers.get(providerId);
+  if (!provider) {
+    send({
+      id: message.id,
+      type: "chat.error",
+      timestamp: new Date().toISOString(),
+      payload: {
+        request_id: message.id,
+        code: "PROVIDER_NOT_FOUND",
+        message: `Mock: Provider ${providerId} nicht gefunden.`,
+      },
+    });
+    return;
+  }
+  send({
+    id: message.id,
+    type: "config.provider",
+    timestamp: new Date().toISOString(),
+    payload: {
+      session_id: session.sessionId,
+      provider: providerToSafe(provider),
+    },
+  });
+}
+
+function applySecretOp(existing, op, presentAfterSet) {
+  if (op === "set") return { present: presentAfterSet };
+  if (op === "clear") return { present: false };
+  return existing;
+}
+
+function handleConfigProviderUpsert(message, session, send) {
+  const payload = message.payload ?? {};
+  const input = payload.provider ?? {};
+  const secretsInput = payload.secrets ?? {};
+  const providerId = String(input.id ?? "").trim();
+  if (!providerId) {
+    send({
+      id: message.id,
+      type: "chat.error",
+      timestamp: new Date().toISOString(),
+      payload: {
+        request_id: message.id,
+        code: "PROVIDER_INVALID",
+        message: "Mock: Provider-ID fehlt.",
+      },
+    });
+    return;
+  }
+
+  const existing = session.providers.get(providerId) ?? {
+    id: providerId,
+    name: providerId,
+    type: String(input.type ?? providerId),
+    secrets: { api_key: { present: false }, oauth_client_secret: { present: false } },
+    oauth: { configured: false, authorized: false, missing_fields: [] },
+    references: [],
+  };
+
+  const apiKeyOp = secretsInput.api_key?.op ?? "keep";
+  const oauthSecretOp = secretsInput.oauth_client_secret?.op ?? "keep";
+
+  const next = {
+    ...existing,
+    id: providerId,
+    name: String(input.name ?? existing.name),
+    type: String(input.type ?? existing.type),
+    base_url: input.base_url ?? existing.base_url,
+    model: input.model ?? existing.model,
+    account_id: input.account_id ?? existing.account_id,
+    auth_type: input.auth_type ?? existing.auth_type ?? "api_key",
+    oauth_provider: input.oauth_provider ?? existing.oauth_provider,
+    oauth_auth_url: input.oauth_auth_url ?? existing.oauth_auth_url,
+    oauth_token_url: input.oauth_token_url ?? existing.oauth_token_url,
+    oauth_client_id: input.oauth_client_id ?? existing.oauth_client_id,
+    oauth_scopes: input.oauth_scopes ?? existing.oauth_scopes,
+    secrets: {
+      api_key: applySecretOp(existing.secrets?.api_key, apiKeyOp, true),
+      oauth_client_secret: applySecretOp(existing.secrets?.oauth_client_secret, oauthSecretOp, true),
+    },
+    oauth: existing.oauth ?? { configured: false, authorized: false, missing_fields: [] },
+    references: existing.references ?? [],
+  };
+
+  // Refresh OAuth missing-fields hint based on auth_type and configured secrets.
+  const missing = [];
+  if (next.auth_type === "oauth") {
+    if (!next.oauth_client_id) missing.push("oauth_client_id");
+    if (!next.secrets.oauth_client_secret.present) missing.push("oauth_client_secret");
+    if (!next.oauth_auth_url) missing.push("oauth_auth_url");
+    if (!next.oauth_token_url) missing.push("oauth_token_url");
+  } else if (next.auth_type === "api_key") {
+    if (!next.secrets.api_key.present) missing.push("api_key");
+  }
+  next.oauth = { ...next.oauth, missing_fields: missing };
+
+  session.providers.set(providerId, next);
+
+  send({
+    id: message.id,
+    type: "config.provider",
+    timestamp: new Date().toISOString(),
+    payload: {
+      session_id: session.sessionId,
+      provider: providerToSafe(next),
+    },
+  });
+}
+
+function handleConfigProviderDelete(message, session, send) {
+  const providerId = String(message.payload?.provider_id ?? "");
+  session.providers.delete(providerId);
+  const providers = [...session.providers.values()].map(providerToSafe);
+  send({
+    id: message.id,
+    type: "config.providers",
+    timestamp: new Date().toISOString(),
+    payload: {
+      session_id: session.sessionId,
+      providers,
+    },
+  });
+}
+
+function sendConfigProviderTestResult(message, session, send) {
+  const providerId = String(message.payload?.provider_id ?? "");
+  const provider = session.providers.get(providerId);
+  const ok = Boolean(provider);
+  send({
+    id: message.id,
+    type: "config.provider.test_result",
+    timestamp: new Date().toISOString(),
+    payload: {
+      session_id: session.sessionId,
+      provider_id: providerId,
+      ok,
+      ...(ok ? {} : { message: "Mock: Provider nicht gefunden." }),
+    },
+  });
+}
+
+function sendConfigProviderCatalog(message, session, send, includeModels) {
+  send({
+    id: message.id,
+    type: "config.provider.catalog",
+    timestamp: new Date().toISOString(),
+    payload: {
+      session_id: session.sessionId,
+      metadata: { source: "mock-catalog" },
+      providers: MOCK_PROVIDER_CATALOG,
+      ...(includeModels ? { models: MOCK_CATALOG_MODELS } : {}),
+    },
+  });
+}
+
+function handleConfigProviderOauthStart(message, session, send) {
+  const providerId = String(message.payload?.provider_id ?? "");
+  const redirectUri = String(message.payload?.redirect_uri ?? "");
+  const state = `mock-${randomUUID().slice(0, 8)}`;
+  const authUrl = new URL(`http://127.0.0.1:${PORT}/api/agodesk/oauth/mock-auth`);
+  authUrl.searchParams.set("redirect_uri", redirectUri);
+  authUrl.searchParams.set("state", state);
+  authUrl.searchParams.set("provider_id", providerId);
+  send({
+    id: message.id,
+    type: "config.provider.oauth.started",
+    timestamp: new Date().toISOString(),
+    payload: {
+      session_id: session.sessionId,
+      provider_id: providerId,
+      auth_url: authUrl.toString(),
+      mode: "agodesk_loopback",
+      oauth_state: state,
+      fallback_modes: ["manual_paste"],
+    },
+  });
+}
+
+function setOauthStatus(session, providerId, authorized) {
+  const provider = session.providers.get(providerId);
+  if (!provider) {
+    return;
+  }
+  session.providers.set(providerId, {
+    ...provider,
+    oauth: {
+      ...provider.oauth,
+      configured: authorized,
+      authorized,
+      has_refresh_token: authorized,
+      expired: false,
+      missing_fields: [],
+    },
+  });
+}
+
+function sendConfigProviderOauthStatus(message, session, send, override) {
+  const providerId = String(message.payload?.provider_id ?? "");
+  const provider = session.providers.get(providerId);
+  const authorized = override?.authorized ?? Boolean(provider?.oauth?.authorized);
+  const configured = override?.configured ?? Boolean(provider?.oauth?.configured);
+  send({
+    id: message.id,
+    type: "config.provider.oauth.status",
+    timestamp: new Date().toISOString(),
+    payload: {
+      session_id: session.sessionId,
+      provider_id: providerId,
+      configured,
+      authorized,
+      expired: false,
+      has_refresh_token: authorized,
+      missing_fields: [],
+      ...(provider ? { provider: providerToSafe(provider) } : {}),
+    },
+  });
+}
+
+function handleConfigProviderOauthComplete(message, session, send) {
+  const providerId = String(message.payload?.provider_id ?? "");
+  setOauthStatus(session, providerId, true);
+  sendConfigProviderOauthStatus(message, session, send, { authorized: true, configured: true });
+}
+
+function handleConfigProviderOauthRevoke(message, session, send) {
+  const providerId = String(message.payload?.provider_id ?? "");
+  setOauthStatus(session, providerId, false);
+  sendConfigProviderOauthStatus(message, session, send, { authorized: false, configured: false });
 }
 
 wss.on("error", (error) => {

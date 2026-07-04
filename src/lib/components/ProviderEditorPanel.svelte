@@ -4,9 +4,20 @@
   import type {
     ConfigProvider,
     ConfigProviderCatalogEntry,
+    ConfigProviderCatalogModel,
     ConfigProviderUpsertPayload,
   } from "../types/protocol";
   import { buildDefaultProviderSecretsForUpsert } from "../types/protocol";
+  import {
+    catalogEntrySupportsApiKey,
+    catalogEntryUsesOauth,
+    catalogModelOptions,
+    filterCatalogModelsForProvider,
+    providerEffectiveMissingFields,
+    providerSupportsOauth,
+    resolveCatalogAuthType,
+    resolveCatalogBaseUrl,
+  } from "../services/provider-display";
 
   export type ProviderEditorMode = "create" | "edit";
 
@@ -15,12 +26,15 @@
     mode?: ProviderEditorMode;
     provider?: ConfigProvider | null;
     catalogEntry?: ConfigProviderCatalogEntry | null;
+    catalogModels?: ConfigProviderCatalogModel[];
     canWrite?: boolean;
     canOauth?: boolean;
     busy?: boolean;
     loadingDetail?: boolean;
+    errorMessage?: string;
     onClose?: () => void;
     onSave?: (payload: ConfigProviderUpsertPayload) => void;
+    onSaveAndStartOauth?: (payload: ConfigProviderUpsertPayload) => void;
     onStartOauth?: (providerId: string) => void;
     onRevokeOauth?: (providerId: string) => void;
   }
@@ -30,12 +44,15 @@
     mode = "create",
     provider = null,
     catalogEntry = null,
+    catalogModels = [],
     canWrite = false,
     canOauth = false,
     busy = false,
     loadingDetail = false,
+    errorMessage = "",
     onClose,
     onSave,
+    onSaveAndStartOauth,
     onStartOauth,
     onRevokeOauth,
   }: Props = $props();
@@ -58,6 +75,11 @@
   let oauthClientSecretInput = $state("");
   let clearApiKey = $state(false);
   let clearOauthSecret = $state(false);
+  let localSubmitError = $state("");
+
+  const canSubmit = $derived(
+    Boolean(canWrite && draftId.trim() && draftName.trim() && draftType.trim()),
+  );
 
   const displayTypeLabel = $derived(
     provider?.type ?? catalogEntry?.aura_provider_type ?? catalogEntry?.id ?? draftType,
@@ -69,6 +91,53 @@
       : $i18n("settings.llmProviders.auth.apiKey"),
   );
 
+  const modelOptions = $derived(
+    catalogModelOptions(filterCatalogModelsForProvider(catalogModels, catalogEntry)),
+  );
+
+  const catalogBaseUrlLocked = $derived(
+    mode === "create" && Boolean(catalogEntry?.base_url?.trim()),
+  );
+
+  const supportsApiKeyAuth = $derived(
+    provider?.auth_type === "api_key" ||
+      catalogEntrySupportsApiKey(catalogEntry) ||
+      (!catalogEntry && !provider),
+  );
+
+  const supportsOauthAuth = $derived(
+    provider?.auth_type === "oauth" ||
+      providerSupportsOauth(provider) ||
+      catalogEntryUsesOauth(catalogEntry),
+  );
+
+  const showAuthTypeSelector = $derived(
+    canWrite && supportsApiKeyAuth && supportsOauthAuth,
+  );
+
+  const usesOauthFlow = $derived(draftAuthType === "oauth" && supportsOauthAuth);
+
+  const canStartOauthNow = $derived(Boolean(provider?.id) && canOauth && usesOauthFlow);
+
+  const catalogOauthPrefilled = $derived(
+    mode === "create" &&
+      Boolean(
+        catalogEntry?.oauth_setup?.auth_url ||
+          catalogEntry?.oauth_setup?.token_url ||
+          catalogEntry?.oauth_provider,
+      ),
+  );
+
+  const missingFieldWarnings = $derived.by(() => {
+    if (provider) {
+      return providerEffectiveMissingFields(provider);
+    }
+    if (mode === "create" && catalogEntry?.missing_credentials?.length) {
+      return catalogEntry.missing_credentials;
+    }
+    return [];
+  });
+
   $effect(() => {
     if (!open) {
       return;
@@ -77,17 +146,14 @@
     draftId = provider?.id ?? catalogEntry?.id ?? crypto.randomUUID();
     draftName = provider?.name ?? catalogEntry?.name ?? "";
     draftType = provider?.type ?? catalogEntry?.aura_provider_type ?? catalogEntry?.id ?? "";
-    draftBaseUrl = provider?.base_url ?? "";
+    draftBaseUrl = provider?.base_url ?? resolveCatalogBaseUrl(catalogEntry);
     draftModel = provider?.model ?? catalogEntry?.default_model ?? "";
     draftAccountId = provider?.account_id ?? "";
-    draftAuthType =
-      provider?.auth_type === "oauth" || catalogEntry?.oauth_setup
-        ? "oauth"
-        : provider?.auth_type === "api_key"
-          ? "api_key"
-          : catalogEntry?.oauth_provider
-            ? "oauth"
-            : "api_key";
+    draftAuthType = (
+      provider?.auth_type === "oauth" || provider?.auth_type === "api_key"
+        ? provider.auth_type
+        : resolveCatalogAuthType(catalogEntry)
+    ) as "api_key" | "oauth";
     draftOauthAuthUrl = provider?.oauth_auth_url ?? oauthSetup?.auth_url ?? "";
     draftOauthTokenUrl = provider?.oauth_token_url ?? oauthSetup?.token_url ?? "";
     draftOauthClientId = provider?.oauth_client_id ?? "";
@@ -107,9 +173,9 @@
     }
   });
 
-  function handleSave(): void {
+  function buildSavePayload(): ConfigProviderUpsertPayload | null {
     if (!canWrite || !draftId.trim() || !draftName.trim() || !draftType.trim()) {
-      return;
+      return null;
     }
 
     const secrets = buildDefaultProviderSecretsForUpsert(
@@ -124,7 +190,7 @@
       secrets.oauth_client_secret = { op: "clear" };
     }
 
-    const payload: ConfigProviderUpsertPayload = {
+    return {
       session_id: "",
       mode: mode === "create" ? "create" : "update",
       provider: {
@@ -137,6 +203,10 @@
         auth_type: draftAuthType,
         ...(draftAuthType === "oauth"
           ? {
+              oauth_provider:
+                provider?.oauth_provider ||
+                catalogEntry?.oauth_provider ||
+                undefined,
               oauth_auth_url: draftOauthAuthUrl.trim() || undefined,
               oauth_token_url: draftOauthTokenUrl.trim() || undefined,
               oauth_client_id: draftOauthClientId.trim() || undefined,
@@ -146,7 +216,30 @@
       },
       secrets,
     };
+  }
+
+  function handleSave(): void {
+    const payload = buildSavePayload();
+    if (!payload) {
+      localSubmitError = canSubmit
+        ? ""
+        : $i18n("settings.llmProviders.editor.requiredFieldsMissing");
+      return;
+    }
+    localSubmitError = "";
     onSave?.(payload);
+  }
+
+  function handleSaveAndStartOauth(): void {
+    const payload = buildSavePayload();
+    if (!payload) {
+      localSubmitError = canSubmit
+        ? ""
+        : $i18n("settings.llmProviders.editor.requiredFieldsMissing");
+      return;
+    }
+    localSubmitError = "";
+    onSaveAndStartOauth?.(payload);
   }
 </script>
 
@@ -183,13 +276,26 @@
       <p class="editor-loading">{$i18n("settings.llmProviders.editor.loading")}</p>
     {:else}
       <dl class="meta-row">
+        <div class="meta-id">
+          <dt>{$i18n("settings.llmProviders.fields.id")}</dt>
+          <dd><code class="provider-id">{draftId}</code></dd>
+        </div>
         <div>
           <dt>{$i18n("settings.llmProviders.fields.type")}</dt>
           <dd><span class="ui-chip" data-tone="idle">{displayTypeLabel}</span></dd>
         </div>
         <div>
           <dt>{$i18n("settings.llmProviders.fields.authType")}</dt>
-          <dd><span class="ui-chip" data-tone="connected">{displayAuthLabel}</span></dd>
+          <dd>
+            {#if showAuthTypeSelector}
+              <select bind:value={draftAuthType} disabled={busy}>
+                <option value="api_key">{$i18n("settings.llmProviders.auth.apiKey")}</option>
+                <option value="oauth">{$i18n("settings.llmProviders.auth.oauth")}</option>
+              </select>
+            {:else}
+              <span class="ui-chip" data-tone="connected">{displayAuthLabel}</span>
+            {/if}
+          </dd>
         </div>
       </dl>
 
@@ -198,18 +304,39 @@
           <span>{$i18n("settings.llmProviders.fields.name")}</span>
           <input bind:value={draftName} disabled={!canWrite || busy} />
         </label>
-        <label>
+        <label class="full">
           <span>{$i18n("settings.llmProviders.fields.baseUrl")}</span>
-          <input bind:value={draftBaseUrl} disabled={!canWrite || busy} />
+          <input
+            bind:value={draftBaseUrl}
+            disabled={!canWrite || busy || catalogBaseUrlLocked}
+          />
         </label>
-        <label>
+        <label class="full">
           <span>{$i18n("settings.llmProviders.fields.model")}</span>
-          <input bind:value={draftModel} disabled={!canWrite || busy} />
+          {#if modelOptions.length > 0}
+            <select bind:value={draftModel} disabled={!canWrite || busy}>
+              <option value="">{$i18n("settings.llmProviders.fields.modelSelect")}</option>
+              {#each modelOptions as option (option.id)}
+                <option value={option.id}>{option.label}</option>
+              {/each}
+            </select>
+          {:else}
+            <input bind:value={draftModel} disabled={!canWrite || busy} />
+          {/if}
         </label>
         <label class="full">
           <span>{$i18n("settings.llmProviders.fields.accountId")}</span>
           <input bind:value={draftAccountId} disabled={!canWrite || busy} />
         </label>
+
+        {#if missingFieldWarnings.length > 0}
+          <div class="missing-fields full">
+            <span class="missing-label">{$i18n("settings.llmProviders.missingFields")}:</span>
+            {#each missingFieldWarnings as field (field)}
+              <span class="ui-chip compact" data-tone="error">{field}</span>
+            {/each}
+          </div>
+        {/if}
 
         {#if draftAuthType === "api_key"}
           <label class="full">
@@ -231,21 +358,36 @@
             </label>
           {/if}
         {:else}
-          <label>
+          {#if mode === "create"}
+            <p class="oauth-intro full">{$i18n("settings.llmProviders.oauth.createHint")}</p>
+          {/if}
+          {#if !canOauth}
+            <p class="oauth-unavailable full">{$i18n("settings.llmProviders.oauth.unavailable")}</p>
+          {/if}
+          <label class="full">
             <span>{$i18n("settings.llmProviders.fields.oauthAuthUrl")}</span>
-            <input bind:value={draftOauthAuthUrl} disabled={!canWrite || busy} />
+            <input
+              bind:value={draftOauthAuthUrl}
+              disabled={!canWrite || busy || catalogOauthPrefilled}
+            />
           </label>
-          <label>
+          <label class="full">
             <span>{$i18n("settings.llmProviders.fields.oauthTokenUrl")}</span>
-            <input bind:value={draftOauthTokenUrl} disabled={!canWrite || busy} />
+            <input
+              bind:value={draftOauthTokenUrl}
+              disabled={!canWrite || busy || catalogOauthPrefilled}
+            />
           </label>
           <label>
             <span>{$i18n("settings.llmProviders.fields.oauthClientId")}</span>
             <input bind:value={draftOauthClientId} disabled={!canWrite || busy} />
           </label>
-          <label class="full">
+          <label>
             <span>{$i18n("settings.llmProviders.fields.oauthScopes")}</span>
-            <input bind:value={draftOauthScopes} disabled={!canWrite || busy} />
+            <input
+              bind:value={draftOauthScopes}
+              disabled={!canWrite || busy || catalogOauthPrefilled}
+            />
           </label>
           <label class="full">
             <span>{$i18n("settings.llmProviders.fields.oauthClientSecret")}</span>
@@ -266,26 +408,26 @@
             </label>
           {/if}
 
-          {#if provider && canOauth}
+          {#if canStartOauthNow}
             <div class="oauth-actions full">
-              {#if provider.oauth?.authorized}
+              {#if provider?.oauth?.authorized}
                 <span class="ui-chip" data-tone="accepted">
                   {$i18n("settings.llmProviders.oauth.authorized")}
                 </span>
                 <button
                   type="button"
-                  class="ui-btn ghost"
+                  class="ui-btn ui-btn-secondary"
                   disabled={busy}
-                  onclick={() => onRevokeOauth?.(provider.id)}
+                  onclick={() => onRevokeOauth?.(provider!.id)}
                 >
                   {$i18n("settings.llmProviders.oauth.revoke")}
                 </button>
               {:else}
                 <button
                   type="button"
-                  class="ui-btn"
+                  class="ui-btn ui-btn-primary"
                   disabled={busy}
-                  onclick={() => onStartOauth?.(provider.id)}
+                  onclick={() => onStartOauth?.(provider!.id)}
                 >
                   {$i18n("settings.llmProviders.oauth.start")}
                 </button>
@@ -296,19 +438,51 @@
       </div>
 
       <div class="editor-footer">
+        {#if errorMessage}
+          <p class="editor-error full" role="alert">{errorMessage}</p>
+        {/if}
+        {#if localSubmitError}
+          <p class="editor-local-error" role="alert">{localSubmitError}</p>
+        {/if}
         <button type="button" class="ui-btn ghost" onclick={() => onClose?.()} disabled={busy}>
           {$i18n("certModal.cancel")}
         </button>
         {#if canWrite}
-          <button
-            bind:this={saveBtn}
-            type="button"
-            class="ui-btn primary"
-            onclick={handleSave}
-            disabled={busy || loadingDetail}
-          >
-            {$i18n("settings.llmProviders.editor.save")}
-          </button>
+          {#if usesOauthFlow && onSaveAndStartOauth}
+            <button
+              type="button"
+              class="ui-btn ui-btn-secondary"
+              onclick={handleSave}
+              disabled={busy || loadingDetail}
+            >
+              {$i18n("settings.llmProviders.editor.save")}
+            </button>
+            {#if canOauth}
+              <button
+                bind:this={saveBtn}
+                type="button"
+                class="ui-btn ui-btn-primary"
+                onclick={handleSaveAndStartOauth}
+                disabled={busy || loadingDetail}
+              >
+                {$i18n("settings.llmProviders.editor.saveAndAuthorize")}
+              </button>
+            {:else}
+              <span class="oauth-footer-hint">
+                {$i18n("settings.llmProviders.oauth.unavailable")}
+              </span>
+            {/if}
+          {:else}
+            <button
+              bind:this={saveBtn}
+              type="button"
+              class="ui-btn ui-btn-primary"
+              onclick={handleSave}
+              disabled={busy || loadingDetail}
+            >
+              {$i18n("settings.llmProviders.editor.save")}
+            </button>
+          {/if}
         {/if}
       </div>
     {/if}
@@ -335,7 +509,8 @@
     margin: 0;
     border: none;
     padding: 1.25rem;
-    overflow: auto;
+    overflow-x: hidden;
+    overflow-y: auto;
   }
 
   .editor-header {
@@ -379,6 +554,25 @@
     margin: 0;
   }
 
+  .meta-id {
+    grid-column: 1 / -1;
+  }
+
+  .provider-id {
+    display: inline-block;
+    max-width: 100%;
+    font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+    font-size: 0.82rem;
+    word-break: break-all;
+    user-select: all;
+    opacity: 0.9;
+  }
+
+  .meta-row select {
+    width: 100%;
+    min-width: 0;
+  }
+
   .editor-grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -388,10 +582,24 @@
   .editor-grid label {
     display: grid;
     gap: 0.35rem;
+    min-width: 0;
   }
 
   .editor-grid label.full {
     grid-column: 1 / -1;
+  }
+
+  .editor-grid input,
+  .editor-grid select {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+  }
+
+  .editor-grid select {
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .editor-grid label.checkbox {
@@ -406,13 +614,70 @@
     flex-wrap: wrap;
   }
 
+  .missing-fields {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    align-items: center;
+  }
+
+  .missing-label {
+    font-size: 0.82rem;
+    opacity: 0.75;
+  }
+
+  .oauth-intro,
+  .oauth-unavailable {
+    margin: 0;
+    font-size: 0.84rem;
+    line-height: 1.45;
+    color: var(--color-muted);
+  }
+
+  .oauth-unavailable {
+    color: var(--color-warning);
+  }
+
   .editor-footer {
     display: flex;
+    flex-wrap: wrap;
     justify-content: flex-end;
     gap: 0.5rem;
     margin-top: 1.25rem;
     padding-top: 1rem;
     border-top: 1px solid color-mix(in srgb, var(--text) 10%, transparent);
+  }
+
+  .oauth-footer-hint {
+    align-self: center;
+    font-size: 0.84rem;
+    line-height: 1.4;
+    color: var(--color-warning);
+    max-width: 60%;
+  }
+
+  .editor-local-error {
+    margin-right: auto;
+    align-self: center;
+    font-size: 0.84rem;
+    line-height: 1.4;
+    color: var(--color-error, #d33);
+    max-width: 55%;
+  }
+
+  .editor-error {
+    margin: 0 0 0.5rem;
+    padding: 0.6rem 0.85rem;
+    border-radius: 0.5rem;
+    background: color-mix(in srgb, var(--color-error, #d33) 12%, transparent);
+    color: var(--color-error, #d33);
+    font-size: 0.88rem;
+    line-height: 1.4;
+    border: 1px solid color-mix(in srgb, var(--color-error, #d33) 25%, transparent);
+  }
+
+  .editor-error.full {
+    flex: 0 0 100%;
   }
 
   @media (max-width: 720px) {

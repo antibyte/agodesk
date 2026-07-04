@@ -2,18 +2,20 @@ import { writable } from "svelte/store";
 import type {
   ConfigProvider,
   ConfigProviderCatalogEntry,
+  ConfigProviderCatalogModel,
+  ConfigProviderCatalogPayload,
   ConfigProviderOauthStartedPayload,
   ConfigProviderOauthStatusPayload,
 } from "../types/protocol";
 
 export interface ProvidersState {
   providers: ConfigProvider[];
-  selectedProvider: ConfigProvider | null;
   catalog: ConfigProviderCatalogEntry[];
+  catalogModels: ConfigProviderCatalogModel[];
+  catalogMetadata: Record<string, unknown> | null;
   catalogEnabled: boolean;
   loading: boolean;
   catalogLoading: boolean;
-  detailLoading: boolean;
   testLoadingProviderId: string | null;
   error: string;
   oauthPending: ConfigProviderOauthStartedPayload | null;
@@ -22,12 +24,12 @@ export interface ProvidersState {
 
 const initialState: ProvidersState = {
   providers: [],
-  selectedProvider: null,
   catalog: [],
+  catalogModels: [],
+  catalogMetadata: null,
   catalogEnabled: false,
   loading: false,
   catalogLoading: false,
-  detailLoading: false,
   testLoadingProviderId: null,
   error: "",
   oauthPending: null,
@@ -43,14 +45,11 @@ function createProvidersStore() {
     setLoading: (loading: boolean) => update((state) => ({ ...state, loading })),
     setCatalogLoading: (catalogLoading: boolean) =>
       update((state) => ({ ...state, catalogLoading })),
-    setDetailLoading: (detailLoading: boolean) => update((state) => ({ ...state, detailLoading })),
     setTestLoadingProviderId: (testLoadingProviderId: string | null) =>
       update((state) => ({ ...state, testLoadingProviderId })),
     setError: (error: string) => update((state) => ({ ...state, error })),
     setProviders: (providers: ConfigProvider[]) =>
       update((state) => ({ ...state, providers, loading: false, error: "" })),
-    setSelectedProvider: (selectedProvider: ConfigProvider | null) =>
-      update((state) => ({ ...state, selectedProvider, detailLoading: false })),
     upsertProviderInList: (provider: ConfigProvider) =>
       update((state) => {
         const index = state.providers.findIndex((entry) => entry.id === provider.id);
@@ -58,24 +57,20 @@ function createProvidersStore() {
           index >= 0
             ? state.providers.map((entry, idx) => (idx === index ? provider : entry))
             : [...state.providers, provider];
-        return {
-          ...state,
-          providers,
-          selectedProvider:
-            state.selectedProvider?.id === provider.id ? provider : state.selectedProvider,
-        };
+        return { ...state, providers };
       }),
     removeProviderFromList: (providerId: string) =>
       update((state) => ({
         ...state,
         providers: state.providers.filter((entry) => entry.id !== providerId),
-        selectedProvider: state.selectedProvider?.id === providerId ? null : state.selectedProvider,
       })),
-    setCatalog: (catalog: ConfigProviderCatalogEntry[], enabled = true) =>
+    setCatalogPayload: (payload: ConfigProviderCatalogPayload) =>
       update((state) => ({
         ...state,
-        catalog,
-        catalogEnabled: enabled,
+        catalog: payload.providers,
+        catalogModels: payload.models ?? [],
+        catalogMetadata: payload.metadata ?? null,
+        catalogEnabled: payload.enabled ?? true,
         catalogLoading: false,
       })),
     setOauthPending: (oauthPending: ConfigProviderOauthStartedPayload | null) =>
