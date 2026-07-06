@@ -341,6 +341,37 @@ pub async fn speech_download_asr_model(
 }
 
 #[tauri::command]
+pub async fn speech_supertonic_status() -> Result<serde_json::Value, String> {
+    tauri::async_runtime::spawn_blocking(|| dispatch_speech_op("supertonic_status", serde_json::json!({})))
+        .await
+        .map_err(|error| error.to_string())?
+}
+
+#[tauri::command]
+pub async fn speech_download_tts_model(
+    app: tauri::AppHandle,
+    model: String,
+) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::speech::model_download::download_supertonic_model(&app, &model)
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
+
+#[tauri::command]
+pub async fn speech_download_piper_voice(
+    app: tauri::AppHandle,
+    voice: String,
+) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::speech::model_download::download_piper_voice(&app, &voice)
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
+
+#[tauri::command]
 pub async fn speech_sidecar_ping() -> Result<serde_json::Value, String> {
     tauri::async_runtime::spawn_blocking(|| dispatch_speech_op("ping", serde_json::json!({})))
         .await
@@ -376,6 +407,7 @@ pub async fn speech_sidecar_synthesize(
     backend: String,
     rate: Option<f32>,
     pitch: Option<f32>,
+    lang: Option<String>,
 ) -> Result<serde_json::Value, String> {
     tauri::async_runtime::spawn_blocking(move || {
         dispatch_speech_op(
@@ -386,6 +418,7 @@ pub async fn speech_sidecar_synthesize(
                 "backend": backend,
                 "rate": rate,
                 "pitch": pitch,
+                "lang": lang,
             }),
         )
     })

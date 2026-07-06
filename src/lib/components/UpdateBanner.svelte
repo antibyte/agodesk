@@ -1,5 +1,6 @@
 <script lang="ts">
   import { i18n } from "../i18n";
+  import { focusTrap } from "../actions/focusTrap";
   import type { UpdateStatus } from "../services/update-flow";
 
   interface Props {
@@ -31,7 +32,9 @@
     data-tone="info"
     aria-live="polite"
     role="dialog"
+    aria-modal="true"
     aria-labelledby="update-banner-title"
+    use:focusTrap
   >
     <div class="copy">
       <strong id="update-banner-title">{$i18n("update.banner.title")}</strong>

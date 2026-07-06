@@ -19,6 +19,7 @@ import {
   requiresRemoteControlBanner,
   normalizeSessionAcceptedPayload,
 } from "../types/protocol";
+import { getTranslateFn } from "../i18n/store";
 import { sessionState } from "../stores/session";
 
 export async function handleSystemConnected(
@@ -70,7 +71,7 @@ export async function sendPairingSessionStart(
   serverUrl: string,
 ): Promise<void> {
   if (!pairingToken.trim()) {
-    sessionState.setStatus("error", "Pairing-Token fehlt.");
+    sessionState.setStatus("error", getTranslateFn()("sessionFlow.error.missingPairingToken"));
     return;
   }
 
@@ -93,7 +94,7 @@ export async function sendReconnectSessionStart(
 export async function handleSessionAccepted(payload: unknown, serverUrl: string): Promise<void> {
   const normalized = normalizeSessionAcceptedPayload(payload);
   if (!normalized) {
-    sessionState.setStatus("error", "Ungueltige session.accepted-Antwort vom Server.");
+    sessionState.setStatus("error", getTranslateFn()("sessionFlow.error.invalidSessionAccepted"));
     return;
   }
 
@@ -107,25 +108,21 @@ export async function handleSessionAccepted(payload: unknown, serverUrl: string)
       await saveSharedKey(normalized.device_id, normalized.shared_key);
       const verified = await loadSharedKey(normalized.device_id);
       if (!verified) {
-        sessionState.setStatus(
-          "error",
-          "Shared Key konnte nicht gespeichert werden. Bitte erneut paaren.",
-        );
+        sessionState.setStatus("error", getTranslateFn()("sessionFlow.error.sharedKeyNotStored"));
         return;
       }
     } catch (error) {
       sessionState.setStatus(
         "error",
-        error instanceof Error ? error.message : "Shared Key konnte nicht gespeichert werden.",
+        error instanceof Error
+          ? error.message
+          : getTranslateFn()("sessionFlow.error.sharedKeyNotStored"),
       );
       return;
     }
     await clearPairingToken(origin);
   } else if (!existingKey && !(await loadSharedKey(normalized.device_id))) {
-    sessionState.setStatus(
-      "error",
-      "Wiederverbindung ohne gespeicherten Shared Key. Bitte erneut mit Pairing-Token paaren.",
-    );
+    sessionState.setStatus("error", getTranslateFn()("sessionFlow.error.missingSharedKey"));
     return;
   }
 

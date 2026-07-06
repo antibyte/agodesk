@@ -8,10 +8,24 @@ describe("local-speech-tts", () => {
     const config = resolveLocalTtsConfig({
       ...DEFAULT_SPEECH_SETTINGS,
       provider: "offline",
+      offlineTtsBackend: "piper",
       offlineTtsVoice: "de_DE-thorsten-high",
     });
     assert.equal(config.backend, "piper");
     assert.equal(config.voice, "de_DE-thorsten-high");
+  });
+
+  it("uses Supertonic for offline provider when configured", () => {
+    const config = resolveLocalTtsConfig({
+      ...DEFAULT_SPEECH_SETTINGS,
+      provider: "offline",
+      offlineTtsBackend: "supertonic",
+      supertonicVoice: "F2",
+      language: "de-DE",
+    });
+    assert.equal(config.backend, "supertonic");
+    assert.equal(config.voice, "F2");
+    assert.equal(config.lang, "de");
   });
 
   it("falls back to Piper voice when hybrid edge_tts is configured", () => {

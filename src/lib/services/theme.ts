@@ -1,8 +1,34 @@
-import type { ThemeMode } from "../types/protocol";
+import type { ThemeMode, UiTheme } from "../types/protocol";
+import { uiThemeHasFixedScheme } from "../types/protocol";
 
 let mediaQuery: MediaQueryList | null = null;
 let mediaListener: ((event: MediaQueryListEvent) => void) | null = null;
 let tauriThemeUnlisten: (() => void) | null = null;
+
+/** Fixed color-scheme each non-aurora theme forces, regardless of the light/dark mode. */
+const UI_THEME_COLOR_SCHEME: Partial<Record<UiTheme, "light" | "dark">> = {
+  minimal: "dark",
+  blossom: "light",
+  cyberpunk: "dark",
+  papyrus: "light",
+  chaos: "dark",
+};
+
+let currentUiTheme: UiTheme = "aurora";
+let currentThemeMode: ThemeMode = "system";
+
+function colorSchemeForMode(theme: ThemeMode): string {
+  return theme === "system" ? "light dark" : theme;
+}
+
+function applyColorScheme(): void {
+  if (uiThemeHasFixedScheme(currentUiTheme)) {
+    document.documentElement.style.colorScheme =
+      UI_THEME_COLOR_SCHEME[currentUiTheme] ?? "light dark";
+    return;
+  }
+  document.documentElement.style.colorScheme = colorSchemeForMode(currentThemeMode);
+}
 
 async function syncNativeTheme(theme: ThemeMode): Promise<void> {
   try {
@@ -29,9 +55,20 @@ async function listenNativeThemeChanges(theme: ThemeMode): Promise<void> {
 }
 
 export function applyTheme(theme: ThemeMode): void {
+  currentThemeMode = theme;
   document.documentElement.setAttribute("data-theme", theme);
-  document.documentElement.style.colorScheme = theme === "system" ? "light dark" : theme;
+  applyColorScheme();
   void syncNativeTheme(theme);
+}
+
+/**
+ * Applies the visual theme (design language) via `data-ui-theme`. Fixed themes
+ * enforce their own color-scheme; aurora follows the current light/dark mode.
+ */
+export function applyUiTheme(theme: UiTheme): void {
+  currentUiTheme = theme;
+  document.documentElement.setAttribute("data-ui-theme", theme);
+  applyColorScheme();
 }
 
 export function initThemeListener(theme: ThemeMode): void {

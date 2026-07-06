@@ -2239,7 +2239,46 @@ export interface ChatMessage {
 
 export type ThemeMode = "system" | "light" | "dark";
 
-export type UiSoundTheme = "soft" | "classic" | "modern" | "warm";
+/** Full visual theme (design language), independent of the light/dark mode. */
+export type UiTheme = "aurora" | "minimal" | "blossom" | "cyberpunk" | "papyrus" | "chaos";
+
+export const UI_THEMES: readonly UiTheme[] = [
+  "aurora",
+  "minimal",
+  "blossom",
+  "cyberpunk",
+  "papyrus",
+  "chaos",
+] as const;
+
+/** Themes that bring a fixed look and ignore the light/dark mode switch. */
+export const FIXED_UI_THEMES: readonly UiTheme[] = [
+  "minimal",
+  "blossom",
+  "cyberpunk",
+  "papyrus",
+  "chaos",
+] as const;
+
+export function normalizeUiTheme(value: unknown): UiTheme {
+  return UI_THEMES.includes(value as UiTheme) ? (value as UiTheme) : "aurora";
+}
+
+export function uiThemeHasFixedScheme(theme: UiTheme): boolean {
+  return FIXED_UI_THEMES.includes(theme);
+}
+
+export type UiSoundTheme =
+  | "soft"
+  | "classic"
+  | "modern"
+  | "warm"
+  | "aurora"
+  | "minimal"
+  | "blossom"
+  | "cyberpunk"
+  | "papyrus"
+  | "chaos";
 
 export type UiSoundEvent = "send" | "receive" | "success" | "error" | "notice";
 
@@ -2279,7 +2318,9 @@ export const SPEECH_PROVIDERS: readonly SpeechProvider[] = [
 
 export type LocalAsrModel = "whisper_small_de" | "sense_voice_int8";
 
-export type HybridTtsBackend = "piper" | "edge_tts" | "azure";
+export type HybridTtsBackend = "piper" | "edge_tts" | "azure" | "supertonic";
+
+export type OfflineTtsBackend = "piper" | "supertonic";
 
 export interface SpeechSettings {
   enabled: boolean;
@@ -2299,12 +2340,17 @@ export interface SpeechSettings {
   hybridTtsVoice: string;
   /** Piper voice id for offline TTS (e.g. de_DE-thorsten-high). */
   offlineTtsVoice: string;
+  /** Offline TTS backend for fully offline mode. */
+  offlineTtsBackend: OfflineTtsBackend;
+  /** Supertonic preset voice style (e.g. M1, F1); language comes from `language`. */
+  supertonicVoice: string;
   /** Barge-in (user interruption while AI speaks) detection mode. */
   bargeInMode: "energy" | "silero" | "auto";
 }
 
 export const DEFAULT_HYBRID_TTS_VOICE = "de-DE-KatjaNeural";
 export const DEFAULT_OFFLINE_TTS_VOICE = "de_DE-thorsten-high";
+export const DEFAULT_SUPERTONIC_VOICE = "M1";
 
 export const DEFAULT_SPEECH_SETTINGS: SpeechSettings = {
   enabled: true,
@@ -2319,6 +2365,8 @@ export const DEFAULT_SPEECH_SETTINGS: SpeechSettings = {
   hybridTtsBackend: "edge_tts",
   hybridTtsVoice: DEFAULT_HYBRID_TTS_VOICE,
   offlineTtsVoice: DEFAULT_OFFLINE_TTS_VOICE,
+  offlineTtsBackend: "piper",
+  supertonicVoice: DEFAULT_SUPERTONIC_VOICE,
   bargeInMode: "auto",
 };
 
@@ -2348,6 +2396,12 @@ export const UI_SOUND_THEMES: readonly UiSoundTheme[] = [
   "classic",
   "modern",
   "warm",
+  "aurora",
+  "minimal",
+  "blossom",
+  "cyberpunk",
+  "papyrus",
+  "chaos",
 ] as const;
 
 export const UI_SOUND_THEME_LABELS: Record<UiSoundTheme, string> = {
@@ -2355,6 +2409,26 @@ export const UI_SOUND_THEME_LABELS: Record<UiSoundTheme, string> = {
   classic: "Classic",
   modern: "Modern",
   warm: "Warm",
+  aurora: "Aurora",
+  minimal: "Minimal",
+  blossom: "Blossom",
+  cyberpunk: "Cyberpunk",
+  papyrus: "Papyrus",
+  chaos: "Chaos",
+};
+
+export function normalizeUiSoundTheme(value: unknown): UiSoundTheme {
+  return UI_SOUND_THEMES.includes(value as UiSoundTheme) ? (value as UiSoundTheme) : "soft";
+}
+
+/** Default sound set paired with each visual theme. */
+export const UI_THEME_SOUND: Record<UiTheme, UiSoundTheme> = {
+  aurora: "aurora",
+  minimal: "minimal",
+  blossom: "blossom",
+  cyberpunk: "cyberpunk",
+  papyrus: "papyrus",
+  chaos: "chaos",
 };
 
 export type FileAccessPermission = "read" | "write";
@@ -2399,6 +2473,8 @@ export const DEFAULT_FILE_ACCESS_SETTINGS: FileAccessSettings = {
 export interface AppSettings {
   serverUrl: string;
   theme: ThemeMode;
+  /** Visuelles Theme (Design-Sprache), unabhängig vom Hell/Dunkel-Modus. */
+  uiTheme: UiTheme;
   /** UI-Sprache (`system` folgt der Betriebssystem-Sprache). */
   locale: UiLocaleSetting;
   speech: SpeechSettings;
@@ -2422,11 +2498,16 @@ export interface AppSettings {
   chatSpeakerMode: boolean;
   /** OpenPets Desktop-Pet Integration. */
   openPets: OpenPetsSettings;
+  /** Reduziert Animationen über prefers-reduced-motion hinaus. */
+  reduceMotion: boolean;
+  /** Hintergrund-Visualizer während Sprachsitzungen. */
+  speechVisualizerEnabled: boolean;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
   serverUrl: "ws://127.0.0.1:8080/api/agodesk/ws?insecure_loopback=1",
   theme: "system",
+  uiTheme: "aurora",
   locale: "system",
   speech: { ...DEFAULT_SPEECH_SETTINGS },
   uiSounds: { ...DEFAULT_UI_SOUND_SETTINGS },
@@ -2439,6 +2520,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   chatTtsMode: "auto",
   chatSpeakerMode: true,
   openPets: { ...DEFAULT_OPENPETS_SETTINGS },
+  reduceMotion: false,
+  speechVisualizerEnabled: true,
 };
 
 export const PROTOCOL_VERSION = "agodesk.v1";

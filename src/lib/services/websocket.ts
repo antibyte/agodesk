@@ -9,6 +9,7 @@ import {
 } from "../stores/connection";
 import { rejectAnyPendingProviderWaiters } from "./providers-flow";
 import { prepareServerUrl } from "./server-url";
+import { getTranslateFn } from "../i18n/store";
 import { formatInvokeError } from "./errors";
 
 export type MessageHandler = (message: WsMessage) => void;
@@ -42,7 +43,7 @@ export class NativeWebSocketService {
       });
     } catch (error) {
       setConnectionError();
-      throw new Error(formatInvokeError(error, "Verbindung konnte nicht gestartet werden."));
+      throw new Error(formatInvokeError(error, getTranslateFn()("websocket.error.connectFailed")));
     }
   }
 

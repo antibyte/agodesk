@@ -21,12 +21,15 @@
   let resizeObserver: ResizeObserver | undefined;
   let fadeStopTimer: ReturnType<typeof setTimeout> | undefined;
 
-  function readThemeColors(): { accent: string; danger: string; bg: string } {
+  function readThemeColors(): { accent: string; aurora1: string; aurora2: string; aurora3: string; danger: string; bg: string } {
     const style = getComputedStyle(document.documentElement);
     return {
-      accent: style.getPropertyValue("--color-accent").trim() || "#2563eb",
+      accent: style.getPropertyValue("--color-accent").trim() || "#8b5cf6",
+      aurora1: style.getPropertyValue("--aurora-1").trim() || "#8b5cf6",
+      aurora2: style.getPropertyValue("--aurora-2").trim() || "#22d3ee",
+      aurora3: style.getPropertyValue("--aurora-3").trim() || "#34d399",
       danger: style.getPropertyValue("--color-danger").trim() || "#dc2626",
-      bg: style.getPropertyValue("--color-bg-elevated").trim() || "#f8fafc",
+      bg: style.getPropertyValue("--color-bg-elevated").trim() || "#07090f",
     };
   }
 
@@ -208,11 +211,11 @@
 
       const { energy, speaking, bass, mid, treble, spectrum } = metrics;
       const colors = readThemeColors();
-      const accent = colors.accent;
+      const accent = colors.aurora2;
       const listening = status === "listening";
       const processing = status === "processing";
-      const danger = listening ? colors.danger : accent;
-      const secondary = processing ? colors.danger : accent;
+      const danger = listening ? colors.aurora3 : colors.aurora2;
+      const secondary = processing ? colors.aurora1 : colors.aurora3;
 
       if (speaking && energy > lastEnergy + 0.09) {
         pulseStrength = Math.max(pulseStrength, energy);

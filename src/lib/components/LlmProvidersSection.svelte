@@ -229,10 +229,39 @@
     editorError = "";
     const wasCreate = payload.mode === "create";
     try {
+      if (import.meta.env.DEV) {
+        console.info(
+          "[agodesk:provider.upsert] request " +
+            JSON.stringify({
+              mode: payload.mode,
+              startOauthAfterSave: options.startOauthAfterSave ?? false,
+              id: payload.provider?.id,
+              type: payload.provider?.type,
+              auth_type: payload.provider?.auth_type,
+              oauth_provider: payload.provider?.oauth_provider,
+              has_oauth_auth_url: Boolean(payload.provider?.oauth_auth_url),
+              has_oauth_token_url: Boolean(payload.provider?.oauth_token_url),
+              has_oauth_client_id: Boolean(payload.provider?.oauth_client_id),
+            }),
+        );
+      }
       const saved = await upsertConfigProvider(wsSend, {
         ...payload,
         session_id: sessionId,
       });
+      if (import.meta.env.DEV) {
+        console.info(
+          "[agodesk:provider.upsert] saved " +
+            JSON.stringify({
+              id: saved.id,
+              type: saved.type,
+              auth_type: saved.auth_type,
+              oauth_provider: saved.oauth_provider,
+              oauth_configured: saved.oauth?.configured,
+              oauth_missing_fields: saved.oauth?.missing_fields,
+            }),
+        );
+      }
       editingProvider = saved;
       editorMode = "edit";
       setFeedback($i18n("settings.llmProviders.feedback.saved"), "success");
@@ -384,6 +413,22 @@
           : null);
       const oauthSetup = catalogEntry?.oauth_setup ?? selectedCatalogEntry?.oauth_setup;
 
+      if (import.meta.env.DEV) {
+        console.info(
+          "[agodesk:oauth.start] pre-flight " +
+            JSON.stringify({
+              provider_id: providerId,
+              provider_type: provider?.type,
+              provider_auth_type: provider?.auth_type,
+              provider_oauth_provider: provider?.oauth_provider,
+              catalog_oauth_provider: catalogEntry?.oauth_provider,
+              catalog_has_oauth_setup: Boolean(oauthSetup),
+              catalog_auth_url: oauthSetup?.auth_url,
+              catalog_token_url: oauthSetup?.token_url,
+            }),
+        );
+      }
+
       // AuraGo rejects oauth.start when the stored provider's auth_type isn't "oauth"
       // ("OAuth2 configuration incomplete: auth_type"). For dual-auth providers that
       // were saved with auth_type=api_key, flip to oauth before starting the flow so
@@ -442,6 +487,16 @@
       return true;
     } catch (error) {
       oauthError = error instanceof Error ? error.message : String(error);
+      if (import.meta.env.DEV) {
+        console.error(
+          "[agodesk:oauth.start] failed " +
+            JSON.stringify({
+              provider_id: providerId,
+              provider_auth_type: provider?.auth_type,
+              error: oauthError,
+            }),
+        );
+      }
       oauthBusy = false;
       return false;
     }

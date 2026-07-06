@@ -122,7 +122,13 @@
 </script>
 
 <div class="message-list-wrap">
-  <div class="message-list" bind:this={container} onscroll={handleScroll}>
+  <div
+    class="message-list"
+    bind:this={container}
+    onscroll={handleScroll}
+    aria-live="polite"
+    aria-relevant="additions"
+  >
     {#if $chatMessages.length === 0}
       <div class="empty">
         <CompanionPresenceCard
@@ -159,8 +165,12 @@
         </div>
       {/if}
       {#if awaitingResponse}
-        <div class="typing" aria-label={$i18n("messageList.typing.ariaLabel")}>
-          <span></span><span></span><span></span>
+        <div class="thinking-orb-row" aria-label={$i18n("messageList.typing.ariaLabel")}>
+          <span class="thinking-orb" aria-hidden="true">
+            <span class="thinking-orb-core"></span>
+            <span class="thinking-orb-ring"></span>
+          </span>
+          <span class="thinking-label">{$i18n("companionPresence.label.thinking")}</span>
         </div>
       {/if}
     {/if}
@@ -257,42 +267,52 @@
     margin: 0 auto;
   }
 
-  .typing {
-    display: flex;
-    gap: 0.35rem;
+  .thinking-orb-row {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-3);
     padding: var(--space-2) var(--space-4);
     align-self: flex-start;
     margin-left: var(--space-2);
   }
 
-  .typing span {
-    width: 0.45rem;
-    height: 0.45rem;
+  .thinking-orb {
+    position: relative;
+    width: 1.75rem;
+    height: 1.75rem;
+    display: grid;
+    place-items: center;
+  }
+
+  .thinking-orb-core {
+    width: 0.95rem;
+    height: 0.95rem;
     border-radius: var(--radius-full);
-    background: var(--color-accent);
-    opacity: 0.45;
-    animation: typing-bounce 1.2s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+    background: var(--aurora-gradient);
+    animation: aurora-spin-slow 2.8s linear infinite;
   }
 
-  .typing span:nth-child(2) {
-    animation-delay: 0.15s;
+  .thinking-orb-ring {
+    position: absolute;
+    inset: 0;
+    border-radius: var(--radius-full);
+    border: 1px solid color-mix(in srgb, var(--color-companion) 40%, transparent);
+    animation: status-ring-pulse 2s ease-in-out infinite;
   }
 
-  .typing span:nth-child(3) {
-    animation-delay: 0.3s;
+  .thinking-label {
+    font-size: var(--font-size-sm);
+    color: var(--color-muted);
   }
 
-  @keyframes typing-bounce {
+  @keyframes status-ring-pulse {
     0%,
-    80%,
     100% {
-      transform: translateY(0);
-      opacity: 0.35;
+      box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-companion) 12%, transparent);
     }
 
-    40% {
-      transform: translateY(-4px);
-      opacity: 0.9;
+    50% {
+      box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-companion) 24%, transparent);
     }
   }
 
@@ -342,9 +362,9 @@
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .typing span {
+    .thinking-orb-core,
+    .thinking-orb-ring {
       animation: none;
-      opacity: 0.6;
     }
   }
 </style>

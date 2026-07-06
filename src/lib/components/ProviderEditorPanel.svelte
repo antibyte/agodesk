@@ -1,5 +1,6 @@
 <script lang="ts">
   import { focusTrap } from "../actions/focusTrap";
+  import { dialogModal } from "../actions/dialogModal";
   import { i18n } from "../i18n";
   import type {
     ConfigProvider,
@@ -244,14 +245,13 @@
 </script>
 
 {#if open}
-  <div class="editor-backdrop" role="presentation" onclick={() => onClose?.()}></div>
   <dialog
     bind:this={modalEl}
     class="editor-modal ui-card glass-panel"
-    open
+    use:dialogModal={{ open, onClose }}
+    use:focusTrap
     aria-modal="true"
     aria-labelledby="provider-editor-title"
-    use:focusTrap
     onclick={(event) => event.stopPropagation()}
   >
     <header class="editor-header">
@@ -267,7 +267,7 @@
           </p>
         {/if}
       </div>
-      <button type="button" class="ui-btn ghost compact" onclick={() => onClose?.()}>
+      <button type="button" class="ui-btn ui-btn-secondary ui-btn-sm" onclick={() => onClose?.()}>
         {$i18n("common.close")}
       </button>
     </header>
@@ -490,27 +490,11 @@
 {/if}
 
 <style>
-  .editor-backdrop {
-    position: fixed;
-    inset: 0;
-    z-index: 1180;
-    background: rgba(0, 0, 0, 0.45);
-    backdrop-filter: blur(6px);
-  }
-
   .editor-modal {
-    position: fixed;
-    top: 50%;
-    left: 50%;
-    z-index: 1190;
-    transform: translate(-50%, -50%);
     width: min(640px, calc(100vw - 2rem));
     max-height: min(88vh, 900px);
-    margin: 0;
-    border: none;
     padding: 1.25rem;
     overflow-x: hidden;
-    overflow-y: auto;
   }
 
   .editor-header {

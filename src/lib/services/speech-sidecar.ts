@@ -150,6 +150,34 @@ export async function downloadSpeechAsrModel(model: string): Promise<void> {
   await invokeSpeech<void>("speech_download_asr_model", { model });
 }
 
+export interface SpeechSupertonicStatus {
+  ready: boolean;
+  models_root: string;
+  download_hint: string;
+  voices: string[];
+}
+
+export async function speechSupertonicStatus(): Promise<SpeechSupertonicStatus> {
+  const raw = await invokeSpeech<unknown>("speech_supertonic_status");
+  const data = isRecord(raw) && isRecord(raw.data) ? raw.data : isRecord(raw) ? raw : {};
+  return {
+    ready: data.ready === true,
+    models_root: typeof data.models_root === "string" ? data.models_root : "",
+    download_hint: typeof data.download_hint === "string" ? data.download_hint : "",
+    voices: Array.isArray(data.voices)
+      ? data.voices.filter((v): v is string => typeof v === "string")
+      : [],
+  };
+}
+
+export async function downloadSpeechTtsModel(model: string = "supertonic_3"): Promise<void> {
+  await invokeSpeech<void>("speech_download_tts_model", { model });
+}
+
+export async function downloadSpeechPiperVoice(voice: string): Promise<void> {
+  await invokeSpeech<void>("speech_download_piper_voice", { voice });
+}
+
 export async function listenSpeechModelDownload(
   handler: (progress: SpeechModelDownloadProgress) => void,
 ): Promise<() => void> {
@@ -196,6 +224,9 @@ export async function speechSidecarSynthesize(params: {
   rate?: number;
 
   pitch?: number;
+
+  /** Language code for backends that decode language separately (Supertonic). */
+  lang?: string;
 }): Promise<SpeechSynthesizeResult> {
   const data = await invokeSpeech<unknown>("speech_sidecar_synthesize", {
     text: params.text,
@@ -207,6 +238,8 @@ export async function speechSidecarSynthesize(params: {
     rate: params.rate ?? null,
 
     pitch: params.pitch ?? null,
+
+    lang: params.lang ?? null,
   });
 
   return normalizeSynthesizeResult(data);

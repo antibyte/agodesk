@@ -42,7 +42,7 @@
 
 {#if visible}
   <aside
-    class="chat-history-panel glass-panel"
+    class="chat-history-panel glass-panel panel-slide-in"
     aria-label={$i18n("chatView.history.title")}
     use:focusTrap
   >

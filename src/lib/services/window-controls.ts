@@ -25,3 +25,21 @@ export async function closeMainWindow(): Promise<void> {
     // Browser-Dev ohne Tauri ignorieren.
   }
 }
+
+export async function toggleMaximizeMainWindow(): Promise<boolean> {
+  if (!isDesktopShell()) {
+    return false;
+  }
+  try {
+    const win = getCurrentWindow();
+    const maximized = await win.isMaximized();
+    if (maximized) {
+      await win.unmaximize();
+      return false;
+    }
+    await win.maximize();
+    return true;
+  } catch {
+    return false;
+  }
+}

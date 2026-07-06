@@ -8,6 +8,7 @@
   import Icon from "./Icon.svelte";
   import { returnFocusToTrigger, setFocusTrigger } from "../actions/focusTrap";
   import type { CompanionPresenceTone } from "../services/companion-presence";
+  import type { CompanionState } from "../services/companion-state";
 
   interface Props {
     serverUrl?: string;
@@ -27,6 +28,7 @@
     warningsActive?: boolean;
     warningsUnacknowledged?: number;
     companionTone?: CompanionPresenceTone;
+    companionState?: CompanionState;
     speechActive?: boolean;
     requestInFlight?: boolean;
     onOpenSettings?: () => void;
@@ -56,6 +58,7 @@
     warningsActive = false,
     warningsUnacknowledged = 0,
     companionTone = "ready",
+    companionState = "idle",
     speechActive = false,
     requestInFlight = false,
     onOpenSettings,
@@ -180,7 +183,7 @@
   });
 </script>
 
-<header class="status-bar glass-panel">
+<header class="status-bar aurora-surface">
   <button
     class="status-pill"
     type="button"
@@ -188,21 +191,18 @@
     onclick={() => onOpenSettings?.()}
   >
     <span
-      class="brand-mark"
-      data-companion-tone={companionTone}
+      class="companion-orb"
+      data-state={companionState}
+      data-tone={companionTone}
+      data-status={connectionStatus}
       class:companion-live={speechActive || requestInFlight}
-      aria-hidden="true"
+      aria-label={$i18n("statusBar.connectionStatus.ariaLabel")}
     >
-      <Icon name="brand" size={18} />
+      <span class="companion-orb-core" aria-hidden="true"></span>
+      <span class="companion-orb-ring" aria-hidden="true"></span>
     </span>
     <span class="status-copy">
       <span class="status-line">
-        <span
-          class="ui-status-orb"
-          data-tone={companionTone}
-          data-status={connectionStatus}
-          aria-label={$i18n("statusBar.connectionStatus.ariaLabel")}
-        ></span>
         <span class="connection-label">{$i18n(`connection.status.${connectionStatus}`)}</span>
         {#if sessionHint}
           <span class="session-sep">·</span>
@@ -429,9 +429,12 @@
     align-items: center;
     justify-content: space-between;
     gap: var(--space-3);
-    padding: var(--space-3) var(--space-5);
-    border-bottom: 1px solid var(--color-border-subtle);
-    border-radius: 0;
+    padding: var(--space-2) var(--space-4);
+    margin: var(--space-2) var(--space-3) 0;
+    border-radius: var(--radius-xl);
+    border: 1px solid var(--glass-border);
+    backdrop-filter: blur(var(--blur));
+    -webkit-backdrop-filter: blur(var(--blur));
     flex-shrink: 0;
     z-index: var(--z-status);
   }
@@ -476,38 +479,63 @@
     transform: translateY(0) scale(0.99);
   }
 
-  .brand-mark {
+  .companion-orb {
+    position: relative;
     display: grid;
     place-items: center;
-    width: 2rem;
-    height: 2rem;
-    border-radius: var(--radius-md);
-    background: var(--color-accent);
-    color: white;
+    width: 2.35rem;
+    height: 2.35rem;
     flex-shrink: 0;
-    transition: box-shadow var(--motion-companion);
-    box-shadow:
-      var(--accent-glow),
-      0 0 0 2px var(--color-companion-ring);
+  }
+
+  .companion-orb-core {
+    width: 1.35rem;
+    height: 1.35rem;
+    border-radius: var(--radius-full);
+    background: var(--aurora-gradient);
+    box-shadow: var(--accent-glow);
+    transition: transform var(--motion-companion);
+  }
+
+  .companion-orb-ring {
+    position: absolute;
+    inset: 0;
+    border-radius: var(--radius-full);
+    border: 1px solid color-mix(in srgb, var(--color-companion) 45%, transparent);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-companion) 12%, transparent);
+  }
+
+  .companion-orb[data-status="disconnected"],
+  .companion-orb[data-status="error"] {
+    --color-companion: var(--color-danger);
+  }
+
+  .companion-orb[data-status="connecting"] .companion-orb-core {
+    opacity: 0.75;
   }
 
   @media (prefers-reduced-motion: no-preference) {
-    .brand-mark.companion-live {
+    .companion-orb.companion-live .companion-orb-ring {
       animation: status-ring-pulse 2.4s ease-in-out infinite;
+    }
+
+    .companion-orb[data-state="thinking"] .companion-orb-core {
+      animation: aurora-spin-slow 3.2s linear infinite;
+    }
+
+    .companion-orb[data-state="listening"] .companion-orb-core {
+      animation: aurora-breathe 1.8s ease-in-out infinite;
     }
   }
 
   @keyframes status-ring-pulse {
     0%,
     100% {
-      box-shadow:
-        var(--accent-glow),
-        0 0 0 2px color-mix(in srgb, var(--color-companion-ring) 55%, transparent);
+      box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-companion) 18%, transparent);
     }
+
     50% {
-      box-shadow:
-        var(--accent-glow),
-        0 0 0 4px color-mix(in srgb, var(--color-companion-ring) 90%, transparent);
+      box-shadow: 0 0 0 5px color-mix(in srgb, var(--color-companion) 32%, transparent);
     }
   }
 

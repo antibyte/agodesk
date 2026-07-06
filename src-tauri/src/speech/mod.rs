@@ -8,6 +8,8 @@ pub mod sidecar_client;
 pub mod tts;
 #[cfg(feature = "speech-asr")]
 pub mod tts_sherpa;
+#[cfg(feature = "speech-supertonic")]
+pub mod tts_supertonic;
 pub mod tts_edge;
 pub mod types;
 

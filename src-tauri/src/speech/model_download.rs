@@ -420,6 +420,322 @@ fn download_asr_model_inner(app: &AppHandle, model_id: &str) -> Result<(), Strin
     Ok(())
 }
 
+// ---------------------------------------------------------------------------
+// Supertonic 3 TTS model (individual files from HuggingFace)
+// ---------------------------------------------------------------------------
+
+const SUPERTONIC_BASE_URL: &str = "https://huggingface.co/Supertone/supertonic-3/resolve/main/";
+
+struct SupertonicFile {
+    /// Path relative to `<models_root>/supertonic/` and to the HF repo root.
+    rel_path: &'static str,
+    bytes_hint: u64,
+}
+
+const SUPERTONIC_FILES: &[SupertonicFile] = &[
+    SupertonicFile { rel_path: "onnx/tts.json", bytes_hint: 8_250 },
+    SupertonicFile { rel_path: "onnx/unicode_indexer.json", bytes_hint: 278_000 },
+    SupertonicFile { rel_path: "onnx/duration_predictor.onnx", bytes_hint: 3_700_000 },
+    SupertonicFile { rel_path: "onnx/text_encoder.onnx", bytes_hint: 36_400_000 },
+    SupertonicFile { rel_path: "onnx/vocoder.onnx", bytes_hint: 101_000_000 },
+    SupertonicFile { rel_path: "onnx/vector_estimator.onnx", bytes_hint: 257_000_000 },
+    SupertonicFile { rel_path: "voice_styles/M1.json", bytes_hint: 292_000 },
+    SupertonicFile { rel_path: "voice_styles/M2.json", bytes_hint: 292_000 },
+    SupertonicFile { rel_path: "voice_styles/M3.json", bytes_hint: 290_000 },
+    SupertonicFile { rel_path: "voice_styles/M4.json", bytes_hint: 292_000 },
+    SupertonicFile { rel_path: "voice_styles/M5.json", bytes_hint: 291_000 },
+    SupertonicFile { rel_path: "voice_styles/F1.json", bytes_hint: 292_000 },
+    SupertonicFile { rel_path: "voice_styles/F2.json", bytes_hint: 292_000 },
+    SupertonicFile { rel_path: "voice_styles/F3.json", bytes_hint: 291_000 },
+    SupertonicFile { rel_path: "voice_styles/F4.json", bytes_hint: 292_000 },
+    SupertonicFile { rel_path: "voice_styles/F5.json", bytes_hint: 291_000 },
+];
+
+const SUPERTONIC_REQUIRED: &[&str] = &[
+    "onnx/tts.json",
+    "onnx/unicode_indexer.json",
+    "onnx/duration_predictor.onnx",
+    "onnx/text_encoder.onnx",
+    "onnx/vocoder.onnx",
+    "onnx/vector_estimator.onnx",
+    "voice_styles/M1.json",
+    "voice_styles/M2.json",
+    "voice_styles/M3.json",
+    "voice_styles/M4.json",
+    "voice_styles/M5.json",
+    "voice_styles/F1.json",
+    "voice_styles/F2.json",
+    "voice_styles/F3.json",
+    "voice_styles/F4.json",
+    "voice_styles/F5.json",
+];
+
+fn supertonic_installed(base: &Path) -> bool {
+    SUPERTONIC_REQUIRED
+        .iter()
+        .all(|rel| base.join(rel).is_file())
+}
+
+fn download_file_streaming(
+    url: &str,
+    dest: &Path,
+    downloaded_so_far: &mut u64,
+    total: u64,
+    app: &AppHandle,
+    model_id: &str,
+) -> Result<(), String> {
+    if let Some(parent) = dest.parent() {
+        fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+    }
+
+    // Download into a temporary `.part` file and only rename to the final path
+    // on success, so an interrupted download is never mistaken for a complete
+    // (but truncated/corrupt) model file on the next run.
+    let tmp = dest.with_extension("part");
+    let _ = fs::remove_file(&tmp);
+
+    let client = reqwest::blocking::Client::builder()
+        .use_native_tls()
+        .build()
+        .map_err(|error| error.to_string())?;
+
+    // Snapshot so a mid-stream failure + curl fallback does not double count.
+    let base = *downloaded_so_far;
+
+    let mut attempt = || -> Result<(), String> {
+        let mut response = client
+            .get(url)
+            .send()
+            .map_err(|error| format!("Download failed: {error}"))?;
+        if !response.status().is_success() {
+            return Err(format!("Download failed: HTTP {}", response.status()));
+        }
+        let mut file = File::create(&tmp).map_err(|error| error.to_string())?;
+        let mut buffer = [0u8; 64 * 1024];
+        loop {
+            let read = response
+                .read(&mut buffer)
+                .map_err(|error| format!("Download read failed: {error}"))?;
+            if read == 0 {
+                break;
+            }
+            file.write_all(&buffer[..read])
+                .map_err(|error| error.to_string())?;
+            *downloaded_so_far += read as u64;
+            let pct = (*downloaded_so_far as f64 / total.max(1) as f64) * 96.0;
+            emit(app, model_id, "downloading", pct, None);
+        }
+        file.flush().map_err(|error| error.to_string())?;
+        Ok(())
+    };
+
+    let result = match attempt() {
+        Ok(()) => Ok(()),
+        Err(reqwest_error) => {
+            let _ = fs::remove_file(&tmp);
+            *downloaded_so_far = base;
+            download_with_curl(url, &tmp, total, app, model_id)
+                .map_err(|curl_error| format!("{reqwest_error}; curl fallback: {curl_error}"))?;
+            let added = fs::metadata(&tmp).map(|meta| meta.len()).unwrap_or(0);
+            *downloaded_so_far = base + added;
+            let pct = (*downloaded_so_far as f64 / total.max(1) as f64) * 96.0;
+            emit(app, model_id, "downloading", pct, None);
+            Ok(())
+        }
+    };
+
+    match result {
+        Ok(()) => {
+            fs::rename(&tmp, dest).map_err(|error| {
+                format!("Failed to finalize {}: {error}", dest.display())
+            })?;
+            Ok(())
+        }
+        Err(error) => {
+            let _ = fs::remove_file(&tmp);
+            Err(error)
+        }
+    }
+}
+
+pub fn download_supertonic_model(app: &AppHandle, model_id: &str) -> Result<(), String> {
+    match download_supertonic_model_inner(app) {
+        Ok(()) => Ok(()),
+        Err(error) => {
+            emit(app, model_id, "error", 0.0, Some(&error));
+            Err(error)
+        }
+    }
+}
+
+fn download_supertonic_model_inner(app: &AppHandle) -> Result<(), String> {
+    let model_id = "supertonic_3";
+    let _guard = DOWNLOAD_LOCK
+        .lock()
+        .map_err(|_| "Another model download is already running.".to_string())?;
+
+    let models_root = ensure_models_root(app)?;
+    let base = models_root.join("supertonic");
+    fs::create_dir_all(&base).map_err(|error| error.to_string())?;
+
+    if supertonic_installed(&base) {
+        emit(app, model_id, "complete", 100.0, None);
+        return Ok(());
+    }
+
+    emit(app, model_id, "downloading", 0.0, None);
+    let total: u64 = SUPERTONIC_FILES.iter().map(|f| f.bytes_hint).sum();
+    let mut downloaded: u64 = 0;
+
+    for file in SUPERTONIC_FILES {
+        let dest = base.join(file.rel_path);
+        if dest.is_file() {
+            if let Ok(meta) = fs::metadata(&dest) {
+                if meta.len() > 0 {
+                    downloaded += meta.len();
+                    continue;
+                }
+            }
+        }
+        let url = format!("{SUPERTONIC_BASE_URL}{}", file.rel_path);
+        download_file_streaming(&url, &dest, &mut downloaded, total, app, model_id)?;
+    }
+
+    if !supertonic_installed(&base) {
+        return Err(format!(
+            "Supertonic model files missing after install in {}",
+            base.display()
+        ));
+    }
+
+    emit(app, model_id, "complete", 100.0, None);
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Piper TTS voices (per-voice archives from sherpa-onnx releases)
+// ---------------------------------------------------------------------------
+
+struct PiperVoiceSpec {
+    voice_id: String,
+    archive_name: String,
+    url: String,
+    extracted_dir: String,
+    archive_bytes_hint: u64,
+}
+
+fn piper_voice_spec(voice_id: &str) -> PiperVoiceSpec {
+    let archive_name = format!("vits-piper-{voice_id}.tar.bz2");
+    PiperVoiceSpec {
+        voice_id: voice_id.to_string(),
+        archive_name: archive_name.clone(),
+        url: format!(
+            "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/{archive_name}"
+        ),
+        extracted_dir: format!("vits-piper-{voice_id}"),
+        archive_bytes_hint: 80_000_000,
+    }
+}
+
+fn piper_voice_dir_ready(dir: &Path, voice_id: &str) -> bool {
+    if !dir.is_dir() {
+        return false;
+    }
+    let model_candidates = [
+        dir.join(format!("{voice_id}.onnx")),
+        dir.join("model.onnx"),
+    ];
+    model_candidates.iter().any(|path| path.is_file()) && dir.join("tokens.txt").is_file()
+}
+
+fn piper_voice_files_present(piper_root: &Path, spec: &PiperVoiceSpec) -> bool {
+    let extracted = piper_root.join(&spec.extracted_dir);
+    piper_voice_dir_ready(&extracted, &spec.voice_id)
+}
+
+fn finalize_piper_install(
+    piper_root: &Path,
+    spec: &PiperVoiceSpec,
+    archive_path: &Path,
+) -> Result<(), String> {
+    let extracted = piper_root.join(&spec.extracted_dir);
+    if !piper_voice_dir_ready(&extracted, &spec.voice_id) {
+        return Err(format!(
+            "Piper voice files missing after install: {}",
+            spec.voice_id
+        ));
+    }
+    remove_path_best_effort(archive_path);
+    Ok(())
+}
+
+pub fn download_piper_voice(app: &AppHandle, voice_id: &str) -> Result<(), String> {
+    match download_piper_voice_inner(app, voice_id) {
+        Ok(()) => Ok(()),
+        Err(error) => {
+            if super::tts::piper_voice_ready(voice_id) {
+                emit(app, voice_id, "complete", 100.0, None);
+                return Ok(());
+            }
+            emit(app, voice_id, "error", 0.0, Some(&error));
+            Err(error)
+        }
+    }
+}
+
+fn download_piper_voice_inner(app: &AppHandle, voice_id: &str) -> Result<(), String> {
+    let voice_id = voice_id.trim();
+    if voice_id.is_empty() {
+        return Err("Piper voice id is required.".to_string());
+    }
+
+    let _guard = DOWNLOAD_LOCK
+        .lock()
+        .map_err(|_| "Another model download is already running.".to_string())?;
+
+    if super::tts::piper_voice_ready(voice_id) {
+        emit(app, voice_id, "complete", 100.0, None);
+        return Ok(());
+    }
+
+    let spec = piper_voice_spec(voice_id);
+    let models_root = ensure_models_root(app)?;
+    let piper_root = models_root.join("piper");
+    fs::create_dir_all(&piper_root).map_err(|error| error.to_string())?;
+    let archive_path = piper_root.join(&spec.archive_name);
+
+    if !piper_voice_files_present(&piper_root, &spec) {
+        if !archive_path.exists() {
+            download_archive(
+                &spec.url,
+                &archive_path,
+                spec.archive_bytes_hint,
+                app,
+                voice_id,
+            )?;
+        } else {
+            emit(app, voice_id, "downloading", 88.0, None);
+        }
+
+        extract_archive(&archive_path, &piper_root, app, voice_id)?;
+    } else {
+        emit(app, voice_id, "extracting", 95.0, None);
+    }
+
+    finalize_piper_install(&piper_root, &spec, &archive_path)?;
+
+    if !super::tts::piper_voice_ready(voice_id) {
+        return Err(format!(
+            "Piper voice '{}' not found after install under {}",
+            voice_id,
+            piper_root.display()
+        ));
+    }
+
+    emit(app, voice_id, "complete", 100.0, None);
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -431,5 +747,13 @@ mod tests {
         assert!(spec_for("whisper_small_de").is_ok());
         assert!(parse_model_kind(Some("whisper_small_de")) == AsrModelKind::WhisperSmallDe);
         assert!(parse_model_kind(Some("sense_voice_int8")) == AsrModelKind::SenseVoiceInt8);
+    }
+
+    #[test]
+    fn piper_voice_spec_builds_release_url() {
+        let spec = piper_voice_spec("de_DE-thorsten-high");
+        assert_eq!(spec.archive_name, "vits-piper-de_DE-thorsten-high.tar.bz2");
+        assert!(spec.url.contains("tts-models"));
+        assert_eq!(spec.extracted_dir, "vits-piper-de_DE-thorsten-high");
     }
 }

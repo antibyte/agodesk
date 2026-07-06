@@ -12,6 +12,7 @@
     ThemeMode,
     UiSoundSettings,
     UiSoundTheme,
+    UiTheme,
   } from "../types/protocol";
   import {
     AGODESK_CLIENT_VERSION,
@@ -21,6 +22,8 @@
     DEFAULT_SPEECH_SETTINGS,
     DEFAULT_UI_SOUND_SETTINGS,
     UI_SOUND_THEMES,
+    UI_THEMES,
+    UI_THEME_SOUND,
     getWsOrigin,
     SPEECH_PROVIDERS,
     type SpeechProvider,
@@ -31,7 +34,7 @@
     hasAdvertisedShellExec,
     shellAccessIsConfigured,
   } from "../types/protocol";
-  import { APP_LOCALES, LOCALE_LABELS, getTranslateFn, i18n, type UiLocaleSetting } from "../i18n";
+  import { APP_LOCALES, LOCALE_LABELS, applyLocaleSetting, getTranslateFn, i18n, type UiLocaleSetting } from "../i18n";
   import type { MessageKey } from "../i18n/types";
   import { loadDeviceId } from "../services/credentials";
   import {
@@ -41,15 +44,20 @@
     saveGeminiApiKey,
   } from "../services/gemini-credentials";
   import { testGeminiConnection, testLocalSpeechTts } from "../services/speech-flow";
+  import { applyTheme, applyUiTheme } from "../services/theme";
   import LlmProvidersSection from "./LlmProvidersSection.svelte";
   import type { WsMessage } from "../types/protocol";
   import {
     speechAsrStatus,
     speechTtsStatus,
+    speechSupertonicStatus,
     downloadSpeechAsrModel,
+    downloadSpeechPiperVoice,
+    downloadSpeechTtsModel,
     listenSpeechModelDownload,
     type SpeechAsrStatus,
     type SpeechTtsStatus,
+    type SpeechSupertonicStatus,
   } from "../services/speech-sidecar";
   import {
     defaultLocalAsrModelForAppLocale,
@@ -62,8 +70,10 @@
     localTtsTestPhraseForAppLocale,
     piperVoicesForSpeechLanguage,
     speechLanguageForAppLocale,
+    supertonicVoices,
+    supertonicLangForSpeechLanguage,
   } from "../services/speech-locale";
-  import { resolveReadyPiperVoice } from "../services/speech-piper-voice";
+  import { piperVoiceCandidateOrder, resolveReadyPiperVoice } from "../services/speech-piper-voice";
   import { collectHostInfo, probeBrowserConnection, type HostInfo } from "../services/desktop";
   import {
     buildPathDisplay,
@@ -95,6 +105,7 @@
     AppSettings,
     | "serverUrl"
     | "theme"
+    | "uiTheme"
     | "locale"
     | "speech"
     | "uiSounds"
@@ -106,6 +117,8 @@
     | "shellAccess"
     | "chatTtsMode"
     | "openPets"
+    | "reduceMotion"
+    | "speechVisualizerEnabled"
   >;
 
   const GEMINI_VOICE_OPTIONS = ["Zephyr", "Puck", "Charon", "Kore", "Fenrir", "Aoede"] as const;
@@ -133,6 +146,7 @@
   interface Props {
     serverUrl?: string;
     theme?: ThemeMode;
+    uiTheme?: UiTheme;
     locale?: UiLocaleSetting;
     speech?: SpeechSettings;
     uiSounds?: UiSoundSettings;
@@ -144,6 +158,8 @@
     shellAccess?: ShellAccessSettings;
     chatTtsMode?: ChatTtsMode;
     openPets?: OpenPetsSettings;
+    reduceMotion?: boolean;
+    speechVisualizerEnabled?: boolean;
     connectionStatus?: ConnectionStatus;
     sessionStatus?: SessionStatus;
     sessionId?: string;
@@ -164,6 +180,7 @@
   let {
     serverUrl = "",
     theme = "system",
+    uiTheme = "aurora",
     locale = "system",
     speech = DEFAULT_SPEECH_SETTINGS,
     uiSounds = DEFAULT_UI_SOUND_SETTINGS,
@@ -175,6 +192,8 @@
     shellAccess = DEFAULT_SHELL_ACCESS_SETTINGS,
     chatTtsMode = "auto",
     openPets = DEFAULT_OPENPETS_SETTINGS,
+    reduceMotion = false,
+    speechVisualizerEnabled = true,
     connectionStatus = "disconnected",
     sessionStatus = "idle",
     sessionId = "",
@@ -196,6 +215,7 @@
   let speechSubSection = $state<SpeechSubSection>("provider");
   let draftUrl = $state("");
   let draftTheme = $state<ThemeMode>("system");
+  let draftUiTheme = $state<UiTheme>("aurora");
   let draftLocale = $state<UiLocaleSetting>("system");
   let draftMinimizeToTray = $state(false);
   let draftShowWindowHotkey = $state("Alt+Shift+G");
@@ -220,6 +240,8 @@
   let draftUiSoundEnabled = $state(true);
   let draftUiSoundTheme = $state<UiSoundTheme>("soft");
   let draftUiSoundVolume = $state(0.2);
+  let draftReduceMotion = $state(false);
+  let draftSpeechVisualizerEnabled = $state(true);
   let deviceId = $state<string | null>(null);
   let hostInfo = $state<HostInfo | null>(null);
   let dirty = $state(false);
@@ -297,12 +319,19 @@
   const isOfflineSpeechSelected = $derived(draftSpeech.provider === "offline");
   const usesLocalAsr = $derived(isHybridSpeechSelected || isOfflineSpeechSelected);
   const usesPiperTts = $derived(
-    isOfflineSpeechSelected || (isHybridSpeechSelected && draftSpeech.hybridTtsBackend === "piper"),
+    (isOfflineSpeechSelected && draftSpeech.offlineTtsBackend === "piper") ||
+      (isHybridSpeechSelected && draftSpeech.hybridTtsBackend === "piper"),
+  );
+  const isSupertonicSelected = $derived(
+    (isOfflineSpeechSelected && draftSpeech.offlineTtsBackend === "supertonic") ||
+      (isHybridSpeechSelected && draftSpeech.hybridTtsBackend === "supertonic"),
   );
   const recommendedLocalAsrModel = $derived(defaultLocalAsrModelForAppLocale(draftLocale));
   const draftSpeechLanguage = $derived(speechLanguageForAppLocale(draftLocale));
   const hybridTtsVoiceOptions = $derived(edgeTtsVoicesForSpeechLanguage(draftSpeechLanguage));
   const offlineTtsVoiceOptions = $derived(piperVoicesForSpeechLanguage(draftSpeechLanguage));
+  const supertonicVoiceOptions = $derived(supertonicVoices());
+  const supertonicLangCode = $derived(supertonicLangForSpeechLanguage(draftSpeechLanguage));
   const showLocalAsrModelHint = $derived(
     usesLocalAsr && draftSpeech.localAsrModel !== recommendedLocalAsrModel,
   );
@@ -314,7 +343,7 @@
     if (draftSpeech.enabled && usesLocalAsr) {
       items.push({ id: "asr", labelKey: "settings.speech.subsection.asr" });
     }
-    if (draftSpeech.enabled && (usesPiperTts || isHybridSpeechSelected)) {
+    if (draftSpeech.enabled && (isHybridSpeechSelected || isOfflineSpeechSelected)) {
       items.push({ id: "tts", labelKey: "settings.speech.subsection.tts" });
     }
     if (draftSpeech.enabled && isGeminiSpeechSelected) {
@@ -331,6 +360,15 @@
   let asrDownloadError = $state<string | null>(null);
   let ttsStatus: SpeechTtsStatus | null = $state(null);
   let ttsStatusLoading = $state(false);
+  let supertonicStatus: SpeechSupertonicStatus | null = $state(null);
+  let supertonicStatusLoading = $state(false);
+  let supertonicDownloading = $state(false);
+  let supertonicDownloadProgress = $state(0);
+  let supertonicDownloadError = $state<string | null>(null);
+  let ttsDownloading = $state(false);
+  let ttsDownloadProgress = $state(0);
+  let ttsDownloadPhase = $state<"downloading" | "extracting" | "complete" | "error" | null>(null);
+  let ttsDownloadError = $state<string | null>(null);
   let ttsTestSampleText = $state(localTtsTestPhraseForAppLocale("system"));
   let ttsTestBusy = $state(false);
   let ttsTestMessage = $state("");
@@ -374,6 +412,27 @@
     return "☾";
   }
 
+  const UI_THEME_LIST = UI_THEMES;
+
+  /** Drei Vorschau-Farbpunkte je Theme für die Galerie. */
+  const UI_THEME_PREVIEW: Record<UiTheme, [string, string, string]> = {
+    aurora: ["#8b5cf6", "#22d3ee", "#34d399"],
+    minimal: ["#0b0b0d", "#52525b", "#f4f4f5"],
+    blossom: ["#f472b6", "#c084fc", "#fbbf24"],
+    cyberpunk: ["#00f0ff", "#ff4500", "#faff00"],
+    papyrus: ["#5e3c20", "#c9a227", "#e9dec4"],
+    chaos: ["#ff0080", "#00ff88", "#00d0ff"],
+  };
+
+  function selectUiTheme(next: UiTheme): void {
+    draftUiTheme = next;
+    // Sound-Set automatisch koppeln (danach manuell änderbar).
+    draftUiSoundTheme = UI_THEME_SOUND[next];
+    // Live-Vorschau sofort anwenden.
+    applyUiTheme(next);
+    markDirty();
+  }
+
   $effect(() => {
     if (initialSection) {
       activeSection = initialSection;
@@ -390,6 +449,7 @@
     if (!dirty) {
       draftUrl = serverUrl;
       draftTheme = theme;
+      draftUiTheme = uiTheme;
       draftLocale = locale;
       draftMinimizeToTray = minimizeToTray;
       draftShowWindowHotkey = showWindowHotkey;
@@ -406,6 +466,8 @@
       draftUiSoundEnabled = uiSounds.enabled;
       draftUiSoundTheme = uiSounds.theme;
       draftUiSoundVolume = uiSounds.volume;
+      draftReduceMotion = reduceMotion;
+      draftSpeechVisualizerEnabled = speechVisualizerEnabled;
       ttsTestSampleText = localTtsTestPhraseForAppLocale(draftLocale);
     }
   });
@@ -468,6 +530,14 @@
       return;
     }
     void refreshTtsStatus(draftSpeech.offlineTtsVoice);
+  });
+
+  $effect(() => {
+    if (!isSupertonicSelected || !draftSpeech.enabled) {
+      supertonicStatus = null;
+      return;
+    }
+    void refreshSupertonicStatus();
   });
 
   $effect(() => {
@@ -553,6 +623,129 @@
     }
   }
 
+  async function refreshSupertonicStatus(): Promise<void> {
+    supertonicStatusLoading = true;
+    try {
+      supertonicStatus = await speechSupertonicStatus();
+    } catch {
+      supertonicStatus = null;
+    } finally {
+      supertonicStatusLoading = false;
+    }
+  }
+
+  async function ensureSupertonicDownload(): Promise<void> {
+    if (supertonicDownloading) return;
+
+    await refreshSupertonicStatus();
+    if (supertonicStatus?.ready) return;
+
+    supertonicDownloading = true;
+    supertonicDownloadProgress = 0;
+    supertonicDownloadError = null;
+
+    const unlisten = await listenSpeechModelDownload((progress) => {
+      if (progress.model_id !== "supertonic_3") return;
+      supertonicDownloadProgress = progress.progress;
+      if (progress.phase === "error" && progress.message) {
+        supertonicDownloadError = progress.message;
+      }
+    });
+
+    try {
+      await downloadSpeechTtsModel("supertonic_3");
+      await refreshSupertonicStatus();
+      if (supertonicStatus?.ready) {
+        supertonicDownloadError = null;
+      }
+    } catch (error) {
+      await refreshSupertonicStatus();
+      if (supertonicStatus?.ready) {
+        supertonicDownloadError = null;
+      } else {
+        supertonicDownloadError = error instanceof Error ? error.message : String(error);
+      }
+    } finally {
+      supertonicDownloading = false;
+      unlisten();
+    }
+  }
+
+  async function ensurePiperVoiceDownload(voice: string): Promise<void> {
+    if (ttsDownloading) return;
+
+    await refreshTtsStatus(voice);
+    if (ttsStatus?.ready) return;
+
+    const candidates = piperVoiceCandidateOrder(draftSpeechLanguage, voice);
+    if (candidates.length === 0) {
+      return;
+    }
+
+    ttsDownloading = true;
+    ttsDownloadProgress = 0;
+    ttsDownloadPhase = "downloading";
+    ttsDownloadError = null;
+
+    let activeVoice = candidates[0] ?? voice;
+    const unlisten = await listenSpeechModelDownload((progress) => {
+      if (progress.model_id !== activeVoice) return;
+      ttsDownloadProgress = progress.progress;
+      ttsDownloadPhase = progress.phase;
+      if (progress.phase === "error" && progress.message) {
+        ttsDownloadError = progress.message;
+      }
+    });
+
+    try {
+      for (const candidate of candidates) {
+        activeVoice = candidate;
+        await refreshTtsStatus(candidate);
+        if (ttsStatus?.ready) {
+          if (candidate !== draftSpeech.offlineTtsVoice) {
+            draftSpeech = { ...draftSpeech, offlineTtsVoice: candidate };
+            markDirty();
+          }
+          ttsDownloadError = null;
+          ttsDownloadPhase = "complete";
+          return;
+        }
+
+        ttsDownloadProgress = 0;
+        ttsDownloadPhase = "downloading";
+        ttsDownloadError = null;
+
+        try {
+          await downloadSpeechPiperVoice(candidate);
+        } catch (error) {
+          ttsDownloadError = error instanceof Error ? error.message : String(error);
+          ttsDownloadPhase = "error";
+          continue;
+        }
+
+        await refreshTtsStatus(candidate);
+        if (ttsStatus?.ready) {
+          if (candidate !== draftSpeech.offlineTtsVoice) {
+            draftSpeech = { ...draftSpeech, offlineTtsVoice: candidate };
+            markDirty();
+          }
+          ttsDownloadError = null;
+          ttsDownloadPhase = "complete";
+          return;
+        }
+      }
+    } finally {
+      ttsDownloading = false;
+      unlisten();
+    }
+  }
+
+  async function handleOfflineTtsVoiceChange(voice: string): Promise<void> {
+    draftSpeech = { ...draftSpeech, offlineTtsVoice: voice };
+    markDirty();
+    await ensurePiperVoiceDownload(voice);
+  }
+
   async function refreshApiKeyStatus(): Promise<void> {
     apiKeyStored = await hasGeminiApiKey();
     if (!apiKeyInput.trim()) {
@@ -564,6 +757,7 @@
   }
 
   function handleAppLocaleChange(): void {
+    void applyLocaleSetting(draftLocale);
     draftSpeech = applySpeechLocaleDefaults(
       {
         ...draftSpeech,
@@ -578,6 +772,9 @@
     }
     if (usesPiperTts) {
       void refreshTtsStatus(draftSpeech.offlineTtsVoice);
+    }
+    if (isSupertonicSelected) {
+      void refreshSupertonicStatus();
     }
   }
 
@@ -594,6 +791,7 @@
     return {
       serverUrl: normalizeServerUrl(draftUrl.trim()),
       theme: draftTheme,
+      uiTheme: draftUiTheme,
       locale: draftLocale,
       speech: { ...draftSpeech },
       uiSounds: {
@@ -614,10 +812,15 @@
         reactToSpeech: draftOpenPetsReactToSpeech,
         showMessages: draftOpenPetsShowMessages,
       },
+      reduceMotion: draftReduceMotion,
+      speechVisualizerEnabled: draftSpeechVisualizerEnabled,
     };
   }
 
   function discardChanges(): void {
+    // Live-Vorschau des Themes zurücksetzen.
+    applyUiTheme(uiTheme);
+    applyTheme(theme);
     dirty = false;
   }
 
@@ -978,6 +1181,7 @@
         class="ui-btn ui-btn-primary"
         onclick={() => void save()}
         disabled={!dirty || saving}
+        title={$i18n("settings.saveReconnectHint")}
       >
         {$i18n("settings.saveAndConnect")}
       </button>
@@ -1016,6 +1220,7 @@
           type="button"
           class="nav-item"
           class:active={activeSection === section.id}
+          aria-current={activeSection === section.id ? "page" : undefined}
           onclick={() => (activeSection = section.id)}
         >
           <span class="nav-label">{section.label}</span>
@@ -1180,24 +1385,86 @@
           {#if activeSection === "appearance"}
             <section class="ui-card">
               <div class="card-header">
+                <h2>{$i18n("settings.appearance.uiTheme.title")}</h2>
+                <p>{$i18n("settings.appearance.uiTheme.description")}</p>
+              </div>
+
+              <div class="ui-theme-grid">
+                {#each UI_THEME_LIST as themeId (themeId)}
+                  <button
+                    type="button"
+                    class="ui-theme-card"
+                    class:selected={draftUiTheme === themeId}
+                    aria-pressed={draftUiTheme === themeId}
+                    onclick={() => selectUiTheme(themeId)}
+                  >
+                    <span class="ui-theme-dots" aria-hidden="true">
+                      {#each UI_THEME_PREVIEW[themeId] as dot (dot)}
+                        <span class="ui-theme-dot" style={`background:${dot}`}></span>
+                      {/each}
+                    </span>
+                    <strong>{$i18n(`uiTheme.${themeId}` as MessageKey)}</strong>
+                    <span class="ui-theme-desc">
+                      {$i18n(`uiTheme.${themeId}.description` as MessageKey)}
+                    </span>
+                  </button>
+                {/each}
+              </div>
+            </section>
+
+            <section class="ui-card">
+              <div class="card-header">
                 <h2>{$i18n("settings.appearance.title")}</h2>
                 <p>{$i18n("settings.appearance.description")}</p>
               </div>
 
-              <div class="theme-grid">
-                {#each THEME_MODES as mode (mode)}
-                  <label
-                    class="theme-card"
-                    class:selected={draftTheme === mode}
-                    data-theme-preview={mode}
-                  >
-                    <input type="radio" bind:group={draftTheme} value={mode} onchange={markDirty} />
-                    <span class="theme-icon" aria-hidden="true">{themeIcon(mode)}</span>
-                    <strong>{$i18n(`theme.${mode}` as MessageKey)}</strong>
-                    <span>{$i18n(`theme.${mode}.description` as MessageKey)}</span>
-                  </label>
-                {/each}
+              {#if draftUiTheme === "aurora"}
+                <div class="theme-grid">
+                  {#each THEME_MODES as mode (mode)}
+                    <label
+                      class="theme-card"
+                      class:selected={draftTheme === mode}
+                      data-theme-preview={mode}
+                    >
+                      <input
+                        type="radio"
+                        bind:group={draftTheme}
+                        value={mode}
+                        onchange={() => {
+                          applyTheme(draftTheme);
+                          markDirty();
+                        }}
+                      />
+                      <span class="theme-icon" aria-hidden="true">{themeIcon(mode)}</span>
+                      <strong>{$i18n(`theme.${mode}` as MessageKey)}</strong>
+                      <span>{$i18n(`theme.${mode}.description` as MessageKey)}</span>
+                    </label>
+                  {/each}
+                </div>
+              {:else}
+                <p class="help">{$i18n("settings.appearance.uiTheme.fixedHint")}</p>
+              {/if}
+            </section>
+
+            <section class="ui-card">
+              <div class="card-header">
+                <h2>{$i18n("settings.appearance.motion.title")}</h2>
+                <p>{$i18n("settings.appearance.motion.description")}</p>
               </div>
+
+              <label class="field checkbox-field">
+                <input type="checkbox" bind:checked={draftReduceMotion} onchange={markDirty} />
+                <span>{$i18n("settings.appearance.reduceMotion")}</span>
+              </label>
+
+              <label class="field checkbox-field">
+                <input
+                  type="checkbox"
+                  bind:checked={draftSpeechVisualizerEnabled}
+                  onchange={markDirty}
+                />
+                <span>{$i18n("settings.appearance.speechVisualizer")}</span>
+              </label>
             </section>
 
             <section class="ui-card">
@@ -1885,7 +2152,7 @@
                 </fieldset>
 
                 {#if isHybridSpeechSelected || isOfflineSpeechSelected}
-                  <p class="help warn">{$i18n("settings.speech.provider.comingSoon")}</p>
+                  <p class="help">{$i18n("settings.speech.provider.localEngineHelp")}</p>
                 {/if}
 
                 {#if isGeminiSpeechSelected}
@@ -2025,35 +2292,12 @@
                       <option value="azure"
                         >{$i18n("settings.speech.hybridTtsBackend.azure")}</option
                       >
+                      <option value="supertonic"
+                        >{$i18n("settings.speech.hybridTtsBackend.supertonic")}</option
+                      >
                     </select>
                   </label>
-                  {#if draftSpeech.hybridTtsBackend === "piper"}
-                    <label class="field">
-                      <span class="field-label"
-                        >{$i18n("settings.speech.offlineTtsVoice.label")}</span
-                      >
-                      <select
-                        bind:value={draftSpeech.offlineTtsVoice}
-                        onchange={markDirty}
-                        disabled={!draftSpeech.enabled}
-                      >
-                        {#each offlineTtsVoiceOptions as voice (voice)}
-                          <option value={voice}>{voice}</option>
-                        {/each}
-                      </select>
-                    </label>
-                    <p class="help" class:warn={!ttsStatus?.ready}>
-                      {#if ttsStatusLoading}
-                        {$i18n("settings.speech.ttsStatus.loading")}
-                      {:else if ttsStatus?.ready}
-                        {$i18n("settings.speech.ttsStatus.ready")}
-                      {:else}
-                        {$i18n("settings.speech.ttsStatus.missing")}
-                        {ttsStatus?.download_hint ??
-                          $i18n("settings.speech.ttsStatus.downloadHint")}
-                      {/if}
-                    </p>
-                  {:else}
+                  {#if draftSpeech.hybridTtsBackend !== "piper" && draftSpeech.hybridTtsBackend !== "supertonic"}
                     <label class="field">
                       <span class="field-label"
                         >{$i18n("settings.speech.hybridTtsVoice.label")}</span
@@ -2073,28 +2317,146 @@
 
                 {#if isOfflineSpeechSelected}
                   <label class="field">
-                    <span class="field-label">{$i18n("settings.speech.offlineTtsVoice.label")}</span
-                    >
+                    <span class="field-label">{$i18n("settings.speech.offlineTtsBackend.label")}</span>
                     <select
-                      bind:value={draftSpeech.offlineTtsVoice}
+                      bind:value={draftSpeech.offlineTtsBackend}
                       onchange={markDirty}
                       disabled={!draftSpeech.enabled}
+                    >
+                      <option value="piper">{$i18n("settings.speech.hybridTtsBackend.piper")}</option>
+                      <option value="supertonic"
+                        >{$i18n("settings.speech.hybridTtsBackend.supertonic")}</option
+                      >
+                    </select>
+                  </label>
+                {/if}
+
+                {#if isSupertonicSelected}
+                  <label class="field">
+                    <span class="field-label">{$i18n("settings.speech.supertonicVoice.label")}</span>
+                    <select
+                      bind:value={draftSpeech.supertonicVoice}
+                      onchange={markDirty}
+                      disabled={!draftSpeech.enabled}
+                    >
+                      {#each supertonicVoiceOptions as voice (voice)}
+                        <option value={voice}>{voice}</option>
+                      {/each}
+                    </select>
+                  </label>
+                  <p class="help">
+                    {$i18n("settings.speech.supertonicVoice.langHint", {
+                      lang: supertonicLangCode,
+                    })}
+                  </p>
+                  {#if supertonicDownloading}
+                    <div class="asr-download">
+                      <p class="help">
+                        {$i18n("settings.speech.supertonicStatus.downloading")}
+                      </p>
+                      <progress
+                        class="asr-progress"
+                        value={supertonicDownloadProgress}
+                        max="100"
+                      ></progress>
+                      <span class="asr-progress-label"
+                        >{Math.round(supertonicDownloadProgress)}%</span
+                      >
+                    </div>
+                  {:else if supertonicDownloadError}
+                    <p class="help warn">
+                      {$i18n("settings.speech.supertonicStatus.downloadFailed")}
+                      {supertonicDownloadError}
+                    </p>
+                    <button
+                      type="button"
+                      class="ui-btn ui-btn-secondary"
+                      onclick={() => void ensureSupertonicDownload()}
+                      disabled={!draftSpeech.enabled}
+                    >
+                      {$i18n("settings.speech.supertonicStatus.download")}
+                    </button>
+                  {:else}
+                    <p class="help" class:warn={!supertonicStatus?.ready}>
+                      {#if supertonicStatusLoading}
+                        {$i18n("settings.speech.ttsStatus.loading")}
+                      {:else if supertonicStatus?.ready}
+                        {$i18n("settings.speech.supertonicStatus.ready")}
+                      {:else}
+                        {$i18n("settings.speech.supertonicStatus.missing")}
+                      {/if}
+                    </p>
+                    {#if !supertonicStatus?.ready && !supertonicStatusLoading}
+                      <button
+                        type="button"
+                        class="ui-btn ui-btn-secondary"
+                        onclick={() => void ensureSupertonicDownload()}
+                        disabled={!draftSpeech.enabled}
+                      >
+                        {$i18n("settings.speech.supertonicStatus.download")}
+                      </button>
+                    {/if}
+                  {/if}
+                {/if}
+
+                {#if usesPiperTts}
+                  <label class="field">
+                    <span class="field-label">{$i18n("settings.speech.offlineTtsVoice.label")}</span>
+                    <select
+                      value={draftSpeech.offlineTtsVoice}
+                      onchange={(event) =>
+                        void handleOfflineTtsVoiceChange(event.currentTarget.value)}
+                      disabled={!draftSpeech.enabled || ttsDownloading}
                     >
                       {#each offlineTtsVoiceOptions as voice (voice)}
                         <option value={voice}>{voice}</option>
                       {/each}
                     </select>
                   </label>
-                  <p class="help" class:warn={!ttsStatus?.ready}>
-                    {#if ttsStatusLoading}
-                      {$i18n("settings.speech.ttsStatus.loading")}
-                    {:else if ttsStatus?.ready}
-                      {$i18n("settings.speech.ttsStatus.ready")}
-                    {:else}
-                      {$i18n("settings.speech.ttsStatus.missing")}
-                      {ttsStatus?.download_hint ?? $i18n("settings.speech.ttsStatus.downloadHint")}
-                    {/if}
-                  </p>
+                  {#if ttsDownloading}
+                    <div class="asr-download">
+                      <p class="help">
+                        {#if ttsDownloadPhase === "extracting"}
+                          {$i18n("settings.speech.asrStatus.extracting")}
+                        {:else}
+                          {$i18n("settings.speech.ttsStatus.downloading")}
+                        {/if}
+                      </p>
+                      <progress class="asr-progress" value={ttsDownloadProgress} max="100"></progress>
+                      <span class="asr-progress-label">{Math.round(ttsDownloadProgress)}%</span>
+                    </div>
+                  {:else if ttsDownloadError}
+                    <p class="help warn">
+                      {$i18n("settings.speech.ttsStatus.downloadFailed")}
+                      {ttsDownloadError}
+                    </p>
+                    <button
+                      type="button"
+                      class="ui-btn ui-btn-secondary asr-download-btn"
+                      onclick={() => void ensurePiperVoiceDownload(draftSpeech.offlineTtsVoice)}
+                      disabled={!draftSpeech.enabled}
+                    >
+                      {$i18n("settings.speech.ttsStatus.download")}
+                    </button>
+                  {:else}
+                    <div class="help" class:warn={!ttsStatus?.ready}>
+                      {#if ttsStatusLoading}
+                        {$i18n("settings.speech.ttsStatus.loading")}
+                      {:else if ttsStatus?.ready}
+                        {$i18n("settings.speech.ttsStatus.ready")}
+                      {:else}
+                        <p class="asr-missing-text">{$i18n("settings.speech.ttsStatus.missing")}</p>
+                        <button
+                          type="button"
+                          class="ui-btn ui-btn-secondary asr-download-btn"
+                          onclick={() => void ensurePiperVoiceDownload(draftSpeech.offlineTtsVoice)}
+                          disabled={!draftSpeech.enabled}
+                        >
+                          {$i18n("settings.speech.ttsStatus.download")}
+                        </button>
+                      {/if}
+                    </div>
+                  {/if}
                 {/if}
 
                 {#if isHybridSpeechSelected || isOfflineSpeechSelected}
@@ -2388,6 +2750,7 @@
     -webkit-backdrop-filter: blur(var(--blur));
     box-shadow: var(--shadow-1);
     flex-wrap: nowrap;
+    flex-shrink: 0;
   }
 
   .header-body {
@@ -2435,6 +2798,7 @@
   .settings-layout {
     display: grid;
     grid-template-columns: minmax(12rem, 16rem) minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
     gap: var(--space-4);
     padding: var(--space-4);
     flex: 1;
@@ -2446,7 +2810,9 @@
     display: flex;
     flex-direction: column;
     gap: var(--space-1);
-    overflow: auto;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
     padding: var(--space-2);
     border-radius: var(--radius-xl);
     border: 1px solid var(--glass-border);
@@ -2456,8 +2822,6 @@
     );
     backdrop-filter: blur(var(--blur));
     -webkit-backdrop-filter: blur(var(--blur));
-    align-self: start;
-    max-height: 100%;
   }
 
   .nav-search {
@@ -2522,12 +2886,14 @@
   }
 
   .settings-content {
-    overflow: auto;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
     display: grid;
     gap: 1rem;
     align-content: start;
     padding-right: 0.25rem;
-    padding-bottom: 0.5rem;
+    padding-bottom: var(--space-4);
   }
 
   .section-panel {
@@ -2775,6 +3141,57 @@
     font-size: 1.25rem;
   }
 
+  .ui-theme-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+    gap: 0.65rem;
+    margin-top: 1rem;
+  }
+
+  .ui-theme-card {
+    display: grid;
+    gap: 0.35rem;
+    text-align: left;
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-lg);
+    padding: var(--space-3);
+    background: color-mix(in srgb, var(--glass-surface) 80%, transparent);
+    cursor: pointer;
+    color: inherit;
+    transition:
+      border-color var(--transition-fast),
+      box-shadow var(--transition-fast),
+      background var(--transition-fast);
+  }
+
+  .ui-theme-card.selected {
+    border-color: color-mix(in srgb, var(--color-accent) 45%, var(--glass-border));
+    background: color-mix(in srgb, var(--color-accent) 10%, var(--color-input-bg));
+    box-shadow: var(--accent-glow);
+  }
+
+  .ui-theme-dots {
+    display: inline-flex;
+    gap: 0.3rem;
+  }
+
+  .ui-theme-dot {
+    width: 1.1rem;
+    height: 1.1rem;
+    border-radius: var(--radius-full);
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12);
+  }
+
+  .ui-theme-card strong {
+    font-size: 0.9rem;
+  }
+
+  .ui-theme-desc {
+    font-size: 0.8125rem;
+    color: var(--color-muted);
+    line-height: 1.4;
+  }
+
   .sound-preview-btn {
     justify-self: start;
     margin-top: 0.25rem;
@@ -2908,6 +3325,7 @@
     -webkit-backdrop-filter: blur(var(--blur));
     box-shadow: var(--shadow-1);
     flex-wrap: wrap;
+    flex-shrink: 0;
   }
 
   .footer-copy {
@@ -2959,7 +3377,10 @@
 
     .settings-nav {
       flex-direction: row;
+      min-height: auto;
+      max-height: none;
       overflow-x: auto;
+      overflow-y: hidden;
       padding-bottom: 0.25rem;
     }
 

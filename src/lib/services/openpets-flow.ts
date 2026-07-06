@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { getTranslateFn } from "../i18n/store";
 import { isChatPlanPanelVisible } from "../stores/chat-plan";
 
 export const OPENPETS_REACTIONS = [
@@ -105,21 +106,21 @@ export function deriveOpenPetsStatusMessage(
   }
   switch (reaction) {
     case "thinking":
-      return "Agent denkt nach";
+      return getTranslateFn()("openPets.status.thinking");
     case "working":
-      return "Agent arbeitet";
+      return getTranslateFn()("openPets.status.working");
     case "editing":
-      return "Dateien werden bearbeitet";
+      return getTranslateFn()("openPets.status.editing");
     case "running":
-      return "Befehl wird ausgefuehrt";
+      return getTranslateFn()("openPets.status.running");
     case "testing":
-      return "Tests laufen";
+      return getTranslateFn()("openPets.status.testing");
     case "success":
-      return "Aufgabe erledigt";
+      return getTranslateFn()("openPets.status.success");
     case "error":
-      return "Etwas ist schiefgelaufen";
+      return getTranslateFn()("openPets.status.error");
     case "waving":
-      return "Sprachmodus aktiv";
+      return getTranslateFn()("openPets.status.waving");
     default:
       return null;
   }

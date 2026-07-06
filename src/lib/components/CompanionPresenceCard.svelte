@@ -34,16 +34,17 @@
   }: Props = $props();
 </script>
 
-<section class="companion-card" data-tone={state.tone} class:compact>
+<section class="companion-card aurora-edge" data-tone={state.tone} class:compact>
   <div class="companion-visual">
     <div class="avatar-wrap">
+      <div class="avatar-aura" aria-hidden="true"></div>
       <PersonaAvatar {imageUrl} {fallbackImageUrl} {label} size={compact ? "md" : "lg"} {loading} />
       <span class="ui-status-orb companion-orb" data-tone={state.tone} aria-hidden="true"></span>
     </div>
   </div>
 
   <div class="companion-copy">
-    <p class="companion-label">{$i18n(state.labelKey)}</p>
+    <p class="companion-greeting font-display">{$i18n(state.labelKey)}</p>
     <p class="companion-description">{$i18n(state.descriptionKey)}</p>
 
     {#if primaryActionLabel && onPrimaryAction}
@@ -75,15 +76,17 @@
     display: flex;
     flex-direction: column;
     align-items: stretch;
-    gap: var(--space-5);
+    gap: var(--space-6);
     width: 100%;
-    max-width: 28rem;
+    max-width: 32rem;
     margin: 0 auto;
-    padding: var(--space-6);
+    padding: var(--space-7) var(--space-6);
     border-radius: var(--radius-2xl);
-    background: var(--color-companion-surface);
+    background: color-mix(in srgb, var(--glass-surface) 72%, transparent);
     box-shadow: var(--shadow-companion);
-    border: 1px solid var(--color-border-subtle);
+    border: 1px solid var(--glass-border);
+    backdrop-filter: blur(var(--blur));
+    -webkit-backdrop-filter: blur(var(--blur));
     transition:
       box-shadow var(--motion-companion),
       transform var(--motion-companion);
@@ -104,6 +107,19 @@
     display: inline-flex;
   }
 
+  .avatar-aura {
+    position: absolute;
+    inset: -18%;
+    border-radius: var(--radius-full);
+    background: radial-gradient(
+      circle,
+      color-mix(in srgb, var(--aurora-2) 35%, transparent),
+      transparent 68%
+    );
+    animation: aurora-breathe 4.8s ease-in-out infinite;
+    pointer-events: none;
+  }
+
   .companion-orb {
     position: absolute;
     right: 0.15rem;
@@ -117,12 +133,13 @@
     text-align: center;
   }
 
-  .companion-label {
+  .companion-greeting {
     margin: 0;
-    font-size: var(--font-size-xl);
-    font-weight: 650;
+    font-size: var(--font-size-3xl);
+    font-weight: 600;
     color: var(--color-text-strong);
-    letter-spacing: -0.02em;
+    letter-spacing: -0.03em;
+    line-height: var(--line-height-tight);
   }
 
   .companion-description {

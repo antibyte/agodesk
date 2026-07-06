@@ -1,0 +1,1045 @@
+/* ── UI-Theme-Overrides ──
+ * Jedes Nicht-Aurora-Theme bringt eine feste Optik mit und überschreibt die
+ * Aurora-Tokens aus app.css. Diese Blöcke stehen nach den `data-theme`-Blöcken
+ * (via separater Datei, in main.ts nach app.css importiert) und gewinnen daher
+ * dank höherer Spezifität (`:root[data-ui-theme="…"]`) bzw. Quell-Reihenfolge.
+ *
+ * Aufbau je Theme: 1) Token-Block, 2) Material-/Effekt-Overrides für
+ * gerahmte Elemente (Statusleiste, Composer, Karten, Panels), 3) Keyframes.
+ */
+
+/* ════════════════════════════════════════════════════════════════════════
+   Schlicht (minimal) ── dunkles Monochrom, präzise Kanten, fast keine
+   Bewegung. Der einzige Effekt: ein hauchfeiner Lichtsaum an der Oberkante.
+   ════════════════════════════════════════════════════════════════════════ */
+:root[data-ui-theme="minimal"] {
+  color-scheme: dark;
+
+  --aurora-1: #27272a;
+  --aurora-2: #3f3f46;
+  --aurora-3: #18181b;
+  --aurora-gradient: linear-gradient(135deg, #fafafa 0%, #71717a 100%);
+
+  --color-bg: #040405;
+  --color-bg-elevated: #0a0a0c;
+  --color-surface: #0a0a0c;
+  --color-surface-solid: #0a0a0c;
+  --color-input-bg: #111114;
+  --color-text: #e4e4e7;
+  --color-text-strong: #fafafa;
+  --color-muted: #a1a1aa;
+  --color-text-muted: #8e8e96;
+  --color-footnote: #9b9ba3;
+  --color-border: rgba(228, 228, 231, 0.14);
+  --color-border-subtle: rgba(228, 228, 231, 0.07);
+  --color-accent: #f4f4f5;
+  --color-accent-soft: rgba(244, 244, 245, 0.08);
+  --color-companion: #a1a1aa;
+  --color-user-bg: #f4f4f5;
+  --color-user-text: #0b0b0d;
+  --color-assistant-bg: transparent;
+  --color-assistant-text: #e4e4e7;
+  --color-system-bg: #17171a;
+  --color-system-text: #b8b8c0;
+  --color-danger: #f87171;
+  --color-danger-soft: rgba(248, 113, 113, 0.1);
+  --color-warning: #fbbf24;
+  --color-warning-soft: rgba(251, 191, 36, 0.1);
+  --color-success: #34d399;
+  --color-success-soft: rgba(52, 211, 153, 0.1);
+  --color-backdrop: rgba(0, 0, 0, 0.66);
+
+  --surface-0: var(--color-bg);
+  --surface-1: var(--color-surface);
+  --surface-2: #17171a;
+  --edge-light: rgba(255, 255, 255, 0.06);
+
+  --glass-surface: #121215;
+  --glass-border: rgba(228, 228, 231, 0.1);
+  --glass-highlight: transparent;
+  --blur: 0px;
+  --blur-strong: 0px;
+
+  --color-panel-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --color-bubble-shadow: none;
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.35);
+  --shadow-2: 0 1px 3px rgba(0, 0, 0, 0.45);
+  --shadow-3: 0 4px 16px rgba(0, 0, 0, 0.5);
+  --accent-glow: none;
+  --shadow-companion: 0 1px 3px rgba(0, 0, 0, 0.45);
+
+  --font-display: "Inter", "Segoe UI", system-ui, sans-serif;
+  --font-sans: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+
+  --radius-sm: 0.25rem;
+  --radius-md: 0.375rem;
+  --radius-lg: 0.5rem;
+  --radius-xl: 0.625rem;
+  --radius-window: 8px;
+  --radius-composer: 0.625rem;
+  --radius-2xl: 0.75rem;
+
+  --transition-fast: 120ms ease;
+  --transition-base: 160ms ease;
+  --motion-companion: 160ms ease;
+  --focus-ring: 0 0 0 2px rgba(244, 244, 245, 0.55);
+}
+
+/* Invertierter Primär-Button: hell auf dunkel, gestochen scharf. */
+:root[data-ui-theme="minimal"] .ui-btn-primary {
+  background: #f4f4f5;
+  color: #0b0b0d;
+  box-shadow: none;
+}
+
+:root[data-ui-theme="minimal"] .ui-btn-primary:not(:disabled):hover {
+  filter: none;
+  background: #ffffff;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.25);
+}
+
+:root[data-ui-theme="minimal"] ::selection {
+  background: #f4f4f5;
+  color: #0b0b0d;
+}
+
+:root[data-ui-theme="minimal"] ::-webkit-scrollbar-thumb {
+  background: rgba(228, 228, 231, 0.18);
+}
+
+/* Schlicht: feiner Lichtsaum — nicht auf Modals/Overlays. */
+:root[data-ui-theme="minimal"] .status-bar,
+:root[data-ui-theme="minimal"] .input-box,
+:root[data-ui-theme="minimal"] .ui-card:not(dialog),
+:root[data-ui-theme="minimal"] .glass-panel:not(dialog, .embed-modal, .onboarding-dialog),
+:root[data-ui-theme="minimal"] .glass-panel-fixed {
+  border-color: rgba(228, 228, 231, 0.1);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 1px 2px rgba(0, 0, 0, 0.45);
+  animation: minimal-edge-breathe 8s ease-in-out infinite;
+}
+
+:root[data-ui-theme="minimal"] .status-bar {
+  border-bottom-color: rgba(255, 255, 255, 0.08);
+}
+
+:root[data-ui-theme="minimal"] .input-box:focus-within {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 0 0 1px rgba(255, 255, 255, 0.12);
+  animation: none;
+}
+
+@keyframes minimal-edge-breathe {
+  0%,
+  100% {
+    border-color: rgba(228, 228, 231, 0.08);
+  }
+  50% {
+    border-color: rgba(228, 228, 231, 0.14);
+  }
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   Blossom (feminin) ── rosé/lavendel/gold, weiche Radien, fallende Blüten.
+   ════════════════════════════════════════════════════════════════════════ */
+:root[data-ui-theme="blossom"] {
+  color-scheme: light;
+
+  --aurora-1: #f9a8d4;
+  --aurora-2: #d8b4fe;
+  --aurora-3: #fcd34d;
+  --aurora-gradient: linear-gradient(135deg, #f472b6 0%, #c084fc 50%, #fbbf24 100%);
+
+  --color-bg: #fff5f9;
+  --color-bg-elevated: #fffafc;
+  --color-surface: rgba(255, 255, 255, 0.72);
+  --color-surface-solid: #fffafc;
+  --color-input-bg: rgba(255, 255, 255, 0.92);
+  --color-text: #4a2545;
+  --color-text-strong: #35152f;
+  --color-muted: #9d6b8f;
+  --color-text-muted: #a97e9c;
+  --color-footnote: #8a5a7d;
+  --color-border: rgba(216, 112, 172, 0.2);
+  --color-border-subtle: rgba(216, 112, 172, 0.1);
+  --color-accent: #db2777;
+  --color-accent-soft: rgba(219, 39, 119, 0.12);
+  --color-companion: #c084fc;
+  --color-user-bg: var(--aurora-gradient);
+  --color-user-text: #ffffff;
+  --color-assistant-bg: rgba(255, 255, 255, 0.55);
+  --color-assistant-text: #4a2545;
+  --color-system-bg: rgba(255, 240, 248, 0.9);
+  --color-system-text: #7a4d6e;
+  --color-backdrop: rgba(74, 37, 69, 0.4);
+
+  --surface-0: var(--color-bg);
+  --surface-1: var(--color-surface);
+  --surface-2: rgba(255, 255, 255, 0.92);
+  --edge-light: rgba(255, 255, 255, 0.8);
+
+  --glass-surface: rgba(255, 255, 255, 0.6);
+  --glass-border: rgba(249, 168, 212, 0.4);
+  --glass-highlight: rgba(255, 255, 255, 0.6);
+  --blur: 26px;
+  --blur-strong: 40px;
+
+  --color-panel-shadow: 0 4px 24px rgba(219, 39, 119, 0.1);
+  --color-bubble-shadow: 0 2px 16px rgba(219, 39, 119, 0.08);
+  --shadow-1: 0 1px 3px rgba(219, 39, 119, 0.1);
+  --shadow-2: 0 8px 32px rgba(219, 39, 119, 0.14);
+  --shadow-3: 0 24px 64px rgba(192, 132, 252, 0.22);
+  --accent-glow:
+    0 0 0 1px color-mix(in srgb, var(--color-companion) 30%, transparent),
+    0 12px 32px color-mix(in srgb, var(--color-companion) 26%, transparent);
+  --shadow-companion:
+    0 20px 56px color-mix(in srgb, var(--color-companion) 24%, transparent),
+    inset 0 1px 0 var(--edge-light);
+
+  --font-display: "Quicksand", "Segoe UI", system-ui, sans-serif;
+  --font-sans: "Quicksand", "Segoe UI", system-ui, -apple-system, sans-serif;
+
+  --radius-sm: 0.625rem;
+  --radius-md: 0.875rem;
+  --radius-lg: 1.25rem;
+  --radius-xl: 1.75rem;
+  --radius-window: 24px;
+  --radius-composer: 1.75rem;
+  --radius-2xl: 2rem;
+  --focus-ring:
+    0 0 0 2px color-mix(in srgb, var(--color-bg) 82%, transparent),
+    0 0 0 4px color-mix(in srgb, var(--color-accent) 55%, transparent);
+}
+
+:root[data-ui-theme="blossom"] ::selection {
+  background: rgba(244, 114, 182, 0.35);
+}
+
+:root[data-ui-theme="blossom"] .status-bar,
+:root[data-ui-theme="blossom"] .input-box,
+:root[data-ui-theme="blossom"] .ui-card:not(dialog),
+:root[data-ui-theme="blossom"] .glass-panel:not(dialog, .embed-modal, .onboarding-dialog),
+:root[data-ui-theme="blossom"] .glass-panel-fixed {
+  border-color: rgba(244, 114, 182, 0.22);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.65),
+    0 4px 20px rgba(219, 39, 119, 0.08);
+  animation: blossom-shimmer 6s ease-in-out infinite;
+}
+
+:root[data-ui-theme="blossom"] .ui-btn-primary {
+  background: var(--aurora-gradient);
+  animation: blossom-btn-glow 4s ease-in-out infinite;
+}
+
+@keyframes blossom-shimmer {
+  0%,
+  100% {
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.65),
+      0 4px 20px rgba(219, 39, 119, 0.08);
+  }
+  50% {
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.75),
+      0 6px 28px rgba(192, 132, 252, 0.16);
+  }
+}
+
+@keyframes blossom-btn-glow {
+  0%,
+  100% {
+    filter: brightness(1);
+  }
+  50% {
+    filter: brightness(1.08);
+  }
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   Cyberpunk ── Neon-HUD auf Schwarz-Teal: Cyan/Orange/Gelb statt Lila,
+   Scanlines, Grid-Horizont, Sweep-Beam, Glitch-Frames, Daten-HUD.
+   ════════════════════════════════════════════════════════════════════════ */
+:root[data-ui-theme="cyberpunk"] {
+  color-scheme: dark;
+
+  --aurora-1: #00f0ff;
+  --aurora-2: #ff4500;
+  --aurora-3: #faff00;
+  --aurora-gradient: linear-gradient(135deg, #00f0ff 0%, #ff4500 55%, #faff00 100%);
+
+  --color-bg: #010508;
+  --color-bg-elevated: #031018;
+  --color-surface: rgba(2, 14, 20, 0.82);
+  --color-surface-solid: #031018;
+  --color-input-bg: rgba(0, 8, 12, 0.94);
+  --color-text: #d8feff;
+  --color-text-strong: #ffffff;
+  --color-muted: #4f8a96;
+  --color-text-muted: #6fa9b6;
+  --color-footnote: #7fc6d4;
+  --color-border: rgba(0, 240, 255, 0.32);
+  --color-border-subtle: rgba(0, 240, 255, 0.14);
+  --color-accent: #00f0ff;
+  --color-accent-soft: rgba(0, 240, 255, 0.14);
+  --color-companion: #ff4500;
+  --color-user-bg: linear-gradient(135deg, #00f0ff 0%, #ff4500 100%);
+  --color-user-text: #ffffff;
+  --color-assistant-bg: rgba(0, 240, 255, 0.06);
+  --color-assistant-text: #d8feff;
+  --color-system-bg: rgba(2, 14, 20, 0.9);
+  --color-system-text: #8fd6e0;
+  --color-danger: #ff0040;
+  --color-danger-soft: rgba(255, 0, 64, 0.14);
+  --color-warning: #faff00;
+  --color-warning-soft: rgba(250, 255, 0, 0.12);
+  --color-success: #00ffa3;
+  --color-success-soft: rgba(0, 255, 163, 0.12);
+  --color-backdrop: rgba(0, 0, 0, 0.84);
+
+  --surface-0: var(--color-bg);
+  --surface-1: var(--color-surface);
+  --surface-2: rgba(2, 14, 20, 0.94);
+  --edge-light: rgba(0, 240, 255, 0.16);
+
+  --glass-surface: rgba(1, 10, 16, 0.76);
+  --glass-border: rgba(0, 240, 255, 0.34);
+  --glass-highlight: rgba(0, 240, 255, 0.1);
+  --blur: 18px;
+  --blur-strong: 28px;
+
+  --color-panel-shadow:
+    0 0 0 1px rgba(0, 240, 255, 0.24), 0 0 28px rgba(0, 240, 255, 0.14),
+    inset 0 1px 0 rgba(0, 240, 255, 0.08);
+  --color-bubble-shadow: 0 0 18px rgba(0, 240, 255, 0.16);
+  --shadow-1: 0 0 10px rgba(0, 240, 255, 0.18);
+  --shadow-2: 0 0 28px rgba(255, 69, 0, 0.2);
+  --shadow-3: 0 0 52px rgba(0, 240, 255, 0.28);
+  --accent-glow:
+    0 0 0 1px color-mix(in srgb, var(--color-accent) 65%, transparent),
+    0 0 22px color-mix(in srgb, var(--color-accent) 55%, transparent);
+  --shadow-companion:
+    0 0 52px color-mix(in srgb, var(--color-companion) 42%, transparent),
+    0 0 0 1px color-mix(in srgb, var(--color-companion) 45%, transparent);
+
+  --font-display: "Orbitron", "Space Grotesk", system-ui, sans-serif;
+  --font-sans: "Share Tech Mono", "JetBrains Mono", ui-monospace, monospace;
+  --font-mono: "Share Tech Mono", "JetBrains Mono", ui-monospace, monospace;
+
+  --radius-sm: 0.125rem;
+  --radius-md: 0.25rem;
+  --radius-lg: 0.375rem;
+  --radius-xl: 0.5rem;
+  --radius-window: 6px;
+  --radius-composer: 0.5rem;
+  --radius-2xl: 0.625rem;
+  --focus-ring:
+    0 0 0 2px color-mix(in srgb, var(--color-bg) 60%, transparent),
+    0 0 0 3px var(--color-companion),
+    0 0 12px var(--color-companion);
+}
+
+/* Statusleiste + Composer als HUD: position:relative nur hier (nicht auf Modals/Panels!). */
+:root[data-ui-theme="cyberpunk"] .status-bar,
+:root[data-ui-theme="cyberpunk"] .input-box {
+  position: relative;
+  border-color: rgba(0, 240, 255, 0.38);
+  background-image:
+    linear-gradient(90deg, rgba(0, 240, 255, 0.06) 1px, transparent 1px),
+    linear-gradient(rgba(255, 69, 0, 0.04) 1px, transparent 1px);
+  background-size: 24px 24px;
+  box-shadow:
+    inset 0 1px 0 rgba(0, 240, 255, 0.12),
+    inset 0 -1px 0 rgba(255, 69, 0, 0.1),
+    0 0 18px rgba(0, 240, 255, 0.1);
+}
+
+/* HUD-Optik auf Karten — ohne position, damit fixed/absolute Modals/Panels intakt bleiben. */
+:root[data-ui-theme="cyberpunk"] .ui-card:not(dialog),
+:root[data-ui-theme="cyberpunk"] .glass-panel:not(
+    dialog,
+    .chat-history-panel,
+    .integrations-panel,
+    .warnings-panel,
+    .overflow-menu,
+    .embed-modal,
+    .onboarding-dialog
+  ),
+:root[data-ui-theme="cyberpunk"] .glass-panel-fixed {
+  border-color: rgba(0, 240, 255, 0.38);
+  background-image:
+    linear-gradient(90deg, rgba(0, 240, 255, 0.06) 1px, transparent 1px),
+    linear-gradient(rgba(255, 69, 0, 0.04) 1px, transparent 1px);
+  background-size: 24px 24px;
+  box-shadow:
+    inset 0 1px 0 rgba(0, 240, 255, 0.12),
+    inset 0 -1px 0 rgba(255, 69, 0, 0.1),
+    0 0 18px rgba(0, 240, 255, 0.1);
+}
+
+/* Modals/Overlays: solide Fläche, keine HUD-Deko die Layout bricht. */
+:root[data-ui-theme="cyberpunk"] dialog,
+:root[data-ui-theme="cyberpunk"] dialog.glass-panel,
+:root[data-ui-theme="cyberpunk"] dialog.ui-card,
+:root[data-ui-theme="cyberpunk"] .embed-modal,
+:root[data-ui-theme="cyberpunk"] .onboarding-dialog,
+:root[data-ui-theme="cyberpunk"] .chat-history-panel,
+:root[data-ui-theme="cyberpunk"] .integrations-panel,
+:root[data-ui-theme="cyberpunk"] .warnings-panel,
+:root[data-ui-theme="cyberpunk"] .overflow-menu {
+  background-image: none;
+  background-color: var(--color-surface-solid);
+}
+
+:root[data-ui-theme="cyberpunk"] dialog::before,
+:root[data-ui-theme="cyberpunk"] dialog.glass-panel::before,
+:root[data-ui-theme="cyberpunk"] dialog.ui-card::before,
+:root[data-ui-theme="cyberpunk"] .embed-modal::before,
+:root[data-ui-theme="cyberpunk"] .onboarding-dialog::before,
+:root[data-ui-theme="cyberpunk"] .chat-history-panel::before,
+:root[data-ui-theme="cyberpunk"] .integrations-panel::before,
+:root[data-ui-theme="cyberpunk"] .warnings-panel::before,
+:root[data-ui-theme="cyberpunk"] .overflow-menu::before {
+  content: none;
+}
+
+:root[data-ui-theme="cyberpunk"] dialog[open]::before,
+:root[data-ui-theme="cyberpunk"] dialog[open]::after {
+  content: none;
+}
+
+:root[data-ui-theme="cyberpunk"] dialog[open] {
+  border: 1px solid rgba(0, 240, 255, 0.42);
+  background: var(--color-surface-solid);
+  background-image: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  box-shadow:
+    inset 0 1px 0 rgba(0, 240, 255, 0.16),
+    0 0 0 1px rgba(255, 69, 0, 0.12),
+    0 0 36px rgba(0, 240, 255, 0.2);
+}
+
+:root[data-ui-theme="cyberpunk"] dialog[open] .ui-btn.ghost {
+  border-color: rgba(0, 240, 255, 0.32);
+  background: rgba(0, 240, 255, 0.06);
+  color: var(--color-text);
+}
+
+:root[data-ui-theme="cyberpunk"] dialog[open] .ui-btn.ghost:not(:disabled):hover {
+  border-color: rgba(0, 240, 255, 0.55);
+  background: rgba(0, 240, 255, 0.12);
+  box-shadow: 0 0 12px rgba(0, 240, 255, 0.18);
+}
+
+:root[data-ui-theme="cyberpunk"] dialog[open] h2 {
+  text-shadow: 0 0 10px rgba(0, 240, 255, 0.35);
+}
+
+:root[data-ui-theme="cyberpunk"] .status-bar {
+  border-color: rgba(0, 240, 255, 0.42);
+  box-shadow:
+    inset 0 -1px 0 rgba(0, 240, 255, 0.45),
+    0 0 22px rgba(0, 240, 255, 0.14);
+}
+
+:root[data-ui-theme="cyberpunk"] .status-bar::before,
+:root[data-ui-theme="cyberpunk"] .status-bar::after {
+  content: "";
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  pointer-events: none;
+  opacity: 0.72;
+}
+
+:root[data-ui-theme="cyberpunk"] .status-bar::before {
+  top: -1px;
+  left: -1px;
+  border-top: 2px solid #00f0ff;
+  border-left: 2px solid #00f0ff;
+}
+
+:root[data-ui-theme="cyberpunk"] .status-bar::after {
+  bottom: -1px;
+  right: -1px;
+  border-bottom: 2px solid #ff4500;
+  border-right: 2px solid #ff4500;
+}
+
+:root[data-ui-theme="cyberpunk"] .input-box::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(0, 240, 255, 0.55) 35%,
+    rgba(250, 255, 0, 0.35) 65%,
+    transparent 100%
+  );
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+:root[data-ui-theme="cyberpunk"] .status-bar .connection-label {
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  text-shadow: 0 0 6px rgba(0, 240, 255, 0.4);
+}
+
+/* Composer: Neon-Rahmen, beim Fokus pulsierend. */
+:root[data-ui-theme="cyberpunk"] .input-box {
+  border-color: rgba(0, 240, 255, 0.34);
+}
+
+:root[data-ui-theme="cyberpunk"] .input-box:focus-within {
+  border-color: rgba(0, 240, 255, 0.58);
+  box-shadow:
+    inset 0 1px 0 rgba(0, 240, 255, 0.14),
+    0 0 20px rgba(0, 240, 255, 0.22);
+  transition:
+    border-color 0.25s ease,
+    box-shadow 0.25s ease;
+}
+
+:root[data-ui-theme="cyberpunk"] .ui-btn-primary {
+  background: linear-gradient(135deg, #00f0ff 0%, #ff4500 100%);
+  text-shadow: 0 0 8px rgba(255, 255, 255, 0.7);
+  position: relative;
+  overflow: hidden;
+}
+
+:root[data-ui-theme="cyberpunk"] .ui-btn-primary::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    105deg,
+    transparent 38%,
+    rgba(255, 255, 255, 0.22) 50%,
+    transparent 62%
+  );
+  transform: translateX(-120%);
+  opacity: 0;
+  transition:
+    transform 0.45s ease,
+    opacity 0.25s ease;
+}
+
+:root[data-ui-theme="cyberpunk"] .ui-btn-primary:not(:disabled):hover::after {
+  transform: translateX(120%);
+  opacity: 1;
+}
+
+:root[data-ui-theme="cyberpunk"] .ui-btn-primary:not(:disabled):hover {
+  filter: brightness(1.08);
+  box-shadow:
+    0 0 0 1px rgba(0, 240, 255, 0.55),
+    0 0 18px rgba(0, 240, 255, 0.32),
+    0 0 32px rgba(255, 69, 0, 0.18);
+  transition:
+    filter 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+:root[data-ui-theme="cyberpunk"] ::selection {
+  background: #00f0ff;
+  color: #020608;
+}
+
+:root[data-ui-theme="cyberpunk"] ::-webkit-scrollbar-thumb {
+  background: rgba(0, 240, 255, 0.35);
+  box-shadow: 0 0 8px rgba(0, 240, 255, 0.4);
+}
+
+@keyframes cyber-bracket-pulse {
+  0%,
+  100% {
+    opacity: 0.65;
+  }
+  50% {
+    opacity: 0.82;
+  }
+}
+
+@keyframes cyber-focus-pulse {
+  0%,
+  100% {
+    border-color: rgba(0, 240, 255, 0.55);
+    box-shadow:
+      inset 0 1px 0 rgba(0, 240, 255, 0.14),
+      0 0 18px rgba(0, 240, 255, 0.2);
+  }
+}
+
+@keyframes cyber-btn-flicker {
+  0%,
+  100% {
+    filter: brightness(1);
+  }
+}
+
+@keyframes cyber-scanline {
+  0%,
+  100% {
+    transform: none;
+    opacity: 0.55;
+  }
+}
+
+@keyframes cyber-btn-sheen {
+  0%,
+  100% {
+    transform: translateX(-120%);
+  }
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   Papyrus ── Pergament mit Faser-Textur, Holz-Fensterrahmen, Messing-
+   Einlagen an allen gerahmten Elementen, Kerzenschein und Staub-Partikel.
+   ════════════════════════════════════════════════════════════════════════ */
+:root[data-ui-theme="papyrus"] {
+  color-scheme: light;
+
+  --aurora-1: #c9a875;
+  --aurora-2: #b08d57;
+  --aurora-3: #8c6d3f;
+  --aurora-gradient: linear-gradient(135deg, #8c6d3f 0%, #5c4326 100%);
+
+  /* Materialien */
+  --papyrus-brass-hi: #f0d98c;
+  --papyrus-brass: #c9a227;
+  --papyrus-brass-lo: #7a5b1e;
+  --papyrus-wood-hi: #7a5233;
+  --papyrus-wood: #5e3c20;
+  --papyrus-wood-lo: #3c2410;
+
+  --color-bg: #e9dec4;
+  --color-bg-elevated: #f4ecd7;
+  --color-surface: rgba(244, 236, 215, 0.85);
+  --color-surface-solid: #f4ecd7;
+  --color-input-bg: rgba(250, 245, 231, 0.94);
+  --color-text: #3a2c17;
+  --color-text-strong: #2a1f10;
+  --color-muted: #7a6748;
+  --color-text-muted: #8a7758;
+  --color-footnote: #6b5838;
+  --color-border: rgba(92, 67, 38, 0.24);
+  --color-border-subtle: rgba(92, 67, 38, 0.12);
+  --color-accent: #7c4a1e;
+  --color-accent-soft: rgba(124, 74, 30, 0.12);
+  --color-companion: #8c6d3f;
+  --color-user-bg: linear-gradient(135deg, #5c4326 0%, #7c4a1e 100%);
+  --color-user-text: #f5eeda;
+  --color-assistant-bg: rgba(250, 245, 231, 0.66);
+  --color-assistant-text: #3a2c17;
+  --color-system-bg: rgba(230, 219, 194, 0.9);
+  --color-system-text: #5c4a2e;
+  --color-danger: #a13d2d;
+  --color-danger-soft: rgba(161, 61, 45, 0.1);
+  --color-warning: #b8860b;
+  --color-warning-soft: rgba(184, 134, 11, 0.1);
+  --color-success: #5c7a3f;
+  --color-success-soft: rgba(92, 122, 63, 0.1);
+  --color-backdrop: rgba(42, 31, 16, 0.42);
+
+  --surface-0: var(--color-bg);
+  --surface-1: var(--color-surface);
+  --surface-2: rgba(250, 245, 231, 0.94);
+  --edge-light: rgba(255, 250, 235, 0.6);
+
+  --glass-surface: rgba(244, 236, 215, 0.82);
+  --glass-border: rgba(122, 91, 30, 0.4);
+  --glass-highlight: rgba(255, 250, 235, 0.5);
+  --blur: 4px;
+  --blur-strong: 8px;
+
+  --color-panel-shadow: 0 2px 8px rgba(92, 67, 38, 0.14);
+  --color-bubble-shadow: 0 1px 6px rgba(92, 67, 38, 0.12);
+  --shadow-1: 0 1px 2px rgba(92, 67, 38, 0.14);
+  --shadow-2: 0 4px 16px rgba(92, 67, 38, 0.16);
+  --shadow-3: 0 12px 40px rgba(92, 67, 38, 0.2);
+  --accent-glow: 0 0 0 1px color-mix(in srgb, var(--papyrus-brass) 45%, transparent);
+  --shadow-companion:
+    0 8px 28px color-mix(in srgb, var(--color-companion) 22%, transparent),
+    inset 0 1px 0 var(--edge-light);
+
+  --font-display: "IM Fell English", Georgia, "Times New Roman", serif;
+  --font-sans: "IM Fell English", Georgia, "Times New Roman", serif;
+
+  --radius-sm: 0.25rem;
+  --radius-md: 0.375rem;
+  --radius-lg: 0.5rem;
+  --radius-xl: 0.625rem;
+  --radius-window: 10px;
+  --radius-composer: 0.625rem;
+  --radius-2xl: 0.75rem;
+  --transition-fast: 200ms ease;
+  --transition-base: 320ms ease;
+  --focus-ring:
+    0 0 0 2px rgba(244, 236, 215, 0.8),
+    0 0 0 4px rgba(201, 162, 39, 0.7);
+}
+
+/* Messing-Einlage — nur In-Flow-Elemente; Modals/Panels behalten fixed/absolute. */
+:root[data-ui-theme="papyrus"] .status-bar,
+:root[data-ui-theme="papyrus"] .input-box {
+  position: relative;
+  border: 2px solid var(--papyrus-brass-lo);
+  box-shadow:
+    inset 0 0 0 1px var(--papyrus-brass-hi),
+    inset 0 0 0 3px var(--papyrus-brass),
+    inset 0 2px 0 rgba(255, 250, 235, 0.45),
+    inset 0 -2px 0 rgba(60, 36, 16, 0.25),
+    0 0 0 1px rgba(60, 36, 16, 0.4),
+    0 4px 14px rgba(60, 36, 16, 0.22);
+}
+
+:root[data-ui-theme="papyrus"] .ui-card:not(dialog),
+:root[data-ui-theme="papyrus"] .glass-panel:not(
+    dialog,
+    .chat-history-panel,
+    .integrations-panel,
+    .warnings-panel,
+    .overflow-menu,
+    .embed-modal,
+    .onboarding-dialog
+  ),
+:root[data-ui-theme="papyrus"] .glass-panel-fixed {
+  border: 2px solid var(--papyrus-brass-lo);
+  box-shadow:
+    inset 0 0 0 1px var(--papyrus-brass-hi),
+    inset 0 0 0 3px var(--papyrus-brass),
+    inset 0 2px 0 rgba(255, 250, 235, 0.45),
+    inset 0 -2px 0 rgba(60, 36, 16, 0.25),
+    0 0 0 1px rgba(60, 36, 16, 0.4),
+    0 4px 14px rgba(60, 36, 16, 0.22);
+}
+
+:root[data-ui-theme="papyrus"] .ui-card:not(dialog) {
+  position: relative;
+}
+
+/* Messing-Eckornamente an gerahmten Elementen. */
+:root[data-ui-theme="papyrus"] .status-bar::before,
+:root[data-ui-theme="papyrus"] .status-bar::after,
+:root[data-ui-theme="papyrus"] .input-box::before,
+:root[data-ui-theme="papyrus"] .input-box::after,
+:root[data-ui-theme="papyrus"] .ui-card:not(dialog)::before,
+:root[data-ui-theme="papyrus"] .ui-card:not(dialog)::after {
+  content: "";
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  pointer-events: none;
+  background: radial-gradient(circle at 35% 30%, #f6e6a8 0%, #c9a227 55%, #6d4f16 100%);
+  box-shadow: 0 1px 2px rgba(20, 10, 2, 0.5);
+}
+
+:root[data-ui-theme="papyrus"] .status-bar::before,
+:root[data-ui-theme="papyrus"] .input-box::before,
+:root[data-ui-theme="papyrus"] .ui-card:not(dialog)::before {
+  top: 3px;
+  left: 3px;
+  border-radius: 2px 0 0 0;
+}
+
+:root[data-ui-theme="papyrus"] .status-bar::after,
+:root[data-ui-theme="papyrus"] .input-box::after,
+:root[data-ui-theme="papyrus"] .ui-card:not(dialog)::after {
+  bottom: 3px;
+  right: 3px;
+  border-radius: 0 0 2px 0;
+}
+
+/* Pergament-Faser auf In-Flow-Flächen und Overlays (ohne position-Override). */
+:root[data-ui-theme="papyrus"] .status-bar,
+:root[data-ui-theme="papyrus"] .input-box,
+:root[data-ui-theme="papyrus"] .ui-card:not(dialog),
+:root[data-ui-theme="papyrus"] .glass-panel:not(
+    dialog,
+    .chat-history-panel,
+    .integrations-panel,
+    .warnings-panel,
+    .overflow-menu,
+    .embed-modal,
+    .onboarding-dialog
+  ),
+:root[data-ui-theme="papyrus"] .glass-panel-fixed,
+:root[data-ui-theme="papyrus"] dialog.glass-panel,
+:root[data-ui-theme="papyrus"] dialog.ui-card,
+:root[data-ui-theme="papyrus"] .chat-history-panel,
+:root[data-ui-theme="papyrus"] .integrations-panel,
+:root[data-ui-theme="papyrus"] .warnings-panel,
+:root[data-ui-theme="papyrus"] .overflow-menu {
+  background-color: var(--color-surface-solid);
+  background-image:
+    url("data:image/svg+xml,%3Csvg viewBox='0 0 160 160' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='f'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85 0.14' numOctaves='4' seed='11'/%3E%3CfeColorMatrix values='0 0 0 0 0.36 0 0 0 0 0.27 0 0 0 0 0.14 0 0 0 0.07 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23f)'/%3E%3C/svg%3E"),
+    repeating-linear-gradient(
+      0deg,
+      transparent 0px,
+      rgba(122, 91, 30, 0.03) 1px,
+      transparent 2px,
+      transparent 6px
+    ),
+    linear-gradient(180deg, rgba(255, 250, 235, 0.55), rgba(233, 222, 196, 0.25));
+}
+
+:root[data-ui-theme="papyrus"] .scroll-fab {
+  border: 2px solid var(--papyrus-brass-lo);
+  box-shadow:
+    inset 0 0 0 1px var(--papyrus-brass-hi),
+    inset 0 0 0 3px var(--papyrus-brass),
+    0 4px 14px rgba(60, 36, 16, 0.28);
+  background-image:
+    radial-gradient(circle at 50% 50%, rgba(161, 61, 45, 0.85) 0%, rgba(124, 45, 32, 0.95) 100%),
+    url("data:image/svg+xml,%3Csvg viewBox='0 0 80 80' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='s'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23s)' opacity='0.15'/%3E%3C/svg%3E");
+  animation: papyrus-wax-pulse 5s ease-in-out infinite;
+}
+
+@keyframes papyrus-wax-pulse {
+  0%,
+  100% {
+    filter: brightness(1);
+  }
+  50% {
+    filter: brightness(1.06);
+  }
+}
+
+/* Messing-Knopf: gebürstetes Metall, dunkle Gravur. */
+:root[data-ui-theme="papyrus"] .ui-btn-primary {
+  background: linear-gradient(180deg, #ecd27e 0%, #c9a227 55%, #94711f 100%);
+  color: #2a1f10;
+  text-shadow: 0 1px 0 rgba(255, 240, 200, 0.55);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 244, 205, 0.8),
+    inset 0 -1px 0 rgba(74, 52, 12, 0.6),
+    0 1px 3px rgba(60, 36, 16, 0.4);
+}
+
+:root[data-ui-theme="papyrus"] .ui-btn-primary:not(:disabled):hover {
+  filter: brightness(1.05);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 244, 205, 0.9),
+    inset 0 -1px 0 rgba(74, 52, 12, 0.6),
+    0 0 12px rgba(201, 162, 39, 0.5);
+}
+
+:root[data-ui-theme="papyrus"] ::selection {
+  background: rgba(201, 162, 39, 0.4);
+  color: #2a1f10;
+}
+
+:root[data-ui-theme="papyrus"] ::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, var(--papyrus-brass-hi), var(--papyrus-brass-lo));
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   Chaos ── rotierende Verläufe, Regenbogen, wobble/pulse, Effekte überall.
+   ════════════════════════════════════════════════════════════════════════ */
+:root[data-ui-theme="chaos"] {
+  color-scheme: dark;
+
+  --aurora-1: #ff0080;
+  --aurora-2: #00ff88;
+  --aurora-3: #ffee00;
+  --aurora-gradient: linear-gradient(
+    135deg,
+    #ff0080 0%,
+    #ff8c00 25%,
+    #ffee00 50%,
+    #00ff88 75%,
+    #00d0ff 100%
+  );
+
+  --color-bg: #0a0118;
+  --color-bg-elevated: #16062e;
+  --color-surface: rgba(30, 8, 60, 0.68);
+  --color-surface-solid: #16062e;
+  --color-input-bg: rgba(20, 4, 40, 0.9);
+  --color-text: #fdf4ff;
+  --color-text-strong: #ffffff;
+  --color-muted: #d0a0ff;
+  --color-text-muted: #c090f0;
+  --color-footnote: #e0b0ff;
+  --color-border: rgba(255, 0, 200, 0.3);
+  --color-border-subtle: rgba(0, 255, 136, 0.18);
+  --color-accent: #ff00c8;
+  --color-accent-soft: rgba(255, 0, 200, 0.18);
+  --color-companion: #00ff88;
+  --color-user-bg: var(--aurora-gradient);
+  --color-user-text: #ffffff;
+  --color-assistant-bg: rgba(255, 0, 200, 0.08);
+  --color-assistant-text: #fdf4ff;
+  --color-system-bg: rgba(30, 8, 60, 0.86);
+  --color-system-text: #ffccf5;
+  --color-danger: #ff2d55;
+  --color-danger-soft: rgba(255, 45, 85, 0.16);
+  --color-warning: #ffee00;
+  --color-warning-soft: rgba(255, 238, 0, 0.14);
+  --color-success: #00ff88;
+  --color-success-soft: rgba(0, 255, 136, 0.14);
+  --color-backdrop: rgba(10, 1, 24, 0.8);
+
+  --surface-0: var(--color-bg);
+  --surface-1: var(--color-surface);
+  --surface-2: rgba(30, 8, 60, 0.92);
+  --edge-light: rgba(255, 255, 255, 0.14);
+
+  --glass-surface: rgba(30, 8, 60, 0.62);
+  --glass-border: rgba(255, 0, 200, 0.32);
+  --glass-highlight: rgba(0, 255, 136, 0.14);
+  --blur: 22px;
+  --blur-strong: 36px;
+
+  --color-panel-shadow: 0 0 0 1px rgba(255, 0, 200, 0.24), 0 0 32px rgba(0, 255, 136, 0.2);
+  --color-bubble-shadow: 0 0 20px rgba(255, 0, 200, 0.2);
+  --shadow-1: 0 0 10px rgba(255, 0, 200, 0.2);
+  --shadow-2: 0 0 28px rgba(0, 255, 136, 0.24);
+  --shadow-3: 0 0 56px rgba(255, 238, 0, 0.24);
+  --accent-glow:
+    0 0 0 1px color-mix(in srgb, var(--color-accent) 55%, transparent),
+    0 0 24px color-mix(in srgb, var(--color-accent) 45%, transparent);
+  --shadow-companion:
+    0 0 56px color-mix(in srgb, var(--color-companion) 40%, transparent),
+    0 0 0 1px color-mix(in srgb, var(--color-companion) 40%, transparent);
+
+  --font-display: "Fredoka", "Space Grotesk", system-ui, sans-serif;
+  --font-sans: "Fredoka", "Segoe UI", system-ui, -apple-system, sans-serif;
+
+  --radius-sm: 0.5rem;
+  --radius-md: 0.875rem;
+  --radius-lg: 1.25rem;
+  --radius-xl: 1.75rem;
+  --radius-window: 22px;
+  --radius-composer: 1.75rem;
+  --radius-2xl: 2rem;
+  --focus-ring:
+    0 0 0 2px color-mix(in srgb, var(--color-bg) 60%, transparent),
+    0 0 0 3px var(--color-accent),
+    0 0 16px var(--color-companion);
+}
+
+:root[data-ui-theme="chaos"] .status-bar,
+:root[data-ui-theme="chaos"] .input-box,
+:root[data-ui-theme="chaos"] .ui-card:not(dialog),
+:root[data-ui-theme="chaos"] .glass-panel:not(dialog, .embed-modal, .onboarding-dialog),
+:root[data-ui-theme="chaos"] .glass-panel-fixed {
+  animation: chaos-border-cycle 5s linear infinite;
+}
+
+:root[data-ui-theme="chaos"] .ui-btn-primary {
+  animation: chaos-btn-wobble 2.4s ease-in-out infinite;
+}
+
+:root[data-ui-theme="chaos"] ::selection {
+  background: rgba(255, 0, 200, 0.45);
+  color: #ffffff;
+}
+
+@keyframes chaos-border-cycle {
+  0% {
+    border-color: rgba(255, 0, 128, 0.45);
+    box-shadow: 0 0 16px rgba(255, 0, 128, 0.2);
+  }
+  25% {
+    border-color: rgba(255, 238, 0, 0.45);
+    box-shadow: 0 0 16px rgba(255, 238, 0, 0.2);
+  }
+  50% {
+    border-color: rgba(0, 255, 136, 0.45);
+    box-shadow: 0 0 16px rgba(0, 255, 136, 0.2);
+  }
+  75% {
+    border-color: rgba(0, 208, 255, 0.45);
+    box-shadow: 0 0 16px rgba(0, 208, 255, 0.2);
+  }
+  100% {
+    border-color: rgba(255, 0, 128, 0.45);
+    box-shadow: 0 0 16px rgba(255, 0, 128, 0.2);
+  }
+}
+
+@keyframes chaos-btn-wobble {
+  0%,
+  100% {
+    transform: rotate(0deg) scale(1);
+  }
+  25% {
+    transform: rotate(-1.2deg) scale(1.02);
+  }
+  75% {
+    transform: rotate(1.2deg) scale(0.98);
+  }
+}
+
+/* Reduce-Motion: Theme-Element-Animationen abschalten */
+:root[data-reduce-motion="true"][data-ui-theme="minimal"] .status-bar,
+:root[data-reduce-motion="true"][data-ui-theme="minimal"] .input-box,
+:root[data-reduce-motion="true"][data-ui-theme="minimal"] .ui-card,
+:root[data-reduce-motion="true"][data-ui-theme="minimal"] .glass-panel,
+:root[data-reduce-motion="true"][data-ui-theme="minimal"] .glass-panel-fixed,
+:root[data-reduce-motion="true"][data-ui-theme="blossom"] .status-bar,
+:root[data-reduce-motion="true"][data-ui-theme="blossom"] .input-box,
+:root[data-reduce-motion="true"][data-ui-theme="blossom"] .ui-card,
+:root[data-reduce-motion="true"][data-ui-theme="blossom"] .glass-panel,
+:root[data-reduce-motion="true"][data-ui-theme="blossom"] .glass-panel-fixed,
+:root[data-reduce-motion="true"][data-ui-theme="blossom"] .ui-btn-primary,
+:root[data-reduce-motion="true"][data-ui-theme="cyberpunk"] .input-box:focus-within,
+:root[data-reduce-motion="true"][data-ui-theme="cyberpunk"] .status-bar::before,
+:root[data-reduce-motion="true"][data-ui-theme="cyberpunk"] .status-bar::after,
+:root[data-reduce-motion="true"][data-ui-theme="cyberpunk"] .input-box::before,
+:root[data-reduce-motion="true"][data-ui-theme="cyberpunk"] .ui-btn-primary::after,
+:root[data-reduce-motion="true"][data-ui-theme="papyrus"] .scroll-fab,
+:root[data-reduce-motion="true"][data-ui-theme="chaos"] .status-bar,
+:root[data-reduce-motion="true"][data-ui-theme="chaos"] .input-box,
+:root[data-reduce-motion="true"][data-ui-theme="chaos"] .ui-card,
+:root[data-reduce-motion="true"][data-ui-theme="chaos"] .glass-panel,
+:root[data-reduce-motion="true"][data-ui-theme="chaos"] .glass-panel-fixed,
+:root[data-reduce-motion="true"][data-ui-theme="chaos"] .ui-btn-primary {
+  animation: none !important;
+}
+
+/* ── Overlay-Schutz (alle Themes): Modals/Overlays nie mit In-Flow-Chrome brechen ── */
+:root[data-ui-theme] .embed-modal {
+  animation: none !important;
+}
+
+:root[data-ui-theme] dialog[open] {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+:root[data-ui-theme="minimal"] dialog[open] {
+  border-color: rgba(228, 228, 231, 0.14);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    var(--shadow-3);
+}
+
+:root[data-ui-theme="blossom"] dialog[open] {
+  border-color: rgba(244, 114, 182, 0.28);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.7),
+    0 8px 32px rgba(219, 39, 119, 0.14);
+}
+
+:root[data-ui-theme="papyrus"] dialog[open] {
+  border: 2px solid var(--papyrus-brass-lo);
+  box-shadow:
+    inset 0 0 0 1px var(--papyrus-brass-hi),
+    inset 0 0 0 3px var(--papyrus-brass),
+    var(--shadow-3);
+}
+
+:root[data-ui-theme="chaos"] dialog[open] {
+  border-color: rgba(255, 0, 200, 0.45);
+  box-shadow: 0 0 24px rgba(0, 255, 136, 0.22);
+}

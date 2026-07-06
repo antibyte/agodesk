@@ -2,7 +2,10 @@ use base64::Engine;
 use serde_json::{json, Value};
 
 use super::asr::{asr_model_ready, asr_status, models_root, transcribe_pcm};
-use super::tts::{piper_voice_ready, synthesize_piper, tts_status};
+use super::tts::{
+    piper_voice_ready, supertonic_ready, supertonic_status, synthesize_piper, synthesize_supertonic,
+    tts_status, SUPERTONIC_VOICES,
+};
 use super::tts_edge::synthesize_edge_tts;
 use super::types::{
     SpeechSidecarRequest, SpeechSidecarResponse, SynthesizeParams, TranscribeParams,
@@ -75,7 +78,7 @@ pub fn handle_speech_request(request: SpeechSidecarRequest) -> SpeechSidecarResp
                 "dev_mode": dev_mode_enabled(),
                 "models_root": models_root().to_string_lossy(),
                 "asr_ready": asr_model_ready(None),
-                "capabilities": ["ping", "list_voices", "transcribe", "synthesize", "asr_status", "tts_status"],
+                "capabilities": ["ping", "list_voices", "transcribe", "synthesize", "asr_status", "tts_status", "supertonic_status"],
             }),
         ),
         "asr_status" => {
@@ -102,6 +105,10 @@ pub fn handle_speech_request(request: SpeechSidecarRequest) -> SpeechSidecarResp
                 serde_json::to_value(status).unwrap_or(json!({})),
             )
         }
+        "supertonic_status" => SpeechSidecarResponse::success(
+            request.id,
+            serde_json::to_value(supertonic_status()).unwrap_or(json!({})),
+        ),
         "list_voices" => handle_list_voices(request.id, &request.params),
         "transcribe" => match serde_json::from_value::<TranscribeParams>(request.params) {
             Ok(params) => handle_transcribe(request.id, params),
@@ -131,6 +138,19 @@ fn handle_list_voices(id: String, params: &Value) -> SpeechSidecarResponse {
             json!({ "id": "de-DE-KatjaNeural", "label": "Katja (DE)" }),
             json!({ "id": "de-DE-ConradNeural", "label": "Conrad (DE)" }),
         ],
+        "supertonic" => {
+            let ready = supertonic_ready();
+            SUPERTONIC_VOICES
+                .iter()
+                .map(|voice| {
+                    json!({
+                        "id": voice,
+                        "label": format!("{voice} (Supertonic)"),
+                        "ready": ready,
+                    })
+                })
+                .collect()
+        }
         _ => vec![
             json!({ "id": "de_DE-thorsten-high", "label": "Thorsten (DE, Piper)", "ready": piper_voice_ready("de_DE-thorsten-high") }),
             json!({ "id": "de_DE-kerstin-low", "label": "Kerstin (DE, Piper)", "ready": piper_voice_ready("de_DE-kerstin-low") }),
@@ -254,6 +274,37 @@ fn handle_synthesize(id: String, params: SynthesizeParams) -> SpeechSidecarRespo
             format!(
                 "Piper voice '{}' not found under {}. {}",
                 params.voice, status.models_root, status.download_hint
+            ),
+        );
+    }
+
+    if params.backend == "supertonic" {
+        if supertonic_ready() {
+            match synthesize_supertonic(text, &params.voice, params.lang.as_deref(), params.rate) {
+                Ok((pcm, sample_rate)) => {
+                    return SpeechSidecarResponse::success(
+                        id,
+                        json!({
+                            "pcm_base64": encode_pcm_i16(&pcm),
+                            "sample_rate": sample_rate,
+                            "mime_type": format!("audio/pcm;rate={sample_rate}"),
+                            "dev_mode": false,
+                            "model_ready": true,
+                            "voice": params.voice,
+                            "backend": "supertonic",
+                        }),
+                    );
+                }
+                Err(error) => return SpeechSidecarResponse::failure(id, error),
+            }
+        }
+
+        let status = supertonic_status();
+        return SpeechSidecarResponse::failure(
+            id,
+            format!(
+                "Supertonic model not found under {}. {}",
+                status.models_root, status.download_hint
             ),
         );
     }

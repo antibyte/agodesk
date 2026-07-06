@@ -3,13 +3,18 @@ import { speechProviderRequiresGeminiApiKey } from "../types/protocol";
 import {
   defaultEdgeTtsVoiceForSpeechLanguage,
   defaultPiperVoiceForSpeechLanguage,
+  defaultSupertonicVoice,
   localTtsTestPhraseForAppLocale,
+  normalizeSupertonicVoice,
+  supertonicLangForSpeechLanguage,
 } from "./speech-locale";
 import type { UiLocaleSetting } from "../i18n/locales";
 import { SpeechAudioPlayback } from "./speech-audio-playback";
 import { piperVoiceCandidateOrder } from "./speech-piper-voice";
 import { plainTextForSpeech } from "./chat-format";
 import { speechSidecarSynthesize } from "./speech-sidecar";
+import { showToast } from "./toast";
+import { getTranslateFn } from "../i18n/store";
 
 interface SpeakableLocalSession {
   speakText(text: string): Promise<void>;
@@ -47,10 +52,12 @@ export interface SynthesizeLocalSpeechOptions {
 }
 
 export interface ResolvedLocalTtsConfig {
-  backend: "piper" | "edge_tts";
+  backend: "piper" | "edge_tts" | "supertonic";
   voice: string;
-  /** Piper voice used when edge_tts is configured but unavailable. */
+  /** Piper voice used when the primary backend is configured but unavailable. */
   piperFallbackVoice: string;
+  /** Supertonic language code (only relevant for the supertonic backend). */
+  lang?: string;
 }
 
 export function registerActiveLocalSpeechSession(session: SpeakableLocalSession | null): void {
@@ -71,6 +78,15 @@ export function resolveLocalTtsConfig(speech: SpeechSettings): ResolvedLocalTtsC
     speech.offlineTtsVoice.trim() || defaultPiperVoiceForSpeechLanguage(speech.language);
 
   if (speech.provider === "offline") {
+    if (speech.offlineTtsBackend === "supertonic") {
+      return {
+        backend: "supertonic",
+        voice: normalizeSupertonicVoice(speech.supertonicVoice || defaultSupertonicVoice()),
+        piperFallbackVoice,
+        lang: supertonicLangForSpeechLanguage(speech.language),
+      };
+    }
+
     return {
       backend: "piper",
       voice: piperFallbackVoice,
@@ -87,6 +103,15 @@ export function resolveLocalTtsConfig(speech: SpeechSettings): ResolvedLocalTtsC
       backend: "edge_tts",
       voice: configuredVoice,
       piperFallbackVoice,
+    };
+  }
+
+  if (configuredBackend === "supertonic") {
+    return {
+      backend: "supertonic",
+      voice: normalizeSupertonicVoice(speech.supertonicVoice || defaultSupertonicVoice()),
+      piperFallbackVoice,
+      lang: supertonicLangForSpeechLanguage(speech.language),
     };
   }
 
@@ -109,10 +134,17 @@ export async function synthesizeLocalSpeech(
 
   const config = resolveLocalTtsConfig(speech);
   const allowPiperFallback = options.allowPiperFallback === true;
-  const attempts: Array<{ backend: string; voice: string }> = [];
+  const attempts: Array<{ backend: string; voice: string; lang?: string }> = [];
 
   if (config.backend === "edge_tts") {
     attempts.push({ backend: "edge_tts", voice: config.voice });
+    if (allowPiperFallback) {
+      for (const voice of piperVoiceCandidateOrder(speech.language, config.piperFallbackVoice)) {
+        attempts.push({ backend: "piper", voice });
+      }
+    }
+  } else if (config.backend === "supertonic") {
+    attempts.push({ backend: "supertonic", voice: config.voice, lang: config.lang });
     if (allowPiperFallback) {
       for (const voice of piperVoiceCandidateOrder(speech.language, config.piperFallbackVoice)) {
         attempts.push({ backend: "piper", voice });
@@ -133,6 +165,7 @@ export async function synthesizeLocalSpeech(
         text: trimmed,
         voice: attempt.voice,
         backend: attempt.backend,
+        lang: attempt.lang,
       });
       return {
         backend: attempt.backend,
@@ -217,7 +250,26 @@ export async function speakChatAssistantText(text: string, speech: SpeechSetting
     await synthesizeAndPlayLocalSpeech(spoken, speech, standalonePlayback);
   } catch (error) {
     console.warn("Chat assistant TTS failed:", error);
+    notifyChatTtsFailure(error);
   }
+}
+
+/** Minimum spacing between visible chat-TTS error toasts to avoid spam. */
+const CHAT_TTS_ERROR_TOAST_INTERVAL_MS = 15_000;
+let lastChatTtsErrorToastAt = 0;
+
+function notifyChatTtsFailure(error: unknown): void {
+  const now = Date.now();
+  if (now - lastChatTtsErrorToastAt < CHAT_TTS_ERROR_TOAST_INTERVAL_MS) {
+    return;
+  }
+  lastChatTtsErrorToastAt = now;
+
+  const message = error instanceof Error ? error.message : String(error);
+  showToast({
+    type: "warning",
+    message: getTranslateFn()("speechFlow.error.synthesizeFailed", { message }),
+  });
 }
 
 export function interruptLocalSpeechPlayback(): void {

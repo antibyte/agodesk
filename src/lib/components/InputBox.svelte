@@ -286,7 +286,7 @@
 </script>
 
 <form
-  class="input-box glass-panel"
+  class="input-box composer-capsule"
   class:drag-active={dragActive}
   onsubmit={(event) => {
     event.preventDefault();
@@ -434,24 +434,32 @@
   .input-box {
     position: relative;
     display: flex;
-
     flex-direction: column;
-
     gap: var(--space-2);
-
-    padding: var(--space-3) var(--space-5);
-
-    border-top: 1px solid var(--color-border-subtle);
-
-    border-radius: 0 0 var(--radius-window) var(--radius-window);
-
+    padding: var(--space-3) var(--space-4) var(--space-4);
+    margin: 0 var(--space-3) var(--space-3);
+    border-radius: var(--radius-composer);
     flex-shrink: 0;
-
-    margin-top: auto;
-
     z-index: var(--z-status);
-
     overflow: hidden;
+    background: color-mix(in srgb, var(--glass-surface) 78%, transparent);
+    border: 1px solid var(--glass-border);
+    backdrop-filter: blur(var(--blur-strong));
+    -webkit-backdrop-filter: blur(var(--blur-strong));
+    box-shadow:
+      inset 0 1px 0 var(--edge-light),
+      var(--shadow-2);
+    transition:
+      box-shadow var(--transition-base),
+      border-color var(--transition-base);
+  }
+
+  .composer-capsule:focus-within {
+    border-color: color-mix(in srgb, var(--color-companion) 42%, var(--glass-border));
+    box-shadow:
+      inset 0 1px 0 var(--edge-light),
+      var(--accent-glow),
+      var(--shadow-2);
   }
 
   .input-box.drag-active {
@@ -624,21 +632,13 @@
 
   .stop-btn {
     width: 2.625rem;
-
     height: 2.625rem;
-
     min-width: 2.625rem;
-
     padding: 0;
-
     border-radius: var(--radius-sm);
-
-    border-color: color-mix(in srgb, var(--color-danger) 45%, var(--color-border));
-
-    background: color-mix(in srgb, var(--color-danger) 12%, transparent);
-
+    border: 2px solid var(--color-danger);
+    background: color-mix(in srgb, var(--color-danger) 16%, transparent);
     color: var(--color-danger);
-
     flex-shrink: 0;
   }
 
@@ -650,26 +650,19 @@
 
   .send-btn {
     width: 2.625rem;
-
     height: 2.625rem;
-
     min-width: 2.625rem;
-
     padding: 0;
-
     border-radius: var(--radius-full);
-
     display: inline-flex;
-
     align-items: center;
-
     justify-content: center;
-
     flex-shrink: 0;
-
+    background: var(--aurora-gradient);
+    border: none;
+    box-shadow: var(--accent-glow);
     transition:
       transform var(--transition-fast),
-      background var(--transition-fast),
       box-shadow var(--transition-fast);
   }
 
@@ -716,8 +709,8 @@
     padding: 0 0 0 var(--space-1);
     font-size: 0.625rem;
     line-height: 1.2;
-    color: var(--color-muted);
-    opacity: 0.8;
+    color: var(--color-footnote);
+    opacity: 0.88;
   }
 
   .footnote-item {

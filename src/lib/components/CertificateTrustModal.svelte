@@ -3,6 +3,7 @@
   import type { CertificateProbeResult, ClientErrorCode } from "../types/protocol";
   import { browserOrigin, probeServerCertificate } from "../services/tls";
   import { focusTrap } from "../actions/focusTrap";
+  import { dialogModal } from "../actions/dialogModal";
 
   interface Props {
     open?: boolean;
@@ -88,14 +89,13 @@
 </script>
 
 {#if open}
-  <div class="backdrop" role="presentation" onclick={() => onClose?.()}></div>
   <dialog
     bind:this={modalEl}
     class="modal ui-card glass-panel"
-    open
+    use:dialogModal={{ open: true, onClose }}
+    use:focusTrap
     aria-modal="true"
     aria-labelledby="cert-title"
-    use:focusTrap
     onclick={(e) => e.stopPropagation()}
   >
     <h2 id="cert-title">{title}</h2>
@@ -157,27 +157,9 @@
 {/if}
 
 <style>
-  .backdrop {
-    position: fixed;
-    inset: 0;
-    background: var(--color-backdrop);
-    backdrop-filter: blur(6px);
-    -webkit-backdrop-filter: blur(6px);
-    z-index: var(--z-modal);
-  }
-
   .modal {
-    position: fixed;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    z-index: calc(var(--z-modal) + 1);
     width: min(92vw, 36rem);
-    margin: 0;
-    border: none;
     padding: var(--space-5);
-    color: var(--color-text);
-    box-shadow: var(--shadow-3);
   }
 
   h2 {

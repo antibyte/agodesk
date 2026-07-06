@@ -61,4 +61,8 @@ pub struct SynthesizeParams {
     pub backend: String,
     pub rate: Option<f32>,
     pub pitch: Option<f32>,
+    /// Language code for backends that decode language separately from the
+    /// voice (e.g. Supertonic). Ignored by piper/edge_tts.
+    #[serde(default)]
+    pub lang: Option<String>,
 }

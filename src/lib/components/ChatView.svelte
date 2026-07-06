@@ -68,6 +68,11 @@
   } from "../services/system-warnings-flow";
   import { deliverSpeechTranscript } from "../services/speech-delivery";
   import { deriveCompanionPresence } from "../services/companion-presence";
+  import OnboardingFlow from "./OnboardingFlow.svelte";
+  import { applyLocaleSetting } from "../i18n/store";
+  import type { UiLocaleSetting } from "../i18n/locales";
+  import { isOnboardingCompleted, markOnboardingCompleted } from "../services/onboarding";
+  import { deriveCompanionState } from "../services/companion-state";
   import { stopSpeechSession, toggleSpeechSession } from "../services/speech-flow";
   import { interruptLocalSpeechPlayback } from "../services/local-speech-tts";
   import { stopAllChatAssistantTts } from "../services/chat-audio";
@@ -151,6 +156,12 @@
   let tlsErrorCode = $state<ClientErrorCode | null>(null);
   let composerDraft = $state("");
   let embedModalOpen = $state(false);
+  let onboardingOpen = $state(!isOnboardingCompleted());
+  let onboardingLocale = $state<UiLocaleSetting>("system");
+  let onboardingServerUrl = $state("");
+  let onboardingSpeechEnabled = $state(false);
+  let onboardingPairingToken = $state("");
+  let coldStartShell = $state(true);
   let embedModalUrl = $state("");
   let embedModalTitle = $state("");
   let appVersion = $state(AGODESK_CLIENT_VERSION);
@@ -216,6 +227,15 @@
     }),
   );
 
+  const companionState = $derived(
+    deriveCompanionState({
+      connectionStatus: $connectionStatus,
+      sessionStatus: $sessionState.status,
+      requestInFlight: pending || streamingActive || $chatConversationState.requestInFlight,
+      speech: $speechState,
+    }),
+  );
+
   const speechAllowed = $derived($settings.speech.enabled);
 
   const remoteBannerVisible = $derived(
@@ -272,6 +292,9 @@
     }
     if (hasAdvertisedChatSessions($sessionState.advertisedCapabilities) && !chatConversationReady) {
       return t("chatView.hint.conversationLoading");
+    }
+    if ($chatConversationState.legacyChatMode) {
+      return t("chatView.hint.legacyChatMode");
     }
     if (attachmentsEnabled && !attachmentsFullyNegotiated) {
       return t("inputBox.attachments.negotiationPending");
@@ -894,6 +917,12 @@
   });
 
   onMount(() => {
+    onboardingServerUrl = $settings.serverUrl;
+    onboardingLocale = $settings.locale;
+    onboardingSpeechEnabled = $settings.speech.enabled;
+    window.setTimeout(() => {
+      coldStartShell = false;
+    }, 700);
     void init();
   });
 
@@ -905,6 +934,58 @@
 </script>
 
 <div class="app-shell">
+  <OnboardingFlow
+    open={onboardingOpen}
+    locale={onboardingLocale}
+    serverUrl={onboardingServerUrl}
+    speechEnabled={onboardingSpeechEnabled}
+    pairingToken={onboardingPairingToken}
+    busy={pairingBusy}
+    onLocaleChange={(next) => {
+      onboardingLocale = next;
+      void applyLocaleSetting(next);
+    }}
+    onServerUrlChange={(next) => {
+      onboardingServerUrl = next;
+    }}
+    onSpeechEnabledChange={(next) => {
+      onboardingSpeechEnabled = next;
+    }}
+    onPairingTokenChange={(next) => {
+      onboardingPairingToken = next;
+    }}
+    onConnect={() => {
+      void handleSaveSettings({
+        ...get(settings),
+        serverUrl: onboardingServerUrl,
+        locale: onboardingLocale,
+        speech: { ...get(settings).speech, enabled: onboardingSpeechEnabled },
+      }).then(() => void connect(onboardingServerUrl));
+    }}
+    onPair={() => {
+      pairingBusy = true;
+      void sendPairingSessionStart(wsService, onboardingPairingToken, onboardingServerUrl).finally(
+        () => {
+          pairingBusy = false;
+        },
+      );
+    }}
+    onComplete={() => {
+      markOnboardingCompleted();
+      onboardingOpen = false;
+      void handleSaveSettings({
+        ...get(settings),
+        serverUrl: onboardingServerUrl,
+        locale: onboardingLocale,
+        speech: { ...get(settings).speech, enabled: onboardingSpeechEnabled },
+      });
+    }}
+    onSkip={() => {
+      markOnboardingCompleted();
+      onboardingOpen = false;
+    }}
+  />
+
   <RemoteControlBanner
     visible={remoteBannerVisible}
     pending={$sessionState.remoteControlPending}
@@ -938,10 +1019,12 @@
 
   {#if settingsOpen}
     {#if SettingsViewLazy}
+      <div class="settings-shell view-transition-enter">
       <SettingsViewLazy
         initialSection={settingsInitialSection}
         serverUrl={$settings.serverUrl}
         theme={$settings.theme}
+        uiTheme={$settings.uiTheme}
         locale={$settings.locale}
         speech={$settings.speech}
         uiSounds={$settings.uiSounds}
@@ -953,6 +1036,8 @@
         shellAccess={$settings.shellAccess}
         chatTtsMode={$settings.chatTtsMode}
         openPets={$settings.openPets}
+        reduceMotion={$settings.reduceMotion}
+        speechVisualizerEnabled={$settings.speechVisualizerEnabled}
         connectionStatus={$connectionStatus}
         sessionStatus={$sessionState.status}
         sessionId={$sessionState.sessionId}
@@ -975,14 +1060,16 @@
         }}
         wsSend={(message: WsMessage) => wsService.send(message)}
       />
+      </div>
     {:else}
-      <div class="settings-loading" aria-busy="true">
-        {$i18n("settings.title")}
+      <div class="settings-loading view-transition-enter" aria-busy="true">
+        <div class="settings-skeleton ui-skeleton"></div>
+        <p>{$i18n("settings.loading")}</p>
       </div>
     {/if}
   {:else}
-    <div class="chat-view">
-      {#if SpeechBackgroundVisualizerLazy}
+    <div class="chat-view" class:cold-start-shell={coldStartShell}>
+      {#if SpeechBackgroundVisualizerLazy && $settings.speechVisualizerEnabled}
         <SpeechBackgroundVisualizerLazy
           active={$speechState.isActive}
           status={$speechState.status}
@@ -1022,6 +1109,7 @@
           onToggleIntegrations={handleToggleIntegrations}
           onToggleWarnings={handleToggleWarnings}
           companionTone={companionPresence.tone}
+          companionState={companionState}
           speechActive={$speechState.isActive}
           requestInFlight={pending || streamingActive || $chatConversationState.requestInFlight}
         />
@@ -1146,14 +1234,27 @@
 
 <style>
   .settings-loading {
-    display: flex;
+    display: grid;
+    place-items: center;
+    gap: var(--space-3);
     flex: 1;
-    align-items: center;
-    justify-content: center;
     min-height: 0;
     color: var(--color-text-muted);
     font-size: 0.95rem;
-    animation: view-enter 400ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  .settings-shell {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .settings-skeleton {
+    width: min(18rem, 70%);
+    height: 1rem;
+    border-radius: var(--radius-full);
   }
 
   .app-shell {

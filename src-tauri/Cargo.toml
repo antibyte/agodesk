@@ -19,12 +19,15 @@ name = "agodesk-speech"
 path = "src/bin/agodesk_speech.rs"
 
 [features]
-default = ["browser-automation", "speech-asr"]
+default = ["browser-automation", "speech-asr", "speech-supertonic"]
 browser-automation = ["dep:chromiumoxide"]
 computer-use-sidecar = []
 speech-asr = ["dep:sherpa-onnx"]
 speech-sidecar = ["speech-asr"]
 sherpa-onnx = ["dep:sherpa-onnx"]
+# Supertonic 3 on-device TTS via ONNX Runtime (ort). Uses load-dynamic so it
+# shares the same onnxruntime shared library that sherpa-onnx already ships.
+speech-supertonic = ["dep:ort", "dep:ort-sys", "dep:rand", "dep:rand_distr", "dep:unicode-normalization"]
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
@@ -64,6 +67,15 @@ active-win-pos-rs = "0.8"
 enigo = "0.6"
 chromiumoxide = { version = "0.8", optional = true, default-features = false, features = ["tokio-runtime"] }
 sherpa-onnx = { version = "1.13.2", optional = true, default-features = false, features = ["shared"] }
+# Supertonic TTS: load-dynamic reuses the onnxruntime shared lib staged for
+# sherpa-onnx instead of downloading/linking a second ONNX Runtime.
+ort = { version = "=2.0.0-rc.7", optional = true, default-features = false, features = ["half", "load-dynamic"] }
+# Pin ort-sys to the exact rc that matches `ort`; cargo's pre-release matching
+# otherwise resolves a newer, ABI-incompatible ort-sys and fails to compile.
+ort-sys = { version = "=2.0.0-rc.7", optional = true, default-features = false }
+rand = { version = "0.8", optional = true }
+rand_distr = { version = "0.4", optional = true }
+unicode-normalization = { version = "0.1", optional = true }
 fff-search = "0.9"
 regex = "1"
 

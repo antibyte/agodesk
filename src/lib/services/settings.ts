@@ -21,6 +21,7 @@ import {
   DEFAULT_UI_SOUND_SETTINGS,
   UI_SOUND_THEMES,
   normalizeSpeechProvider,
+  normalizeUiTheme,
 } from "../types/protocol";
 import type { UiLocaleSetting } from "../i18n/locales";
 import { normalizeLocaleSetting } from "../i18n/locales";
@@ -28,7 +29,7 @@ import { applyLocaleSetting } from "../i18n/store";
 import { syncFileSearchRoots } from "./file-search-sync";
 import { normalizeServerUrl } from "./server-url";
 import { updateSettings } from "../stores/settings";
-import { initThemeListener } from "./theme";
+import { applyUiTheme, initThemeListener } from "./theme";
 import { normalizeShowWindowHotkey } from "./show-window-hotkey";
 import { defaultLocalAsrModelForAppLocale } from "./local-asr-model";
 import {
@@ -37,6 +38,7 @@ import {
   defaultPiperVoiceForSpeechLanguage,
   normalizeEdgeTtsVoiceForLanguage,
   normalizePiperVoiceForLanguage,
+  normalizeSupertonicVoice,
   speechLanguageForAppLocale,
 } from "./speech-locale";
 import { buildPathDisplay } from "./file-access";
@@ -132,7 +134,8 @@ function normalizeSpeechSettings(
     hybridTtsBackend:
       saved.hybridTtsBackend === "azure" ||
       saved.hybridTtsBackend === "edge_tts" ||
-      saved.hybridTtsBackend === "piper"
+      saved.hybridTtsBackend === "piper" ||
+      saved.hybridTtsBackend === "supertonic"
         ? saved.hybridTtsBackend
         : DEFAULT_SPEECH_SETTINGS.hybridTtsBackend,
     hybridTtsVoice:
@@ -143,6 +146,14 @@ function normalizeSpeechSettings(
       typeof saved.offlineTtsVoice === "string" && saved.offlineTtsVoice.trim().length > 0
         ? normalizePiperVoiceForLanguage(saved.offlineTtsVoice.trim(), language)
         : defaultPiperVoiceForSpeechLanguage(defaultLanguage),
+    offlineTtsBackend:
+      saved.offlineTtsBackend === "piper" || saved.offlineTtsBackend === "supertonic"
+        ? saved.offlineTtsBackend
+        : DEFAULT_SPEECH_SETTINGS.offlineTtsBackend,
+    supertonicVoice:
+      typeof saved.supertonicVoice === "string" && saved.supertonicVoice.trim().length > 0
+        ? normalizeSupertonicVoice(saved.supertonicVoice.trim())
+        : DEFAULT_SPEECH_SETTINGS.supertonicVoice,
     bargeInMode:
       saved.bargeInMode === "energy" ||
       saved.bargeInMode === "silero" ||
@@ -332,6 +343,7 @@ export function normalizeAppSettings(saved: Partial<AppSettings> | null | undefi
     serverUrl,
     theme:
       theme === "light" || theme === "dark" || theme === "system" ? theme : DEFAULT_SETTINGS.theme,
+    uiTheme: normalizeUiTheme(saved?.uiTheme),
     locale,
     speech: normalizeSpeechSettings(saved?.speech, locale),
     uiSounds: normalizeUiSoundSettings(saved?.uiSounds),
@@ -356,6 +368,12 @@ export function normalizeAppSettings(saved: Partial<AppSettings> | null | undefi
         ? saved.chatSpeakerMode
         : DEFAULT_SETTINGS.chatSpeakerMode,
     openPets: normalizeOpenPetsSettings(saved?.openPets),
+    reduceMotion:
+      typeof saved?.reduceMotion === "boolean" ? saved.reduceMotion : DEFAULT_SETTINGS.reduceMotion,
+    speechVisualizerEnabled:
+      typeof saved?.speechVisualizerEnabled === "boolean"
+        ? saved.speechVisualizerEnabled
+        : DEFAULT_SETTINGS.speechVisualizerEnabled,
   };
 }
 
@@ -369,6 +387,7 @@ function normalizeChatTtsMode(value: unknown): ChatTtsMode {
 async function applySettings(next: AppSettings): Promise<void> {
   const normalized = normalizeAppSettings(next);
   updateSettings(normalized);
+  applyUiTheme(normalized.uiTheme);
   initThemeListener(normalized.theme);
   await applyLocaleSetting(normalized.locale);
   void syncFileSearchRoots(normalized.fileAccess).catch((error) => {

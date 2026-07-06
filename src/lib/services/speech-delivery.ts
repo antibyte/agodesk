@@ -1,4 +1,5 @@
 import { get } from "svelte/store";
+import { getTranslateFn } from "../i18n/store";
 import { sendChatMessage } from "./chat-outbound";
 import { chatConversationState } from "../stores/chat-conversation";
 import type { WsMessage } from "../types/protocol";
@@ -37,14 +38,14 @@ export async function deliverSpeechTranscript(
     }
 
     context.onComposerDraft(trimmed);
-    context.onSystemNotice(
-      "Sprachtranskript in die Eingabe übernommen — Chat ist derzeit nicht verfügbar.",
-    );
+    context.onSystemNotice(getTranslateFn()("speechDelivery.notice.chatUnavailable"));
     return { mode: "composer" };
   }
 
   context.onComposerDraft(trimmed);
-  context.onSystemNotice(`Sprache erkannt: „${trimmed}“`);
+  context.onSystemNotice(
+    getTranslateFn()("speechDelivery.notice.recognized", { text: trimmed }),
+  );
   return { mode: "composer" };
 }
 

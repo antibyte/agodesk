@@ -133,9 +133,9 @@
 </script>
 
 {#if shellVisible && url}
-  <div class="embed-backdrop" role="presentation" onclick={handleClose}></div>
+  <div class="embed-backdrop ui-overlay-backdrop" role="presentation" onclick={handleClose}></div>
   <div
-    class="embed-modal glass-panel"
+    class="embed-modal ui-overlay-shell glass-panel"
     role="dialog"
     aria-modal="true"
     aria-labelledby="embed-modal-title"
@@ -184,17 +184,8 @@
 {/if}
 
 <style>
-  .embed-backdrop {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.45);
-    z-index: var(--z-modal);
-  }
-
   .embed-modal {
-    position: fixed;
     inset: var(--space-5);
-    z-index: calc(var(--z-modal) + 1);
     display: grid;
     grid-template-rows: auto 1fr;
     border-radius: var(--radius-xl);

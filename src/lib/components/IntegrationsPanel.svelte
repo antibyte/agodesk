@@ -51,7 +51,7 @@
 
 {#if visible}
   <aside
-    class="integrations-panel glass-panel"
+    class="integrations-panel glass-panel panel-slide-in"
     aria-label={$i18n("integrations.title")}
     use:focusTrap
   >

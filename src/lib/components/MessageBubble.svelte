@@ -24,11 +24,12 @@
 </script>
 
 <div
-  class="message-row"
+  class="message-row message-entry"
   class:user={message.role === "user"}
   class:assistant={message.role === "assistant"}
   class:system={message.role === "system"}
   class:grouped={group.groupWithPrevious}
+  style:animation-delay="{Math.min(index * 40, 320)}ms"
 >
   {#if message.role === "user"}
     <article
@@ -88,13 +89,11 @@
     display: flex;
     gap: var(--space-2);
     align-items: flex-end;
-    max-width: min(88%, 780px);
+    max-width: min(92%, 820px);
   }
 
-  @media (min-width: 1024px) {
-    .message-row {
-      max-width: min(88%, 820px);
-    }
+  .message-entry {
+    animation: ui-entry 420ms var(--ease-spring) both;
   }
 
   .message-row.user {
@@ -150,6 +149,7 @@
     margin-top: var(--space-2);
     font-size: var(--font-size-xs);
     color: var(--color-footnote);
+    opacity: 0.78;
     font-variant-numeric: tabular-nums;
   }
 
@@ -160,10 +160,8 @@
   .user .bubble {
     background: var(--color-user-bg);
     color: var(--color-user-text);
-    box-shadow:
-      0 2px 8px color-mix(in srgb, var(--color-accent) 18%, transparent),
-      0 10px 28px color-mix(in srgb, var(--color-accent) 10%, transparent);
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: var(--accent-glow);
+    border: 1px solid color-mix(in srgb, var(--aurora-2) 28%, transparent);
   }
 
   .user .bubble.tail-user {
@@ -177,8 +175,28 @@
   .assistant .bubble {
     background: var(--color-assistant-bg);
     color: var(--color-assistant-text);
-    border: 1px solid var(--color-assistant-border);
-    box-shadow: var(--color-bubble-shadow);
+    border: none;
+    box-shadow: none;
+    padding-inline: var(--space-2);
+  }
+
+  .assistant .bubble.streaming {
+    position: relative;
+    padding-left: calc(var(--space-2) + 3px);
+  }
+
+  .assistant .bubble.streaming::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0.35rem;
+    bottom: 0.35rem;
+    width: 3px;
+    border-radius: var(--radius-full);
+    background: var(--aurora-gradient);
+    background-size: 200% 200%;
+    animation: aurora-shimmer 2.4s linear infinite;
+    box-shadow: 0 0 12px color-mix(in srgb, var(--aurora-2) 45%, transparent);
   }
 
   .assistant .bubble.tail-assistant {
@@ -187,12 +205,6 @@
 
   .assistant .bubble.grouped {
     border-top-left-radius: var(--radius-sm);
-  }
-
-  .assistant .bubble.streaming {
-    box-shadow:
-      var(--color-bubble-shadow),
-      0 0 0 1px color-mix(in srgb, var(--color-accent) 18%, transparent);
   }
 
   .system .bubble {

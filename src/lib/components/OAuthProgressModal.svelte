@@ -1,5 +1,6 @@
 <script lang="ts">
   import { focusTrap } from "../actions/focusTrap";
+  import { dialogModal } from "../actions/dialogModal";
   import { i18n } from "../i18n";
 
   interface Props {
@@ -37,46 +38,54 @@
 </script>
 
 {#if open}
-  <div class="oauth-modal-backdrop" role="presentation">
-    <dialog
-      bind:this={modalEl}
-      class="oauth-modal ui-card"
-      open
-      aria-labelledby="oauth-progress-title"
-      use:focusTrap
-    >
+  <dialog
+    bind:this={modalEl}
+    class="oauth-modal ui-card"
+    use:dialogModal={{ open: true, onClose: onCancel }}
+    use:focusTrap
+    aria-labelledby="oauth-progress-title"
+  >
       <h2 id="oauth-progress-title">{$i18n("settings.llmProviders.oauth.title")}</h2>
-      <p class="oauth-intro">
-        {$i18n("settings.llmProviders.oauth.waiting", { name: providerName || "Provider" })}
-      </p>
-
-      {#if busy}
-        <div class="oauth-spinner" aria-hidden="true"></div>
-      {/if}
-      <p class="oauth-status">{$i18n("settings.llmProviders.oauth.browserHint")}</p>
 
       {#if errorMessage}
         <p class="oauth-error" role="alert">{errorMessage}</p>
-      {/if}
+        <div class="oauth-recovery">
+          <p>{$i18n("settings.llmProviders.oauth.recoveryTitle")}</p>
+          <ol>
+            <li>{$i18n("settings.llmProviders.oauth.recoveryStep1")}</li>
+            <li>{$i18n("settings.llmProviders.oauth.recoveryStep2")}</li>
+            <li>{$i18n("settings.llmProviders.oauth.recoveryStep3")}</li>
+          </ol>
+        </div>
+      {:else}
+        <p class="oauth-intro">
+          {$i18n("settings.llmProviders.oauth.waiting", { name: providerName || "Provider" })}
+        </p>
 
-      {#if manualPasteEnabled}
-        <label class="oauth-manual">
-          <span>{$i18n("settings.llmProviders.oauth.manualLabel")}</span>
-          <input
-            type="url"
-            bind:value={manualRedirectUrl}
-            placeholder={$i18n("settings.llmProviders.oauth.manualPlaceholder")}
-            disabled={busy}
-          />
-        </label>
-        <button
-          type="button"
-          class="ui-btn"
-          disabled={busy || !manualRedirectUrl.trim()}
-          onclick={() => onManualPaste?.(manualRedirectUrl.trim())}
-        >
-          {$i18n("settings.llmProviders.oauth.manualSubmit")}
-        </button>
+        {#if busy}
+          <div class="oauth-spinner" aria-hidden="true"></div>
+        {/if}
+        <p class="oauth-status">{$i18n("settings.llmProviders.oauth.browserHint")}</p>
+
+        {#if manualPasteEnabled}
+          <label class="oauth-manual">
+            <span>{$i18n("settings.llmProviders.oauth.manualLabel")}</span>
+            <input
+              type="url"
+              bind:value={manualRedirectUrl}
+              placeholder={$i18n("settings.llmProviders.oauth.manualPlaceholder")}
+              disabled={busy}
+            />
+          </label>
+          <button
+            type="button"
+            class="ui-btn"
+            disabled={busy || !manualRedirectUrl.trim()}
+            onclick={() => onManualPaste?.(manualRedirectUrl.trim())}
+          >
+            {$i18n("settings.llmProviders.oauth.manualSubmit")}
+          </button>
+        {/if}
       {/if}
 
       <div class="oauth-actions">
@@ -90,24 +99,11 @@
         </button>
       </div>
     </dialog>
-  </div>
 {/if}
 
 <style>
-  .oauth-modal-backdrop {
-    position: fixed;
-    inset: 0;
-    z-index: 1200;
-    display: grid;
-    place-items: center;
-    background: rgba(0, 0, 0, 0.45);
-    backdrop-filter: blur(6px);
-  }
-
   .oauth-modal {
     width: min(480px, calc(100vw - 2rem));
-    margin: 0;
-    border: none;
     padding: 1.25rem;
   }
 
@@ -139,6 +135,20 @@
 
   .oauth-error {
     color: var(--danger, #f87171);
+  }
+
+  .oauth-recovery {
+    margin: 0.75rem 0 1rem;
+    padding: var(--space-3);
+    border-radius: var(--radius-lg);
+    background: color-mix(in srgb, var(--color-warning-soft) 80%, transparent);
+    border: 1px solid color-mix(in srgb, var(--color-warning) 25%, transparent);
+    font-size: var(--font-size-sm);
+  }
+
+  .oauth-recovery ol {
+    margin: var(--space-2) 0 0;
+    padding-left: 1.2rem;
   }
 
   .oauth-manual {

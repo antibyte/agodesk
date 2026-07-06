@@ -1,3 +1,4 @@
+import { getTranslateFn } from "../i18n/store";
 import type { ConnectionStatus, SessionStatus } from "../types/protocol";
 import type { GeminiFunctionCall, GeminiFunctionResponse } from "./speech-tools";
 
@@ -28,17 +29,19 @@ export async function executeSpeechTool(
       }
 
       if (!context.canSendChat) {
-        context.onSystemNotice(`AuraGo nicht erreichbar — Befehl nicht gesendet: ${message}`);
+        context.onSystemNotice(
+          getTranslateFn()("speechTool.notice.unreachable", { message }),
+        );
         return {
           success: false,
-          error: "Chat ist derzeit nicht verfügbar.",
+          error: getTranslateFn()("speechTool.error.chatUnavailable"),
           message,
         };
       }
 
       try {
         await context.sendToAuraGo(message);
-        context.onSystemNotice(`Sprachbefehl an AuraGo gesendet.`);
+        context.onSystemNotice(getTranslateFn()("speechTool.notice.sent"));
         return { success: true, sent: true, message };
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : "Senden fehlgeschlagen.";

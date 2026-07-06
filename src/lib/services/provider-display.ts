@@ -210,11 +210,14 @@ export function filterSelectableCatalogEntries(
 }
 
 /**
- * True when a catalog entry carries any OAuth signal: explicit `auth_type: oauth`,
- * an `oauth_provider` key, or `oauth_setup` metadata (auth/token URL, callback path,
- * flow, scopes). Mirrors the signals `catalogOauthPrefilled` in `ProviderEditorPanel`
- * counts, so a provider that AuraGo advertises via `oauth_provider` alone (without
- * inline auth_url) is still recognized as OAuth-capable.
+ * True when a catalog entry carries a *reliable* OAuth signal that guarantees
+ * AuraGo can complete an OAuth flow for this provider type: either an explicit
+ * `auth_type: "oauth"`, or `oauth_setup` metadata that includes BOTH the
+ * authorization and token endpoints. AuraGo pairs `oauth_provider` with a full
+ * `oauth_setup` (auth_url + token_url) for every genuinely OAuth-capable provider
+ * in its bundled catalog, so a stray `oauth_provider` label, a lone `flow`, or
+ * `scopes` alone are NOT treated as OAuth support — offering OAuth on those leads
+ * to AuraGo rejecting oauth.start with "OAuth2 configuration incomplete: auth_type".
  */
 function catalogEntryHasOauthSignal(entry: ConfigProviderCatalogEntry | null | undefined): boolean {
   if (!entry) {
@@ -223,20 +226,11 @@ function catalogEntryHasOauthSignal(entry: ConfigProviderCatalogEntry | null | u
   if (entry.auth_type === "oauth") {
     return true;
   }
-  if (entry.oauth_provider?.trim()) {
-    return true;
-  }
   const setup = entry.oauth_setup;
   if (!setup) {
     return false;
   }
-  return Boolean(
-    setup.auth_url?.trim() ||
-      setup.token_url?.trim() ||
-      setup.callback_path?.trim() ||
-      setup.flow?.trim() ||
-      (Array.isArray(setup.scopes) && setup.scopes.length > 0),
-  );
+  return Boolean(setup.auth_url?.trim() && setup.token_url?.trim());
 }
 
 export function catalogEntryUsesOauth(entry: ConfigProviderCatalogEntry | null | undefined): boolean {
@@ -310,10 +304,12 @@ export function providerSupportsOauth(provider: ConfigProvider | null | undefine
     return true;
   }
   // Dual-auth providers may be persisted with auth_type=api_key while still carrying
-  // OAuth endpoints. Treat the presence of OAuth URLs or an OAuth state object as
-  // OAuth-capable so the user can switch to / start OAuth after saving.
-  if (provider.oauth_auth_url || provider.oauth_token_url) {
+  // explicit OAuth endpoints. Requiring both auth + token URLs avoids false positives:
+  // AuraGo attaches an `oauth` status block (with missing_fields) to EVERY configured
+  // provider — including API-key-only ones like xai — so the mere presence of an
+  // `oauth` object must NOT be treated as OAuth capability.
+  if (provider.oauth_auth_url?.trim() && provider.oauth_token_url?.trim()) {
     return true;
   }
-  return Boolean(provider.oauth);
+  return false;
 }

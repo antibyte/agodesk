@@ -131,17 +131,21 @@ test("filterSelectableCatalogEntries keeps addable providers including oauth set
   );
 });
 
-test("catalogEntryUsesOauth respects auth_type and oauth_setup metadata", () => {
+test("catalogEntryUsesOauth requires concrete oauth_setup endpoints or explicit auth_type", () => {
   assert.equal(
     catalogEntryUsesOauth({ id: "openai", name: "Openai", auth_type: "api_key" }),
     false,
   );
+  // Full oauth_setup with both endpoints (dual-auth openai) -> OAuth capable.
   assert.equal(
     catalogEntryUsesOauth({
       id: "openai",
       name: "Openai",
       auth_type: "api_key",
-      oauth_setup: { auth_url: "https://auth.openai.com/oauth/authorize" },
+      oauth_setup: {
+        auth_url: "https://auth.openai.com/oauth/authorize",
+        token_url: "https://auth.openai.com/oauth/token",
+      },
     }),
     true,
   );
@@ -149,13 +153,11 @@ test("catalogEntryUsesOauth respects auth_type and oauth_setup metadata", () => 
     catalogEntryUsesOauth({ id: "google", name: "Google", auth_type: "oauth" }),
     true,
   );
+  // Weak/partial signals must NOT be treated as OAuth support: AuraGo would reject
+  // oauth.start with "OAuth2 configuration incomplete: auth_type".
   assert.equal(
-    catalogEntryUsesOauth({
-      id: "openai",
-      name: "Openai",
-      oauth_provider: "openai",
-    }),
-    true,
+    catalogEntryUsesOauth({ id: "openai", name: "Openai", oauth_provider: "openai" }),
+    false,
   );
   assert.equal(
     catalogEntryUsesOauth({
@@ -163,7 +165,7 @@ test("catalogEntryUsesOauth respects auth_type and oauth_setup metadata", () => 
       name: "Google",
       oauth_setup: { auth_url: "https://example.com/auth" },
     }),
-    true,
+    false,
   );
   assert.equal(
     catalogEntryUsesOauth({
@@ -171,7 +173,7 @@ test("catalogEntryUsesOauth respects auth_type and oauth_setup metadata", () => 
       name: "Google",
       oauth_setup: { callback_path: "/oauth/callback", flow: "authorization_code_pkce" },
     }),
-    true,
+    false,
   );
   assert.equal(
     catalogEntryUsesOauth({
@@ -179,7 +181,7 @@ test("catalogEntryUsesOauth respects auth_type and oauth_setup metadata", () => 
       name: "Google",
       oauth_setup: { scopes: ["openid", "email"] },
     }),
-    true,
+    false,
   );
 });
 
@@ -214,14 +216,17 @@ test("catalogEntrySupportsApiKey allows dual-auth catalog providers", () => {
   );
 });
 
-test("resolveCatalogAuthType prefers oauth when oauth_setup is present", () => {
+test("resolveCatalogAuthType prefers oauth only with concrete oauth_setup endpoints", () => {
   assert.equal(resolveCatalogAuthType({ id: "openai", name: "Openai", auth_type: "api_key" }), "api_key");
   assert.equal(
     resolveCatalogAuthType({
       id: "openai",
       name: "Openai",
       auth_type: "api_key",
-      oauth_setup: { auth_url: "https://auth.openai.com/oauth/authorize" },
+      oauth_setup: {
+        auth_url: "https://auth.openai.com/oauth/authorize",
+        token_url: "https://auth.openai.com/oauth/token",
+      },
     }),
     "oauth",
   );
@@ -230,13 +235,17 @@ test("resolveCatalogAuthType prefers oauth when oauth_setup is present", () => {
     resolveCatalogAuthType({
       id: "google",
       name: "Google",
-      oauth_setup: { auth_url: "https://example.com/auth" },
+      oauth_setup: {
+        auth_url: "https://example.com/auth",
+        token_url: "https://example.com/token",
+      },
     }),
     "oauth",
   );
+  // oauth_provider label alone (no concrete endpoints) is not enough.
   assert.equal(
     resolveCatalogAuthType({ id: "google", name: "Google", oauth_provider: "google" }),
-    "oauth",
+    "api_key",
   );
   assert.equal(
     resolveCatalogAuthType({ id: "anthropic", name: "Anthropic", auth_type: "api_key" }),
@@ -270,6 +279,7 @@ test("providerSupportsOauth follows configured auth metadata", () => {
       name: "Google",
       type: "google",
       oauth_auth_url: "https://example.com/auth",
+      oauth_token_url: "https://example.com/token",
     }),
     true,
   );
@@ -290,15 +300,19 @@ test("providerSupportsOauth recognizes dual-auth providers saved with api_key", 
     }),
     true,
   );
+  // AuraGo attaches an `oauth` status block to EVERY configured provider (incl.
+  // API-key-only providers like xai) to report missing_fields. Its mere presence
+  // must NOT be treated as OAuth capability, otherwise the client sends a doomed
+  // oauth.start that AuraGo rejects with "OAuth2 configuration incomplete: auth_type".
   assert.equal(
     providerSupportsOauth({
-      id: "openai",
-      name: "Openai",
-      type: "openai",
+      id: "xai",
+      name: "xAI",
+      type: "xai",
       auth_type: "api_key",
-      oauth: { configured: false, authorized: false },
+      oauth: { configured: false, authorized: false, missing_fields: ["auth_type"] },
     }),
-    true,
+    false,
   );
 });
 

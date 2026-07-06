@@ -14,7 +14,7 @@
 <div class="toast-stack" aria-live="polite">
   {#each $toastState.active as toast (toast.id)}
     <div
-      class="toast-item banner-glass"
+      class="toast-item banner-glass spring-enter"
       data-tone={toneForType[toast.type]}
       role={toast.type === "error" ? "alert" : "status"}
     >
@@ -52,7 +52,6 @@
     justify-content: space-between;
     gap: var(--space-2);
     pointer-events: auto;
-    animation: toast-in var(--transition-base) ease-out;
   }
 
   .toast-item p {

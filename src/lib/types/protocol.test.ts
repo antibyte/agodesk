@@ -74,6 +74,11 @@ import {
   AGODESK_CONFIG_PROVIDERS_READ_CAPABILITY,
   AGODESK_CONFIG_PROVIDERS_WRITE_CAPABILITY,
   AGODESK_CONFIG_PROVIDERS_OAUTH_CAPABILITY,
+  normalizeUiTheme,
+  normalizeUiSoundTheme,
+  uiThemeHasFixedScheme,
+  UI_THEMES,
+  UI_THEME_SOUND,
 } from "./protocol.ts";
 
 test("normalizeSessionAcceptedPayload akzeptiert snake_case", () => {
@@ -378,6 +383,41 @@ test("DEFAULT_SETTINGS enthaelt uiSounds, locale und browserControlEnabled", () 
   assert.equal(DEFAULT_SETTINGS.fileAccess.enabled, false);
   assert.equal(DEFAULT_SETTINGS.browserControlEnabled, true);
   assert.equal(DEFAULT_SETTINGS.desktopControlEnabled, true);
+});
+
+test("DEFAULT_SETTINGS.uiTheme ist aurora", () => {
+  assert.equal(DEFAULT_SETTINGS.uiTheme, "aurora");
+});
+
+test("normalizeUiTheme akzeptiert gueltige Themes, sonst aurora", () => {
+  assert.equal(normalizeUiTheme("cyberpunk"), "cyberpunk");
+  assert.equal(normalizeUiTheme("papyrus"), "papyrus");
+  assert.equal(normalizeUiTheme("chaos"), "chaos");
+  assert.equal(normalizeUiTheme("unbekannt"), "aurora");
+  assert.equal(normalizeUiTheme(undefined), "aurora");
+  assert.equal(normalizeUiTheme(null), "aurora");
+});
+
+test("normalizeUiSoundTheme faellt auf soft zurueck", () => {
+  assert.equal(normalizeUiSoundTheme("cyberpunk"), "cyberpunk");
+  assert.equal(normalizeUiSoundTheme("blossom"), "blossom");
+  assert.equal(normalizeUiSoundTheme("xxx"), "soft");
+});
+
+test("uiThemeHasFixedScheme nur fuer Nicht-Aurora-Themes", () => {
+  assert.equal(uiThemeHasFixedScheme("aurora"), false);
+  assert.equal(uiThemeHasFixedScheme("minimal"), true);
+  assert.equal(uiThemeHasFixedScheme("cyberpunk"), true);
+  assert.equal(uiThemeHasFixedScheme("chaos"), true);
+});
+
+test("UI_THEME_SOUND koppelt jedes Theme an ein Sound-Set", () => {
+  for (const theme of UI_THEMES) {
+    assert.equal(typeof UI_THEME_SOUND[theme], "string");
+    assert.ok(UI_THEME_SOUND[theme].length > 0);
+  }
+  assert.equal(UI_THEME_SOUND.cyberpunk, "cyberpunk");
+  assert.equal(UI_THEME_SOUND.aurora, "aurora");
 });
 
 test("normalizePersonaAssetsPayload akzeptiert snake_case", () => {

@@ -46,6 +46,55 @@ const PIPER_VOICES_BY_PREFIX: Record<string, readonly string[]> = {
   en: ["en_US-lessac-high", "en_US-lessac-medium"],
 };
 
+/** Supertonic preset voice styles (language-agnostic; language is separate). */
+export const SUPERTONIC_VOICES: readonly string[] = [
+  "M1",
+  "M2",
+  "M3",
+  "M4",
+  "M5",
+  "F1",
+  "F2",
+  "F3",
+  "F4",
+  "F5",
+];
+
+/** Supertonic 3 language codes (subset used for mapping app locales). */
+const SUPERTONIC_LANGS = new Set([
+  "en",
+  "ko",
+  "ja",
+  "ar",
+  "bg",
+  "cs",
+  "da",
+  "de",
+  "el",
+  "es",
+  "et",
+  "fi",
+  "fr",
+  "hi",
+  "hr",
+  "hu",
+  "id",
+  "it",
+  "lt",
+  "lv",
+  "nl",
+  "pl",
+  "pt",
+  "ro",
+  "ru",
+  "sk",
+  "sl",
+  "sv",
+  "tr",
+  "uk",
+  "vi",
+]);
+
 const LOCAL_TTS_TEST_PHRASES: Record<AppLocale, string> = {
   de: "Dies ist ein Test der Sprachausgabe.",
   en: "This is a speech output test.",
@@ -127,6 +176,25 @@ export function normalizePiperVoiceForLanguage(voice: string, language: string):
     return trimmed;
   }
   return defaultPiperVoiceForSpeechLanguage(language);
+}
+
+export function supertonicVoices(): readonly string[] {
+  return SUPERTONIC_VOICES;
+}
+
+export function defaultSupertonicVoice(): string {
+  return SUPERTONIC_VOICES[0] ?? "M1";
+}
+
+export function normalizeSupertonicVoice(voice: string): string {
+  const trimmed = voice.trim().toUpperCase();
+  return SUPERTONIC_VOICES.includes(trimmed) ? trimmed : defaultSupertonicVoice();
+}
+
+/** Maps a BCP47 speech language to a Supertonic language code (or "na"). */
+export function supertonicLangForSpeechLanguage(language: string): string {
+  const prefix = languagePrefix(language);
+  return SUPERTONIC_LANGS.has(prefix) ? prefix : "na";
 }
 
 export function localTtsTestPhraseForAppLocale(locale: UiLocaleSetting): string {
