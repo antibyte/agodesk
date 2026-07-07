@@ -23,7 +23,7 @@ default = ["browser-automation", "speech-asr", "speech-supertonic"]
 browser-automation = ["dep:chromiumoxide"]
 computer-use-sidecar = []
 speech-asr = ["dep:sherpa-onnx"]
-speech-sidecar = ["speech-asr"]
+speech-sidecar = ["speech-asr", "speech-supertonic"]
 sherpa-onnx = ["dep:sherpa-onnx"]
 # Supertonic 3 on-device TTS via ONNX Runtime (ort). Uses load-dynamic so it
 # shares the same onnxruntime shared library that sherpa-onnx already ships.

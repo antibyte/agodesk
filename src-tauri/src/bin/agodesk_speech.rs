@@ -1,4 +1,4 @@
-use agodesk_lib::speech::{handle_speech_request, types::SpeechSidecarRequest};
+use agodesk_lib::speech::{asr, handle_speech_request, runtime, types::SpeechSidecarRequest};
 use std::io::{self, BufRead, Write};
 
 fn main() {
@@ -9,6 +9,8 @@ fn main() {
 }
 
 fn run() -> Result<(), String> {
+    runtime::init_sherpa_runtime();
+    asr::init_speech_models_from_env();
     let stdin = io::stdin();
     for line in stdin.lock().lines() {
         let line = line.map_err(|error| error.to_string())?;

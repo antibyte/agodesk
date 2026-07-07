@@ -10,7 +10,7 @@ use serde::Serialize;
 use tar::Archive;
 use tauri::{AppHandle, Emitter};
 
-use super::asr::{discover_asr_model, models_search_roots, register_models_search_root};
+use super::asr::{discover_asr_model, models_search_roots, register_models_search_root, root_has_installed_models};
 use tauri::Manager;
 
 static DOWNLOAD_LOCK: Mutex<()> = Mutex::new(());
@@ -110,7 +110,7 @@ fn download_root_candidates(app: &AppHandle) -> Result<Vec<PathBuf>, String> {
 
 fn ensure_models_root(app: &AppHandle) -> Result<PathBuf, String> {
     for root in models_search_roots() {
-        if root.join("whisper-small-de").exists() || root.join("sense-voice-int8").exists() {
+        if root_has_installed_models(&root) {
             return Ok(root);
         }
     }
@@ -118,6 +118,9 @@ fn ensure_models_root(app: &AppHandle) -> Result<PathBuf, String> {
     for root in download_root_candidates(app)? {
         if try_prepare_writable_dir(&root) {
             register_models_search_root(root.clone());
+            if std::env::var("AGODESK_SPEECH_MODELS").is_err() {
+                std::env::set_var("AGODESK_SPEECH_MODELS", &root);
+            }
             return Ok(root);
         }
     }

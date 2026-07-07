@@ -2502,6 +2502,8 @@ export interface AppSettings {
   reduceMotion: boolean;
   /** Hintergrund-Visualizer während Sprachsitzungen. */
   speechVisualizerEnabled: boolean;
+  /** Ersteinrichtung abgeschlossen (überlebt App-Updates via plugin-store). */
+  onboardingCompleted: boolean;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -2522,6 +2524,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   openPets: { ...DEFAULT_OPENPETS_SETTINGS },
   reduceMotion: false,
   speechVisualizerEnabled: true,
+  onboardingCompleted: false,
 };
 
 export const PROTOCOL_VERSION = "agodesk.v1";

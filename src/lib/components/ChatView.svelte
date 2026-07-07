@@ -38,7 +38,7 @@
     isUpdateBannerVisible,
     updateState,
   } from "../services/update-flow";
-  import { loadSettings, saveSettings } from "../services/settings";
+  import { loadSettings, saveSettings, markOnboardingCompleted } from "../services/settings";
   import { applyOpenPetsSettings } from "../services/openpets-flow";
   import { openPetsContext } from "../stores/openpets-context";
   import { cycleTheme, destroyThemeListener } from "../services/theme";
@@ -71,7 +71,7 @@
   import OnboardingFlow from "./OnboardingFlow.svelte";
   import { applyLocaleSetting } from "../i18n/store";
   import type { UiLocaleSetting } from "../i18n/locales";
-  import { isOnboardingCompleted, markOnboardingCompleted } from "../services/onboarding";
+  import { shouldShowOnboarding } from "../services/onboarding";
   import { deriveCompanionState } from "../services/companion-state";
   import { stopSpeechSession, toggleSpeechSession } from "../services/speech-flow";
   import { interruptLocalSpeechPlayback } from "../services/local-speech-tts";
@@ -156,7 +156,7 @@
   let tlsErrorCode = $state<ClientErrorCode | null>(null);
   let composerDraft = $state("");
   let embedModalOpen = $state(false);
-  let onboardingOpen = $state(!isOnboardingCompleted());
+  let onboardingOpen = $state(false);
   let onboardingLocale = $state<UiLocaleSetting>("system");
   let onboardingServerUrl = $state("");
   let onboardingSpeechEnabled = $state(false);
@@ -920,10 +920,13 @@
     onboardingServerUrl = $settings.serverUrl;
     onboardingLocale = $settings.locale;
     onboardingSpeechEnabled = $settings.speech.enabled;
-    window.setTimeout(() => {
-      coldStartShell = false;
-    }, 700);
-    void init();
+    void (async () => {
+      onboardingOpen = await shouldShowOnboarding(get(settings));
+      window.setTimeout(() => {
+        coldStartShell = false;
+      }, 700);
+      await init();
+    })();
   });
 
   onDestroy(() => {
@@ -971,18 +974,22 @@
       );
     }}
     onComplete={() => {
-      markOnboardingCompleted();
-      onboardingOpen = false;
-      void handleSaveSettings({
-        ...get(settings),
-        serverUrl: onboardingServerUrl,
-        locale: onboardingLocale,
-        speech: { ...get(settings).speech, enabled: onboardingSpeechEnabled },
-      });
+      void (async () => {
+        await markOnboardingCompleted();
+        onboardingOpen = false;
+        await handleSaveSettings({
+          ...get(settings),
+          serverUrl: onboardingServerUrl,
+          locale: onboardingLocale,
+          speech: { ...get(settings).speech, enabled: onboardingSpeechEnabled },
+        });
+      })();
     }}
     onSkip={() => {
-      markOnboardingCompleted();
-      onboardingOpen = false;
+      void (async () => {
+        await markOnboardingCompleted();
+        onboardingOpen = false;
+      })();
     }}
   />
 

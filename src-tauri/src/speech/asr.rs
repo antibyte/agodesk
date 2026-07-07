@@ -12,6 +12,24 @@ pub fn register_models_search_root(path: PathBuf) {
     }
 }
 
+/// Registers `AGODESK_SPEECH_MODELS` and normalizes legacy folder layouts.
+/// Called from the main app and the `agodesk-speech` sidecar on startup.
+pub fn init_speech_models_from_env() {
+    normalize_legacy_model_layouts();
+    if let Ok(custom) = std::env::var("AGODESK_SPEECH_MODELS") {
+        register_models_search_root(PathBuf::from(custom));
+    }
+}
+
+pub fn root_has_installed_models(root: &Path) -> bool {
+    if root.join(SENSE_VOICE_TARGET_DIR).exists() || root.join("whisper-small-de").exists() {
+        return true;
+    }
+    let supertonic = root.join("supertonic");
+    supertonic.join("onnx/tts.json").is_file()
+        || supertonic.join("tts.json").is_file()
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AsrModelKind {
     SenseVoiceInt8,
@@ -110,11 +128,16 @@ pub fn normalize_legacy_model_layouts() {
 }
 
 pub fn models_root() -> PathBuf {
+    #[cfg(feature = "speech-supertonic")]
+    if let Some(files) = super::tts_supertonic::discover_supertonic() {
+        if let Some(parent) = files.base_dir.parent() {
+            return parent.to_path_buf();
+        }
+    }
+
     models_search_roots()
         .into_iter()
-        .find(|root| {
-            root.join(SENSE_VOICE_TARGET_DIR).exists() || root.join("whisper-small-de").exists()
-        })
+        .find(|root| root_has_installed_models(root))
         .or_else(|| {
             models_search_roots()
                 .into_iter()

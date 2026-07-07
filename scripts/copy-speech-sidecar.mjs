@@ -37,7 +37,7 @@ if (process.argv.includes("--ensure-dummy")) {
 if (!existsSync(source)) {
   console.error(`Speech sidecar binary missing: ${source}`);
   console.error(
-    "Run: cd src-tauri && cargo build --release --bin agodesk-speech --features speech-sidecar",
+    "Run: cd src-tauri && cargo build --release --bin agodesk-speech --features speech-sidecar,speech-supertonic",
   );
   process.exit(1);
 }

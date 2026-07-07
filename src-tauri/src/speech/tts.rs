@@ -149,12 +149,29 @@ pub fn supertonic_ready() -> bool {
 }
 
 pub fn supertonic_status() -> SupertonicStatus {
+    let models_root = {
+        #[cfg(feature = "speech-supertonic")]
+        {
+            if let Some(files) = super::tts_supertonic::discover_supertonic() {
+                files.base_dir.to_string_lossy().to_string()
+            } else {
+                super::asr::models_root()
+                    .join("supertonic")
+                    .to_string_lossy()
+                    .to_string()
+            }
+        }
+        #[cfg(not(feature = "speech-supertonic"))]
+        {
+            super::asr::models_root()
+                .join("supertonic")
+                .to_string_lossy()
+                .to_string()
+        }
+    };
     SupertonicStatus {
         ready: supertonic_ready(),
-        models_root: super::asr::models_root()
-            .join("supertonic")
-            .to_string_lossy()
-            .to_string(),
+        models_root,
         download_hint: supertonic_download_hint(),
         voices: SUPERTONIC_VOICES.iter().map(|v| v.to_string()).collect(),
     }

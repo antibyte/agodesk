@@ -31,6 +31,9 @@ import { normalizeServerUrl } from "./server-url";
 import { updateSettings } from "../stores/settings";
 import { applyUiTheme, initThemeListener } from "./theme";
 import { normalizeShowWindowHotkey } from "./show-window-hotkey";
+import { resolveOnboardingInSettings, clearLegacyOnboardingFlag } from "./onboarding";
+import { get } from "svelte/store";
+import { settings } from "../stores/settings";
 import { defaultLocalAsrModelForAppLocale } from "./local-asr-model";
 import {
   applySpeechLocaleDefaults,
@@ -374,6 +377,10 @@ export function normalizeAppSettings(saved: Partial<AppSettings> | null | undefi
       typeof saved?.speechVisualizerEnabled === "boolean"
         ? saved.speechVisualizerEnabled
         : DEFAULT_SETTINGS.speechVisualizerEnabled,
+    onboardingCompleted:
+      typeof saved?.onboardingCompleted === "boolean"
+        ? saved.onboardingCompleted
+        : DEFAULT_SETTINGS.onboardingCompleted,
   };
 }
 
@@ -400,12 +407,24 @@ export async function loadSettings(): Promise<AppSettings> {
     const loaded = await getStore();
     const saved = await loaded.get<Partial<AppSettings>>(SETTINGS_KEY);
     const merged = normalizeAppSettings(saved);
-    await applySettings(merged);
-    return merged;
+    const withOnboarding = await resolveOnboardingInSettings(merged);
+    await applySettings(withOnboarding);
+
+    if (withOnboarding.onboardingCompleted && !merged.onboardingCompleted) {
+      try {
+        await loaded.set(SETTINGS_KEY, withOnboarding);
+        await loaded.save();
+      } catch {
+        // Theme/Locale sind bereits angewendet, auch wenn Persistenz fehlschlägt
+      }
+    }
+
+    return withOnboarding;
   } catch {
     const fallback = normalizeAppSettings(DEFAULT_SETTINGS);
-    await applySettings(fallback);
-    return fallback;
+    const withOnboarding = await resolveOnboardingInSettings(fallback);
+    await applySettings(withOnboarding);
+    return withOnboarding;
   }
 }
 
@@ -420,4 +439,21 @@ export async function saveSettings(next: AppSettings): Promise<void> {
   } catch {
     // Theme/Locale sind bereits angewendet, auch wenn Persistenz fehlschlägt
   }
+}
+
+export async function markOnboardingCompleted(): Promise<void> {
+  const current = normalizeAppSettings(get(settings));
+  if (current.onboardingCompleted) {
+    clearLegacyOnboardingFlag();
+    return;
+  }
+
+  await saveSettings({ ...current, onboardingCompleted: true });
+  clearLegacyOnboardingFlag();
+}
+
+export async function resetOnboardingCompleted(): Promise<void> {
+  const current = normalizeAppSettings(get(settings));
+  await saveSettings({ ...current, onboardingCompleted: false });
+  clearLegacyOnboardingFlag();
 }

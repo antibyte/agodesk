@@ -32,10 +32,13 @@ pub fn run() {
         .manage(oauth::OAuthListenerState::default())
         .setup(|app| {
             speech::runtime::init_sherpa_runtime();
-            speech::asr::normalize_legacy_model_layouts();
             if let Ok(dir) = app.path().app_data_dir() {
-                speech::asr::register_models_search_root(dir.join("speech-models"));
+                let speech_models = dir.join("speech-models");
+                if std::env::var("AGODESK_SPEECH_MODELS").is_err() {
+                    std::env::set_var("AGODESK_SPEECH_MODELS", &speech_models);
+                }
             }
+            speech::asr::init_speech_models_from_env();
             let app_data = app
                 .path()
                 .app_data_dir()

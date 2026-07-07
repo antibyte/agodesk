@@ -81,12 +81,16 @@ fn send_speech_sidecar_request_spawn(
         params,
     };
 
-    let mut child = Command::new(sidecar_binary_path())
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .spawn()
-        .map_err(|error| format!("Failed to spawn agodesk-speech: {error}"))?;
+    let mut child = {
+        let mut command = Command::new(sidecar_binary_path());
+        command.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::null());
+        if let Ok(models_root) = std::env::var("AGODESK_SPEECH_MODELS") {
+            command.env("AGODESK_SPEECH_MODELS", models_root);
+        }
+        command
+            .spawn()
+            .map_err(|error| format!("Failed to spawn agodesk-speech: {error}"))?
+    };
 
     {
         let stdin = child
