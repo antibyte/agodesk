@@ -25,6 +25,12 @@ pub fn root_has_installed_models(root: &Path) -> bool {
     if root.join(SENSE_VOICE_TARGET_DIR).exists() || root.join("whisper-small-de").exists() {
         return true;
     }
+    if KROKO_LANGS
+        .iter()
+        .any(|lang| root.join(format!("kroko-{lang}")).exists())
+    {
+        return true;
+    }
     let supertonic = root.join("supertonic");
     supertonic.join("onnx/tts.json").is_file()
         || supertonic.join("tts.json").is_file()
@@ -34,6 +40,7 @@ pub fn root_has_installed_models(root: &Path) -> bool {
 pub enum AsrModelKind {
     SenseVoiceInt8,
     WhisperSmallDe,
+    KrokoZipformer,
 }
 
 #[derive(Debug, Clone)]
@@ -45,6 +52,12 @@ pub enum AsrModelLayout {
     Whisper {
         encoder_path: PathBuf,
         decoder_path: PathBuf,
+        tokens_path: PathBuf,
+    },
+    KrokoTransducer {
+        encoder_path: PathBuf,
+        decoder_path: PathBuf,
+        joiner_path: PathBuf,
         tokens_path: PathBuf,
     },
 }
@@ -114,6 +127,15 @@ const SENSE_VOICE_EXTRACTED_DIRS: &[&str] = &[
 ];
 const SENSE_VOICE_TARGET_DIR: &str = "sense-voice-int8";
 
+/// Kroko Community ASR languages (sherpa-onnx streaming Zipformer transducers).
+pub const KROKO_LANGS: &[&str] = &["de", "en", "fr", "es", "it", "pt", "tr"];
+
+/// Returns the Kroko language code (e.g. `"de"`) for a `kroko_*` model id.
+pub fn kroko_language_from_model_id(model_id: &str) -> Option<&'static str> {
+    let lang = model_id.strip_prefix("kroko_")?;
+    KROKO_LANGS.iter().copied().find(|candidate| *candidate == lang)
+}
+
 /// Renames legacy extracted ASR folders to the canonical layout.
 pub fn normalize_legacy_model_layouts() {
     for root in models_search_roots() {
@@ -181,23 +203,28 @@ pub fn prefers_sense_voice_for_language(language: Option<&str>) -> bool {
 }
 
 pub fn parse_model_kind(model_id: Option<&str>) -> AsrModelKind {
-    match normalize_model_id(model_id).as_str() {
+    let normalized = normalize_model_id(model_id);
+    if kroko_language_from_model_id(&normalized).is_some() {
+        return AsrModelKind::KrokoZipformer;
+    }
+    match normalized.as_str() {
         "whisper_small_de" => AsrModelKind::WhisperSmallDe,
         _ => AsrModelKind::SenseVoiceInt8,
     }
 }
 
 pub fn discover_asr_model(model_id: Option<&str>) -> Option<AsrModelFiles> {
-    let kind = parse_model_kind(model_id);
+    let normalized = normalize_model_id(model_id);
+    let kind = parse_model_kind(Some(&normalized));
     for root in models_search_roots() {
-        if let Some(files) = discover_in_root(&root, kind) {
+        if let Some(files) = discover_in_root(&root, kind, &normalized) {
             return Some(files);
         }
     }
     None
 }
 
-fn discover_in_root(root: &Path, kind: AsrModelKind) -> Option<AsrModelFiles> {
+fn discover_in_root(root: &Path, kind: AsrModelKind, model_id: &str) -> Option<AsrModelFiles> {
     if !root.exists() {
         return None;
     }
@@ -205,6 +232,10 @@ fn discover_in_root(root: &Path, kind: AsrModelKind) -> Option<AsrModelFiles> {
     match kind {
         AsrModelKind::SenseVoiceInt8 => discover_sense_voice(root),
         AsrModelKind::WhisperSmallDe => discover_whisper_small(root),
+        AsrModelKind::KrokoZipformer => {
+            let lang = kroko_language_from_model_id(model_id)?;
+            discover_kroko(root, lang)
+        }
     }
 }
 
@@ -280,6 +311,58 @@ fn whisper_files_in_dir(dir: &Path) -> Option<AsrModelFiles> {
     None
 }
 
+/// Canonical target dir (`kroko-de`) plus the release archive's extracted dir name.
+fn kroko_dir_candidates(root: &Path, lang: &str) -> Vec<PathBuf> {
+    vec![
+        root.join(format!("kroko-{lang}")),
+        root.join(format!("sherpa-onnx-streaming-zipformer-{lang}-kroko-2025-08-06")),
+    ]
+}
+
+/// Prefers the int8-quantized ONNX file, falling back to the full-precision one.
+fn pick_onnx(dir: &Path, base: &str) -> Option<PathBuf> {
+    let int8 = dir.join(format!("{base}.int8.onnx"));
+    if file_exists(&int8) {
+        return Some(int8);
+    }
+    let plain = dir.join(format!("{base}.onnx"));
+    if file_exists(&plain) {
+        return Some(plain);
+    }
+    None
+}
+
+fn discover_kroko(root: &Path, lang: &str) -> Option<AsrModelFiles> {
+    for dir in kroko_dir_candidates(root, lang) {
+        if let Some(files) = kroko_files_in_dir(&dir) {
+            return Some(files);
+        }
+    }
+    None
+}
+
+fn kroko_files_in_dir(dir: &Path) -> Option<AsrModelFiles> {
+    if !dir.is_dir() {
+        return None;
+    }
+    let encoder = pick_onnx(dir, "encoder")?;
+    let decoder = pick_onnx(dir, "decoder")?;
+    let joiner = pick_onnx(dir, "joiner")?;
+    let tokens = dir.join("tokens.txt");
+    if !file_exists(&tokens) {
+        return None;
+    }
+    Some(AsrModelFiles {
+        kind: AsrModelKind::KrokoZipformer,
+        layout: AsrModelLayout::KrokoTransducer {
+            encoder_path: encoder,
+            decoder_path: decoder,
+            joiner_path: joiner,
+            tokens_path: tokens,
+        },
+    })
+}
+
 pub fn asr_model_ready(model_id: Option<&str>) -> bool {
     #[cfg(feature = "speech-asr")]
     {
@@ -311,6 +394,14 @@ pub fn asr_status(model_id: Option<&str>) -> AsrStatus {
             Some(encoder_path.to_string_lossy().to_string()),
             Some(tokens_path.to_string_lossy().to_string()),
         ),
+        Some(AsrModelLayout::KrokoTransducer {
+            encoder_path,
+            tokens_path,
+            ..
+        }) => (
+            Some(encoder_path.to_string_lossy().to_string()),
+            Some(tokens_path.to_string_lossy().to_string()),
+        ),
         None => (None, None),
     };
     AsrStatus {
@@ -324,12 +415,27 @@ pub fn asr_status(model_id: Option<&str>) -> AsrStatus {
 }
 
 pub fn download_hint_for(model_id: &str) -> String {
-    match normalize_model_id(Some(model_id)).as_str() {
+    let normalized = normalize_model_id(Some(model_id));
+    if let Some(lang) = kroko_language_from_model_id(&normalized) {
+        return format!(
+            "Select the Kroko ({}) model in settings to download it (~55-155 MB).",
+            lang.to_uppercase()
+        );
+    }
+    match normalized.as_str() {
         "whisper_small_de" => {
             "Select Whisper in settings to download the model (~610 MB).".to_string()
         }
         _ => "Select SenseVoice in settings to download the model (~160 MB).".to_string(),
     }
+}
+
+/// Kroko models are language-specific; the tag is derived from the model id.
+pub fn map_kroko_language(model_id: Option<&str>) -> String {
+    model_id
+        .and_then(kroko_language_from_model_id)
+        .unwrap_or("de")
+        .to_string()
 }
 
 pub fn map_sense_voice_language(language: Option<&str>) -> String {
@@ -405,5 +511,21 @@ mod tests {
             normalize_model_id(Some("omnilingual_ctc_int8")),
             "sense_voice_int8"
         );
+    }
+
+    #[test]
+    fn kroko_ids_parse_as_zipformer() {
+        for lang in KROKO_LANGS {
+            let id = format!("kroko_{lang}");
+            assert_eq!(parse_model_kind(Some(&id)), AsrModelKind::KrokoZipformer);
+            assert_eq!(kroko_language_from_model_id(&id), Some(*lang));
+        }
+    }
+
+    #[test]
+    fn kroko_language_tag_falls_back_to_de() {
+        assert_eq!(map_kroko_language(Some("kroko_fr")), "fr");
+        assert_eq!(map_kroko_language(Some("kroko_unknown")), "de");
+        assert_eq!(kroko_language_from_model_id("kroko_xx"), None);
     }
 }

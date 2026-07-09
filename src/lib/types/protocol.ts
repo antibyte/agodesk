@@ -2316,7 +2316,16 @@ export const SPEECH_PROVIDERS: readonly SpeechProvider[] = [
   "offline",
 ] as const;
 
-export type LocalAsrModel = "whisper_small_de" | "sense_voice_int8";
+export type LocalAsrModel =
+  | "whisper_small_de"
+  | "sense_voice_int8"
+  | "kroko_de"
+  | "kroko_en"
+  | "kroko_fr"
+  | "kroko_es"
+  | "kroko_it"
+  | "kroko_pt"
+  | "kroko_tr";
 
 export type HybridTtsBackend = "piper" | "edge_tts" | "azure" | "supertonic";
 

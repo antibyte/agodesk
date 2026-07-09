@@ -61,7 +61,9 @@
   } from "../services/speech-sidecar";
   import {
     defaultLocalAsrModelForAppLocale,
-    LOCAL_ASR_MODEL_OPTIONS,
+    KROKO_ASR_MODELS,
+    LEGACY_ASR_MODELS,
+    prefersKrokoForAppLocale,
     prefersSenseVoiceForAppLocale,
   } from "../services/local-asr-model";
   import {
@@ -123,7 +125,8 @@
 
   const GEMINI_VOICE_OPTIONS = ["Zephyr", "Puck", "Charon", "Kore", "Fenrir", "Aoede"] as const;
 
-  const LOCAL_ASR_MODEL_OPTIONS_LIST = LOCAL_ASR_MODEL_OPTIONS;
+  const KROKO_ASR_MODEL_LIST = KROKO_ASR_MODELS;
+  const LEGACY_ASR_MODEL_LIST = LEGACY_ASR_MODELS;
 
   const THEME_MODES: ThemeMode[] = ["system", "light", "dark"];
   const CHAT_TTS_MODES: ChatTtsMode[] = ["auto", "aurago", "frontend", "off"];
@@ -2505,21 +2508,35 @@
                         void handleLocalAsrModelChange(event.currentTarget.value as LocalAsrModel)}
                       disabled={!draftSpeech.enabled || asrDownloading}
                     >
-                      {#each LOCAL_ASR_MODEL_OPTIONS_LIST as model (model)}
-                        <option value={model}>
-                          {$i18n(`settings.speech.localAsrModel.${model}` as MessageKey)}
-                        </option>
-                      {/each}
+                      <optgroup label={$i18n("settings.speech.localAsrModel.group.kroko")}>
+                        {#each KROKO_ASR_MODEL_LIST as model (model)}
+                          <option value={model}>
+                            {$i18n(`settings.speech.localAsrModel.${model}` as MessageKey)}
+                          </option>
+                        {/each}
+                      </optgroup>
+                      <optgroup label={$i18n("settings.speech.localAsrModel.group.legacy")}>
+                        {#each LEGACY_ASR_MODEL_LIST as model (model)}
+                          <option value={model}>
+                            {$i18n(`settings.speech.localAsrModel.${model}` as MessageKey)}
+                          </option>
+                        {/each}
+                      </optgroup>
                     </select>
                     {#if showLocalAsrModelHint}
                       <p class="help warn">
                         {$i18n(
-                          prefersSenseVoiceForAppLocale(draftLocale)
-                            ? "settings.speech.localAsrModel.senseVoiceRecommendedHint"
-                            : "settings.speech.localAsrModel.whisperRecommendedHint",
+                          prefersKrokoForAppLocale(draftLocale)
+                            ? "settings.speech.localAsrModel.krokoRecommendedHint"
+                            : prefersSenseVoiceForAppLocale(draftLocale)
+                              ? "settings.speech.localAsrModel.senseVoiceRecommendedHint"
+                              : "settings.speech.localAsrModel.whisperRecommendedHint",
                         )}
                       </p>
                     {/if}
+                    <p class="help">
+                      {$i18n("settings.speech.localAsrModel.krokoLicenseHint")}
+                    </p>
                   </label>
                   {#if asrDownloading}
                     <div class="asr-download">

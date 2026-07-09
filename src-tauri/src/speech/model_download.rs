@@ -53,6 +53,38 @@ fn spec_for(model_id: &str) -> Result<ModelSpec, String> {
             target_dir: "whisper-small-de",
             archive_bytes_hint: 639_000_000,
         }),
+        "kroko_de" => Ok(ModelSpec {
+            model_id: "kroko_de",
+            archive_name: "sherpa-onnx-streaming-zipformer-de-kroko-2025-08-06.tar.bz2",
+            url: "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-zipformer-de-kroko-2025-08-06.tar.bz2",
+            extracted_dir: "sherpa-onnx-streaming-zipformer-de-kroko-2025-08-06",
+            target_dir: "kroko-de",
+            archive_bytes_hint: 57_600_000,
+        }),
+        "kroko_en" => Ok(ModelSpec {
+            model_id: "kroko_en",
+            archive_name: "sherpa-onnx-streaming-zipformer-en-kroko-2025-08-06.tar.bz2",
+            url: "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-zipformer-en-kroko-2025-08-06.tar.bz2",
+            extracted_dir: "sherpa-onnx-streaming-zipformer-en-kroko-2025-08-06",
+            target_dir: "kroko-en",
+            archive_bytes_hint: 57_300_000,
+        }),
+        "kroko_fr" => Ok(ModelSpec {
+            model_id: "kroko_fr",
+            archive_name: "sherpa-onnx-streaming-zipformer-fr-kroko-2025-08-06.tar.bz2",
+            url: "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-zipformer-fr-kroko-2025-08-06.tar.bz2",
+            extracted_dir: "sherpa-onnx-streaming-zipformer-fr-kroko-2025-08-06",
+            target_dir: "kroko-fr",
+            archive_bytes_hint: 57_200_000,
+        }),
+        "kroko_es" => Ok(ModelSpec {
+            model_id: "kroko_es",
+            archive_name: "sherpa-onnx-streaming-zipformer-es-kroko-2025-08-06.tar.bz2",
+            url: "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-zipformer-es-kroko-2025-08-06.tar.bz2",
+            extracted_dir: "sherpa-onnx-streaming-zipformer-es-kroko-2025-08-06",
+            target_dir: "kroko-es",
+            archive_bytes_hint: 124_400_000,
+        }),
         other => Err(format!("Unknown ASR model: {other}")),
     }
 }
@@ -263,9 +295,22 @@ fn whisper_model_ready(dir: &Path) -> bool {
         && dir.join("small-tokens.txt").is_file()
 }
 
+fn kroko_dir_ready(dir: &Path) -> bool {
+    if !dir.is_dir() {
+        return false;
+    }
+    let has = |base: &str| {
+        dir.join(format!("{base}.int8.onnx")).is_file() || dir.join(format!("{base}.onnx")).is_file()
+    };
+    has("encoder") && has("decoder") && has("joiner") && dir.join("tokens.txt").is_file()
+}
+
 fn dir_has_model(model_id: &str, dir: &Path) -> bool {
     if !dir.is_dir() {
         return false;
+    }
+    if super::asr::kroko_language_from_model_id(model_id).is_some() {
+        return kroko_dir_ready(dir);
     }
     match model_id {
         "whisper_small_de" => whisper_model_ready(dir),
@@ -385,6 +430,14 @@ fn download_asr_model_inner(app: &AppHandle, model_id: &str) -> Result<(), Strin
         return Ok(());
     }
 
+    // Kroko IT/PT/TR ship only as loose files on Hugging Face (no release archive).
+    let normalized = super::asr::normalize_model_id(Some(model_id));
+    if let Some(lang) = super::asr::kroko_language_from_model_id(&normalized) {
+        if KROKO_HF_LANGS.contains(&lang) {
+            return download_kroko_hf_inner(app, model_id, lang);
+        }
+    }
+
     let spec = spec_for(model_id)?;
     let models_root = ensure_models_root(app)?;
     let archive_path = models_root.join(spec.archive_name);
@@ -413,6 +466,70 @@ fn download_asr_model_inner(app: &AppHandle, model_id: &str) -> Result<(), Strin
         return Err(format!(
             "Model files missing after install for {}",
             spec.target_dir
+        ));
+    }
+
+    #[cfg(feature = "speech-asr")]
+    super::asr_sherpa::reset_recognizer_cache();
+
+    emit(app, model_id, "complete", 100.0, None);
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Kroko IT/PT/TR (loose files from HuggingFace, no release archive)
+// ---------------------------------------------------------------------------
+
+/// Kroko languages that are only published as loose ONNX files on Hugging Face.
+const KROKO_HF_LANGS: &[&str] = &["it", "pt", "tr"];
+
+struct KrokoHfFile {
+    name: &'static str,
+    bytes_hint: u64,
+}
+
+const KROKO_HF_FILES: &[KrokoHfFile] = &[
+    KrokoHfFile { name: "encoder.onnx", bytes_hint: 155_000_000 },
+    KrokoHfFile { name: "decoder.onnx", bytes_hint: 620_000 },
+    KrokoHfFile { name: "joiner.onnx", bytes_hint: 340_000 },
+    KrokoHfFile { name: "tokens.txt", bytes_hint: 7_000 },
+];
+
+fn download_kroko_hf_inner(app: &AppHandle, model_id: &str, lang: &str) -> Result<(), String> {
+    let models_root = ensure_models_root(app)?;
+    let target = models_root.join(format!("kroko-{lang}"));
+    fs::create_dir_all(&target).map_err(|error| error.to_string())?;
+
+    if kroko_dir_ready(&target) {
+        #[cfg(feature = "speech-asr")]
+        super::asr_sherpa::reset_recognizer_cache();
+        emit(app, model_id, "complete", 100.0, None);
+        return Ok(());
+    }
+
+    emit(app, model_id, "downloading", 0.0, None);
+    let total: u64 = KROKO_HF_FILES.iter().map(|file| file.bytes_hint).sum();
+    let mut downloaded: u64 = 0;
+    let repo = format!("kouhxp/sherpa-onnx-streaming-zipformer-{lang}-kroko");
+
+    for file in KROKO_HF_FILES {
+        let dest = target.join(file.name);
+        if dest.is_file() {
+            if let Ok(meta) = fs::metadata(&dest) {
+                if meta.len() > 0 {
+                    downloaded += meta.len();
+                    continue;
+                }
+            }
+        }
+        let url = format!("https://huggingface.co/{repo}/resolve/main/{}", file.name);
+        download_file_streaming(&url, &dest, &mut downloaded, total, app, model_id)?;
+    }
+
+    if !kroko_dir_ready(&target) {
+        return Err(format!(
+            "Kroko model files missing after install in {}",
+            target.display()
         ));
     }
 
@@ -750,6 +867,23 @@ mod tests {
         assert!(spec_for("whisper_small_de").is_ok());
         assert!(parse_model_kind(Some("whisper_small_de")) == AsrModelKind::WhisperSmallDe);
         assert!(parse_model_kind(Some("sense_voice_int8")) == AsrModelKind::SenseVoiceInt8);
+    }
+
+    #[test]
+    fn kroko_release_langs_have_specs() {
+        for lang in ["de", "en", "fr", "es"] {
+            let id = format!("kroko_{lang}");
+            let spec = spec_for(&id).expect("release spec");
+            assert_eq!(spec.target_dir, format!("kroko-{lang}"));
+            assert!(spec.url.contains(&format!("{lang}-kroko")));
+        }
+    }
+
+    #[test]
+    fn kroko_hf_langs_are_not_release_specs() {
+        for lang in KROKO_HF_LANGS {
+            assert!(spec_for(&format!("kroko_{lang}")).is_err());
+        }
     }
 
     #[test]

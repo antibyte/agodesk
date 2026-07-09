@@ -4,6 +4,7 @@ import type {
   ChatTtsMode,
   FileAccessRoot,
   FileAccessSettings,
+  LocalAsrModel,
   OpenPetsSettings,
   ShellAccessCwd,
   ShellAccessSettings,
@@ -34,7 +35,10 @@ import { normalizeShowWindowHotkey } from "./show-window-hotkey";
 import { resolveOnboardingInSettings, clearLegacyOnboardingFlag } from "./onboarding";
 import { get } from "svelte/store";
 import { settings } from "../stores/settings";
-import { defaultLocalAsrModelForAppLocale } from "./local-asr-model";
+import {
+  defaultLocalAsrModelForAppLocale,
+  LOCAL_ASR_MODEL_OPTIONS,
+} from "./local-asr-model";
 import {
   applySpeechLocaleDefaults,
   defaultEdgeTtsVoiceForSpeechLanguage,
@@ -128,9 +132,13 @@ function normalizeSpeechSettings(
         ? saved.voiceName.trim()
         : DEFAULT_SPEECH_SETTINGS.voiceName,
     localAsrModel: (() => {
-      const model = saved.localAsrModel as string | undefined;
-      if (model === "whisper_small_de" || model === "sense_voice_int8") {
-        return model;
+      const model = typeof saved.localAsrModel === "string" ? (saved.localAsrModel as string) : undefined;
+      if (model === "omnilingual_ctc_int8") {
+        return "sense_voice_int8";
+      }
+      const options = LOCAL_ASR_MODEL_OPTIONS as readonly string[];
+      if (model && options.includes(model)) {
+        return model as LocalAsrModel;
       }
       return defaultAsrModel;
     })(),

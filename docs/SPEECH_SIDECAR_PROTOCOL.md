@@ -40,7 +40,7 @@ Local ASR (sherpa-onnx).
 | `pcm_base64` | string | 16-bit LE PCM, mono |
 | `sample_rate` | number | typically `16000` |
 | `language` | string? | BCP-47 hint, e.g. `de-DE` |
-| `model` | string? | `omnilingual_ctc_int8` or `whisper_small_de` |
+| `model` | string? | `whisper_small_de`, `sense_voice_int8`, or `kroko_{de,en,fr,es,it,pt,tr}` |
 
 **Response `data`:** `{ "text": "...", "language": "de", "model_ready": true }`
 
@@ -50,7 +50,7 @@ Without a model: error (production) or dev placeholder when `AGODESK_SPEECH_DEV=
 
 Check whether the local ASR model files exist.
 
-**Params:** `{ "model": "omnilingual_ctc_int8" | "whisper_small_de" | null }`
+**Params:** `{ "model": "whisper_small_de" | "sense_voice_int8" | "kroko_de" | … | null }`
 
 **Response `data`:** `{ "model_id", "ready", "model_path", "tokens_path", "models_root", "download_hint" }`
 
