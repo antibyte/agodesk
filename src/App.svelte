@@ -39,9 +39,15 @@
     <span class="chaos-blob chaos-blob-5">⚡</span>
   </div>
   <div class="cyber-extras" aria-hidden="true">
+    <div class="cyber-carbon"></div>
+    <div class="cyber-bloom cyber-bloom-a"></div>
+    <div class="cyber-bloom cyber-bloom-b"></div>
+    <div class="cyber-bloom cyber-bloom-c"></div>
     <div class="cyber-grid"></div>
     <div class="cyber-hex"></div>
+    <div class="cyber-sheen"></div>
     <div class="cyber-beam"></div>
+    <div class="cyber-chrome-rim"></div>
     <span class="cyber-hud cyber-hud-tl">SYS::ONLINE</span>
     <span class="cyber-hud cyber-hud-tr">AURA::LINK</span>
     <span class="cyber-hud cyber-hud-bl">NET::SYNC</span>
@@ -421,12 +427,12 @@
     background-image:
       repeating-linear-gradient(
         to bottom,
-        rgba(0, 240, 255, 0.022) 0px,
-        rgba(0, 240, 255, 0.022) 1px,
+        rgba(0, 240, 255, 0.035) 0px,
+        rgba(0, 240, 255, 0.035) 1px,
         transparent 1px,
         transparent 4px
       ),
-      radial-gradient(ellipse 60% 40% at 50% 100%, rgba(255, 69, 0, 0.05), transparent 70%);
+      radial-gradient(ellipse 60% 40% at 50% 100%, rgba(255, 69, 0, 0.1), transparent 70%);
     mix-blend-mode: normal;
   }
   :global(:root[data-ui-theme="cyberpunk"]) .cyber-extras {
@@ -444,6 +450,53 @@
     border-radius: inherit;
   }
 
+  .cyber-carbon {
+    position: absolute;
+    inset: 0;
+    opacity: 0.14;
+    background-image:
+      url("data:image/svg+xml,%3Csvg width='48' height='48' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M0 24h48M24 0v48' stroke='%2300f0ff' stroke-width='0.4' opacity='0.35'/%3E%3Cpath d='M0 0l48 48M48 0L0 48' stroke='%23ff4500' stroke-width='0.3' opacity='0.2'/%3E%3C/svg%3E"),
+      repeating-linear-gradient(
+        0deg,
+        rgba(0, 240, 255, 0.03) 0px,
+        rgba(0, 240, 255, 0.03) 1px,
+        transparent 1px,
+        transparent 3px
+      );
+    background-size: 48px 48px, 100% 100%;
+    mix-blend-mode: screen;
+  }
+
+  .cyber-bloom {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(48px);
+    pointer-events: none;
+    opacity: 0.55;
+  }
+  .cyber-bloom-a {
+    width: 42%;
+    height: 34%;
+    top: -8%;
+    left: -6%;
+    background: radial-gradient(circle, rgba(0, 240, 255, 0.55) 0%, transparent 70%);
+  }
+  .cyber-bloom-b {
+    width: 38%;
+    height: 30%;
+    right: -8%;
+    bottom: 8%;
+    background: radial-gradient(circle, rgba(255, 69, 0, 0.5) 0%, transparent 70%);
+  }
+  .cyber-bloom-c {
+    width: 28%;
+    height: 22%;
+    left: 38%;
+    top: 42%;
+    background: radial-gradient(circle, rgba(250, 255, 0, 0.22) 0%, transparent 70%);
+    opacity: 0.35;
+  }
+
   .cyber-grid {
     position: absolute;
     left: -30%;
@@ -451,24 +504,62 @@
     bottom: -12%;
     height: 46%;
     background-image:
-      linear-gradient(rgba(0, 240, 255, 0.2) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(255, 69, 0, 0.14) 1px, transparent 1px);
+      linear-gradient(rgba(0, 240, 255, 0.32) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 69, 0, 0.22) 1px, transparent 1px);
     background-size: 44px 44px;
     transform: perspective(420px) rotateX(62deg) translateZ(0);
     transform-origin: 50% 0%;
     mask-image: linear-gradient(180deg, transparent 0%, #000 34%, #000 100%);
     -webkit-mask-image: linear-gradient(180deg, transparent 0%, #000 34%, #000 100%);
     animation: cyber-grid-scroll 14s linear infinite;
-    opacity: 0.32;
+    opacity: 0.48;
     will-change: transform;
   }
 
   .cyber-hex {
     position: absolute;
     inset: 0;
-    opacity: 0.06;
+    opacity: 0.12;
     background-image: url("data:image/svg+xml,%3Csvg width='56' height='100' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M28 0 L56 16 L56 50 L28 66 L0 50 L0 16 Z' fill='none' stroke='%2300f0ff' stroke-width='0.6'/%3E%3C/svg%3E");
     background-size: 56px 100px;
+  }
+
+  .cyber-sheen {
+    position: absolute;
+    inset: -20%;
+    background: linear-gradient(
+      115deg,
+      transparent 36%,
+      rgba(255, 255, 255, 0.04) 44%,
+      rgba(0, 240, 255, 0.14) 50%,
+      rgba(255, 255, 255, 0.06) 56%,
+      transparent 64%
+    );
+    transform: translateX(-40%);
+    animation: cyber-sheen-sweep 14s ease-in-out infinite;
+    mix-blend-mode: screen;
+    opacity: 0.85;
+    will-change: transform;
+  }
+
+  @keyframes cyber-sheen-sweep {
+    0%,
+    18% {
+      transform: translateX(-45%) translateY(4%);
+      opacity: 0;
+    }
+    28% {
+      opacity: 0.9;
+    }
+    55% {
+      transform: translateX(35%) translateY(-2%);
+      opacity: 0.75;
+    }
+    70%,
+    100% {
+      transform: translateX(55%) translateY(-4%);
+      opacity: 0;
+    }
   }
 
   @keyframes cyber-grid-scroll {
@@ -487,7 +578,7 @@
     letter-spacing: 0.12em;
     text-transform: uppercase;
     color: rgba(0, 240, 255, 0.62);
-    text-shadow: 0 0 6px rgba(0, 240, 255, 0.35);
+    text-shadow: 0 0 10px rgba(0, 240, 255, 0.55);
     opacity: 0.8;
   }
 
@@ -499,13 +590,13 @@
     top: 14px;
     right: 36px;
     color: rgba(255, 69, 0, 0.65);
-    text-shadow: 0 0 6px rgba(255, 69, 0, 0.3);
+    text-shadow: 0 0 10px rgba(255, 69, 0, 0.45);
   }
   .cyber-hud-bl {
     bottom: 14px;
     left: 36px;
     color: rgba(250, 255, 0, 0.62);
-    text-shadow: 0 0 6px rgba(250, 255, 0, 0.25);
+    text-shadow: 0 0 10px rgba(250, 255, 0, 0.45);
   }
   .cyber-hud-br {
     bottom: 14px;
@@ -521,12 +612,12 @@
     background: linear-gradient(
       90deg,
       transparent 0%,
-      rgba(0, 240, 255, 0.45) 30%,
-      rgba(0, 240, 255, 0.65) 50%,
-      rgba(0, 240, 255, 0.45) 70%,
+      rgba(0, 240, 255, 0.55) 30%,
+      rgba(0, 240, 255, 0.85) 50%,
+      rgba(0, 240, 255, 0.55) 70%,
       transparent 100%
     );
-    box-shadow: 0 0 10px rgba(0, 240, 255, 0.35);
+    box-shadow: 0 0 16px rgba(0, 240, 255, 0.55);
     animation: cyber-beam-sweep 18s ease-in-out infinite;
     opacity: 0;
     will-change: transform, opacity;
@@ -550,40 +641,64 @@
     }
   }
 
+  .cyber-chrome-rim {
+    position: absolute;
+    inset: 5px;
+    border-radius: inherit;
+    pointer-events: none;
+    border: 1px solid transparent;
+    background:
+      linear-gradient(transparent, transparent) padding-box,
+      linear-gradient(
+          135deg,
+          rgba(0, 240, 255, 0.85) 0%,
+          rgba(255, 255, 255, 0.35) 28%,
+          rgba(255, 69, 0, 0.75) 62%,
+          rgba(250, 255, 0, 0.45) 100%
+        )
+        border-box;
+    box-shadow:
+      inset 0 0 0 1px rgba(0, 240, 255, 0.18),
+      inset 0 1px 0 rgba(255, 255, 255, 0.22),
+      0 0 28px rgba(0, 240, 255, 0.22),
+      0 0 48px rgba(255, 69, 0, 0.12);
+    opacity: 0.9;
+  }
+
   .cyber-corner {
     position: absolute;
-    width: 22px;
-    height: 22px;
-    opacity: 0.72;
+    width: 26px;
+    height: 26px;
+    opacity: 0.9;
   }
 
   .cyber-corner-tl {
     top: 6px;
     left: 6px;
-    border-top: 2px solid rgba(0, 240, 255, 0.75);
-    border-left: 2px solid rgba(0, 240, 255, 0.75);
-    box-shadow: 0 0 6px rgba(0, 240, 255, 0.25);
+    border-top: 2.5px solid rgba(0, 240, 255, 0.75);
+    border-left: 2.5px solid rgba(0, 240, 255, 0.75);
+    box-shadow: 0 0 10px rgba(0, 240, 255, 0.45);
   }
   .cyber-corner-tr {
     top: 6px;
     right: 6px;
-    border-top: 2px solid rgba(255, 69, 0, 0.75);
-    border-right: 2px solid rgba(255, 69, 0, 0.75);
-    box-shadow: 0 0 6px rgba(255, 69, 0, 0.25);
+    border-top: 2.5px solid rgba(255, 69, 0, 0.75);
+    border-right: 2.5px solid rgba(255, 69, 0, 0.75);
+    box-shadow: 0 0 10px rgba(255, 69, 0, 0.45);
   }
   .cyber-corner-bl {
     bottom: 6px;
     left: 6px;
-    border-bottom: 2px solid rgba(250, 255, 0, 0.65);
-    border-left: 2px solid rgba(250, 255, 0, 0.65);
-    box-shadow: 0 0 6px rgba(250, 255, 0, 0.2);
+    border-bottom: 2.5px solid rgba(250, 255, 0, 0.65);
+    border-left: 2.5px solid rgba(250, 255, 0, 0.65);
+    box-shadow: 0 0 10px rgba(250, 255, 0, 0.45);
   }
   .cyber-corner-br {
     bottom: 6px;
     right: 6px;
-    border-bottom: 2px solid rgba(0, 240, 255, 0.75);
-    border-right: 2px solid rgba(0, 240, 255, 0.75);
-    box-shadow: 0 0 6px rgba(0, 240, 255, 0.25);
+    border-bottom: 2.5px solid rgba(0, 240, 255, 0.75);
+    border-right: 2.5px solid rgba(0, 240, 255, 0.75);
+    box-shadow: 0 0 10px rgba(0, 240, 255, 0.45);
   }
 
   /* ── Papyrus: Pergament-Textur + Alters-Flecken, Layer statisch warm ── */
@@ -941,6 +1056,7 @@
   :global(:root[data-reduce-motion="true"]) .chaos-blob,
   :global(:root[data-reduce-motion="true"]) .aurora-layer,
   :global(:root[data-reduce-motion="true"]) .cyber-grid,
+  :global(:root[data-reduce-motion="true"]) .cyber-sheen,
   :global(:root[data-reduce-motion="true"]) .cyber-beam,
   :global(:root[data-reduce-motion="true"]) .minimal-grid,
   :global(:root[data-reduce-motion="true"]) .blossom-petal,
@@ -948,6 +1064,9 @@
   :global(:root[data-reduce-motion="true"]) .papyrus-dust,
   :global(:root[data-reduce-motion="true"]) .papyrus-brass-inlay {
     animation: none !important;
+  }
+  :global(:root[data-reduce-motion="true"]) .cyber-sheen {
+    opacity: 0 !important;
   }
   :global(:root[data-reduce-motion="true"][data-ui-theme="chaos"]) .theme-overlay {
     animation: none !important;
@@ -957,6 +1076,7 @@
     .aurora-layer,
     .chaos-blob,
     .cyber-grid,
+    .cyber-sheen,
     .cyber-beam,
     .minimal-grid,
     .blossom-petal,
@@ -964,6 +1084,9 @@
     .papyrus-dust,
     .papyrus-brass-inlay {
       animation: none;
+    }
+    .cyber-sheen {
+      opacity: 0;
     }
   }
 </style>
