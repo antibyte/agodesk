@@ -1,5 +1,6 @@
 # Local agent/design tooling
 .commandcode/
+.worktrees/
 
 # Development artifacts
 _create-tauri-app/
