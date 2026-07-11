@@ -272,8 +272,8 @@
 
   --color-bg: #010508;
   --color-bg-elevated: #031018;
-  --color-surface: rgba(2, 14, 20, 0.82);
-  --color-surface-solid: #031018;
+  --color-surface: rgba(2, 14, 20, 0.88);
+  --color-surface-solid: #041820;
   --color-input-bg: rgba(0, 8, 12, 0.94);
   --color-text: #d8feff;
   --color-text-strong: #ffffff;
@@ -304,19 +304,22 @@
   --surface-2: rgba(2, 14, 20, 0.94);
   --edge-light: rgba(0, 240, 255, 0.16);
 
-  --glass-surface: rgba(1, 10, 16, 0.76);
-  --glass-border: rgba(0, 240, 255, 0.34);
-  --glass-highlight: rgba(0, 240, 255, 0.1);
+  --glass-surface: rgba(1, 12, 18, 0.82);
+  --glass-border: rgba(0, 240, 255, 0.48);
+  --glass-highlight: rgba(255, 255, 255, 0.14);
   --blur: 18px;
   --blur-strong: 28px;
 
   --color-panel-shadow:
-    0 0 0 1px rgba(0, 240, 255, 0.24), 0 0 28px rgba(0, 240, 255, 0.14),
-    inset 0 1px 0 rgba(0, 240, 255, 0.08);
+    0 0 0 1px rgba(0, 240, 255, 0.35),
+    0 0 36px rgba(0, 240, 255, 0.22),
+    0 0 64px rgba(255, 69, 0, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    inset 0 -1px 0 rgba(255, 69, 0, 0.14);
   --color-bubble-shadow: 0 0 18px rgba(0, 240, 255, 0.16);
-  --shadow-1: 0 0 10px rgba(0, 240, 255, 0.18);
-  --shadow-2: 0 0 28px rgba(255, 69, 0, 0.2);
-  --shadow-3: 0 0 52px rgba(0, 240, 255, 0.28);
+  --shadow-1: 0 0 14px rgba(0, 240, 255, 0.28);
+  --shadow-2: 0 0 36px rgba(255, 69, 0, 0.28);
+  --shadow-3: 0 0 64px rgba(0, 240, 255, 0.36);
   --accent-glow:
     0 0 0 1px color-mix(in srgb, var(--color-accent) 65%, transparent),
     0 0 22px color-mix(in srgb, var(--color-accent) 55%, transparent);
@@ -345,15 +348,25 @@
 :root[data-ui-theme="cyberpunk"] .status-bar,
 :root[data-ui-theme="cyberpunk"] .input-box {
   position: relative;
-  border-color: rgba(0, 240, 255, 0.38);
+  border-color: rgba(0, 240, 255, 0.5);
+  background-color: rgba(2, 12, 18, 0.92);
   background-image:
-    linear-gradient(90deg, rgba(0, 240, 255, 0.06) 1px, transparent 1px),
-    linear-gradient(rgba(255, 69, 0, 0.04) 1px, transparent 1px);
-  background-size: 24px 24px;
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.14) 0%,
+      rgba(0, 240, 255, 0.08) 12%,
+      transparent 42%,
+      rgba(255, 69, 0, 0.06) 100%
+    ),
+    linear-gradient(90deg, rgba(0, 240, 255, 0.07) 1px, transparent 1px),
+    linear-gradient(rgba(255, 69, 0, 0.05) 1px, transparent 1px);
+  background-size: 100% 100%, 22px 22px, 22px 22px;
   box-shadow:
-    inset 0 1px 0 rgba(0, 240, 255, 0.12),
-    inset 0 -1px 0 rgba(255, 69, 0, 0.1),
-    0 0 18px rgba(0, 240, 255, 0.1);
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    inset 0 -1px 0 rgba(255, 69, 0, 0.18),
+    0 0 0 1px rgba(0, 240, 255, 0.2),
+    0 0 28px rgba(0, 240, 255, 0.2),
+    0 0 48px rgba(255, 69, 0, 0.1);
 }
 
 /* HUD-Optik auf Karten — ohne position, damit fixed/absolute Modals/Panels intakt bleiben. */
@@ -368,15 +381,25 @@
     .onboarding-dialog
   ),
 :root[data-ui-theme="cyberpunk"] .glass-panel-fixed {
-  border-color: rgba(0, 240, 255, 0.38);
+  border-color: rgba(0, 240, 255, 0.5);
+  background-color: rgba(2, 12, 18, 0.92);
   background-image:
-    linear-gradient(90deg, rgba(0, 240, 255, 0.06) 1px, transparent 1px),
-    linear-gradient(rgba(255, 69, 0, 0.04) 1px, transparent 1px);
-  background-size: 24px 24px;
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.14) 0%,
+      rgba(0, 240, 255, 0.08) 12%,
+      transparent 42%,
+      rgba(255, 69, 0, 0.06) 100%
+    ),
+    linear-gradient(90deg, rgba(0, 240, 255, 0.07) 1px, transparent 1px),
+    linear-gradient(rgba(255, 69, 0, 0.05) 1px, transparent 1px);
+  background-size: 100% 100%, 22px 22px, 22px 22px;
   box-shadow:
-    inset 0 1px 0 rgba(0, 240, 255, 0.12),
-    inset 0 -1px 0 rgba(255, 69, 0, 0.1),
-    0 0 18px rgba(0, 240, 255, 0.1);
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    inset 0 -1px 0 rgba(255, 69, 0, 0.18),
+    0 0 0 1px rgba(0, 240, 255, 0.2),
+    0 0 28px rgba(0, 240, 255, 0.2),
+    0 0 48px rgba(255, 69, 0, 0.1);
 }
 
 /* Modals/Overlays: solide Fläche, keine HUD-Deko die Layout bricht. */
@@ -411,20 +434,29 @@
 }
 
 :root[data-ui-theme="cyberpunk"] dialog[open] {
-  border: 1px solid rgba(0, 240, 255, 0.42);
-  background: var(--color-surface-solid);
-  background-image: none;
+  border: 1px solid transparent;
+  background:
+    linear-gradient(#041820, #041820) padding-box,
+    linear-gradient(
+        135deg,
+        rgba(0, 240, 255, 0.85),
+        rgba(255, 255, 255, 0.35),
+        rgba(255, 69, 0, 0.75)
+      )
+      border-box;
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
   box-shadow:
-    inset 0 1px 0 rgba(0, 240, 255, 0.16),
-    0 0 0 1px rgba(255, 69, 0, 0.12),
-    0 0 36px rgba(0, 240, 255, 0.2);
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    inset 0 -1px 0 rgba(255, 69, 0, 0.12),
+    0 0 0 1px rgba(0, 240, 255, 0.2),
+    0 0 48px rgba(0, 240, 255, 0.28);
 }
 
 :root[data-ui-theme="cyberpunk"] dialog[open] .ui-btn.ghost {
-  border-color: rgba(0, 240, 255, 0.32);
-  background: rgba(0, 240, 255, 0.06);
+  border-color: rgba(0, 240, 255, 0.45);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(0, 240, 255, 0.06));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
   color: var(--color-text);
 }
 
@@ -435,14 +467,9 @@
 }
 
 :root[data-ui-theme="cyberpunk"] dialog[open] h2 {
-  text-shadow: 0 0 10px rgba(0, 240, 255, 0.35);
-}
-
-:root[data-ui-theme="cyberpunk"] .status-bar {
-  border-color: rgba(0, 240, 255, 0.42);
-  box-shadow:
-    inset 0 -1px 0 rgba(0, 240, 255, 0.45),
-    0 0 22px rgba(0, 240, 255, 0.14);
+  text-shadow:
+    0 0 12px rgba(0, 240, 255, 0.55),
+    0 0 24px rgba(0, 240, 255, 0.25);
 }
 
 :root[data-ui-theme="cyberpunk"] .status-bar::before,
@@ -490,27 +517,55 @@
 :root[data-ui-theme="cyberpunk"] .status-bar .connection-label {
   text-transform: uppercase;
   letter-spacing: 0.09em;
-  text-shadow: 0 0 6px rgba(0, 240, 255, 0.4);
+  text-shadow:
+    0 0 8px rgba(0, 240, 255, 0.5),
+    0 0 14px rgba(0, 240, 255, 0.28);
 }
 
 /* Composer: Neon-Rahmen, beim Fokus pulsierend. */
-:root[data-ui-theme="cyberpunk"] .input-box {
-  border-color: rgba(0, 240, 255, 0.34);
-}
-
 :root[data-ui-theme="cyberpunk"] .input-box:focus-within {
-  border-color: rgba(0, 240, 255, 0.58);
+  border-color: rgba(0, 240, 255, 0.72);
   box-shadow:
-    inset 0 1px 0 rgba(0, 240, 255, 0.14),
-    0 0 20px rgba(0, 240, 255, 0.22);
+    inset 0 1px 0 rgba(255, 255, 255, 0.2),
+    0 0 0 1px rgba(0, 240, 255, 0.28),
+    0 0 28px rgba(0, 240, 255, 0.35),
+    0 0 48px rgba(255, 69, 0, 0.14);
   transition:
     border-color 0.25s ease,
     box-shadow 0.25s ease;
 }
 
+:root[data-ui-theme="cyberpunk"] .user .bubble {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.1) 0%, transparent 28%),
+    linear-gradient(145deg, #042a32 0%, #0a1218 48%, #2a1208 100%);
+  border: 1px solid rgba(0, 240, 255, 0.55);
+  box-shadow:
+    0 0 0 1px rgba(255, 69, 0, 0.22),
+    0 0 22px rgba(0, 240, 255, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.16);
+  color: var(--color-user-text);
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.45);
+}
+
+:root[data-ui-theme="cyberpunk"] .assistant .bubble {
+  background: linear-gradient(180deg, rgba(0, 240, 255, 0.06), rgba(2, 18, 26, 0.92));
+  border: 1px solid rgba(0, 240, 255, 0.28);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    inset 0 0 0 1px rgba(0, 0, 0, 0.25);
+  color: var(--color-assistant-text);
+}
+
 :root[data-ui-theme="cyberpunk"] .ui-btn-primary {
-  background: linear-gradient(135deg, #00f0ff 0%, #ff4500 100%);
-  text-shadow: 0 0 8px rgba(255, 255, 255, 0.7);
+  background: linear-gradient(135deg, #00f0ff 0%, #1a9fff 38%, #ff4500 100%);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  text-shadow: 0 0 10px rgba(255, 255, 255, 0.85);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.45),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.25),
+    0 0 18px rgba(0, 240, 255, 0.35),
+    0 0 32px rgba(255, 69, 0, 0.2);
   position: relative;
   overflow: hidden;
 }
@@ -522,7 +577,7 @@
   background: linear-gradient(
     105deg,
     transparent 38%,
-    rgba(255, 255, 255, 0.22) 50%,
+    rgba(255, 255, 255, 0.35) 50%,
     transparent 62%
   );
   transform: translateX(-120%);
@@ -538,11 +593,13 @@
 }
 
 :root[data-ui-theme="cyberpunk"] .ui-btn-primary:not(:disabled):hover {
-  filter: brightness(1.08);
+  filter: brightness(1.1);
   box-shadow:
-    0 0 0 1px rgba(0, 240, 255, 0.55),
-    0 0 18px rgba(0, 240, 255, 0.32),
-    0 0 32px rgba(255, 69, 0, 0.18);
+    inset 0 1px 0 rgba(255, 255, 255, 0.55),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.2),
+    0 0 0 1px rgba(0, 240, 255, 0.65),
+    0 0 24px rgba(0, 240, 255, 0.42),
+    0 0 40px rgba(255, 69, 0, 0.28);
   transition:
     filter 0.2s ease,
     box-shadow 0.2s ease;
