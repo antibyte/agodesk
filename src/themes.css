@@ -436,7 +436,7 @@
 :root[data-ui-theme="cyberpunk"] dialog[open] {
   border: 1px solid transparent;
   background:
-    linear-gradient(#041820, #041820) padding-box,
+    linear-gradient(var(--color-surface-solid), var(--color-surface-solid)) padding-box,
     linear-gradient(
         135deg,
         rgba(0, 240, 255, 0.85),

@@ -1065,6 +1065,9 @@
   :global(:root[data-reduce-motion="true"]) .papyrus-brass-inlay {
     animation: none !important;
   }
+  :global(:root[data-reduce-motion="true"]) .cyber-sheen {
+    opacity: 0 !important;
+  }
   :global(:root[data-reduce-motion="true"][data-ui-theme="chaos"]) .theme-overlay {
     animation: none !important;
   }
@@ -1081,6 +1084,9 @@
     .papyrus-dust,
     .papyrus-brass-inlay {
       animation: none;
+    }
+    .cyber-sheen {
+      opacity: 0;
     }
   }
 </style>
