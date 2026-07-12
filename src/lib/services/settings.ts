@@ -32,6 +32,7 @@ import { normalizeServerUrl } from "./server-url";
 import { updateSettings } from "../stores/settings";
 import { applyUiTheme, initThemeListener } from "./theme";
 import { normalizeShowWindowHotkey } from "./show-window-hotkey";
+import { normalizeSpeechHotkey } from "./speech-hotkey";
 import { resolveOnboardingInSettings, clearLegacyOnboardingFlag } from "./onboarding";
 import { get } from "svelte/store";
 import { settings } from "../stores/settings";
@@ -363,6 +364,7 @@ export function normalizeAppSettings(saved: Partial<AppSettings> | null | undefi
         ? saved.minimizeToTray
         : DEFAULT_SETTINGS.minimizeToTray,
     showWindowHotkey: normalizeShowWindowHotkey(saved?.showWindowHotkey),
+    speechHotkey: normalizeSpeechHotkey(saved?.speechHotkey),
     desktopControlEnabled:
       typeof saved?.desktopControlEnabled === "boolean"
         ? saved.desktopControlEnabled

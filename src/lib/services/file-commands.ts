@@ -206,3 +206,77 @@ export async function writeRemoteFile(
     throw error;
   }
 }
+
+export interface FilePatchResult {
+  rootId: string;
+  path: string;
+  dryRun: boolean;
+  applied: boolean;
+  diff: string;
+  sha256Before: string;
+  sha256After: string;
+  replacements: number;
+}
+
+export async function patchRemoteFile(
+  settings: FileAccessSettings,
+  commandId: string,
+  rootId: string | undefined,
+  path: string,
+  patches: Array<{ old_text: string; new_text: string; expected_occurrences?: number }>,
+  maxBytes: number,
+  expectedSha256?: string,
+  dryRun = false,
+): Promise<FilePatchResult> {
+  try {
+    const result = await invoke<{
+      root_id: string;
+      path: string;
+      dry_run: boolean;
+      applied: boolean;
+      diff: string;
+      sha256_before: string;
+      sha256_after: string;
+      replacements: number;
+    }>("file_patch", {
+      roots: mapRootsForInvoke(settings),
+      args: {
+        root_id: rootId,
+        path,
+        expected_sha256: expectedSha256,
+        patches,
+        dry_run: dryRun,
+        max_bytes: maxBytes,
+      },
+    });
+    auditFileAccess({
+      operation: "file_patch",
+      commandId,
+      rootId: result.root_id,
+      path: result.path,
+      bytes: 0,
+      ok: true,
+    });
+    return {
+      rootId: result.root_id,
+      path: result.path,
+      dryRun: result.dry_run,
+      applied: result.applied,
+      diff: result.diff,
+      sha256Before: result.sha256_before,
+      sha256After: result.sha256_after,
+      replacements: result.replacements,
+    };
+  } catch (error) {
+    auditFileAccess({
+      operation: "file_patch",
+      commandId,
+      rootId: rootId ?? "",
+      path,
+      bytes: 0,
+      ok: false,
+      errorCode: mapFileError(error),
+    });
+    throw error;
+  }
+}

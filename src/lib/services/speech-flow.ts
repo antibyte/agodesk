@@ -1,9 +1,13 @@
 import type { SpeechSettings, AgentMoodMetadata } from "../types/protocol";
-import { speechProviderRequiresGeminiApiKey } from "../types/protocol";
+import {
+  speechProviderRequiresGeminiApiKey,
+  speechProviderRequiresXaiApiKey,
+} from "../types/protocol";
 
 import type { SpeechAgentContext } from "../types/speech";
 
 import { loadGeminiApiKey } from "./gemini-credentials";
+import { hasXaiApiKey } from "./xai-credentials";
 
 import { isMicrophoneSupported, SpeechAudioCapture } from "./speech-audio";
 
@@ -57,6 +61,34 @@ export function isAiSpeaking(): boolean {
   return liveSession?.isAiSpeaking ?? false;
 }
 
+/** True when the active live session can speak arbitrary text (Grok force_message, local TTS). */
+export function canActiveSpeechSessionSpeakText(): boolean {
+  const session = liveSession;
+  return Boolean(session && typeof session.speakText === "function" && !activeConnectingSession);
+}
+
+/**
+ * Speak text through the active live speech session voice (e.g. Grok).
+ * Returns true when handled; false when no capable session is active.
+ */
+export async function speakViaActiveSpeechSession(text: string): Promise<boolean> {
+  const session = liveSession;
+  if (!session || typeof session.speakText !== "function") {
+    return false;
+  }
+  const trimmed = text.trim();
+  if (!trimmed) {
+    return false;
+  }
+  try {
+    await session.speakText(trimmed);
+    return true;
+  } catch (error) {
+    console.warn("speakViaActiveSpeechSession failed:", error);
+    return false;
+  }
+}
+
 /**
  * Immediately stops local AI voice playback (barge-in).
  * Should be called by a client-side VAD detector.
@@ -97,7 +129,14 @@ export async function toggleSpeechSession(
   if (speechProviderRequiresGeminiApiKey(speech.provider)) {
     apiKey = (await loadGeminiApiKey()) ?? undefined;
     if (!apiKey) {
-      speechState.setError(getTranslateFn()("speechFlow.error.noApiKey"));
+      speechState.setError(getTranslateFn()("speechFlow.error.noApiKey.gemini_live"));
+      return;
+    }
+  } else if (speechProviderRequiresXaiApiKey(speech.provider)) {
+    // Grok uses native WS with the stored key (API key stays in Tauri).
+    const hasKey = await hasXaiApiKey();
+    if (!hasKey) {
+      speechState.setError(getTranslateFn()("speechFlow.error.noApiKey.grok_voice"));
       return;
     }
   }
@@ -381,5 +420,31 @@ export async function testGeminiConnection(
     await session.connect({ apiKey: apiKey.trim() });
   } finally {
     session.disconnect();
+  }
+}
+
+/**
+ * Settings "connection test" for Grok Voice.
+ * Default is **local-only** (no xAI HTTP) so repeated clicks cannot burn rate limit.
+ * Pass network:true only when explicitly needed.
+ */
+export async function testGrokConnection(
+  speech: SpeechSettings,
+  options?: { network?: boolean },
+): Promise<string> {
+  if (!speechProviderRequiresXaiApiKey(speech.provider)) {
+    throw new Error(getTranslateFn()("settings.speech.xaiApiKey.error.testGrokOnly"));
+  }
+
+  const { testXaiApiKey } = await import("./xai-credentials");
+  try {
+    const result = await testXaiApiKey({ network: options?.network === true });
+    return result.message;
+  } catch (error) {
+    const message =
+      error instanceof Error && error.message.trim()
+        ? error.message.trim()
+        : getTranslateFn()("settings.speech.xaiApiKey.error.testFailed");
+    throw new Error(message);
   }
 }

@@ -11,6 +11,8 @@
   import ShellApprovalBanner from "./ShellApprovalBanner.svelte";
   import UpdateBanner from "./UpdateBanner.svelte";
   import ChatPlanFloatingPanel from "./ChatPlanFloatingPanel.svelte";
+  import ActivityTimelinePanel from "./ActivityTimelinePanel.svelte";
+  import ArtifactInspectorPanel from "./ArtifactInspectorPanel.svelte";
   import ChatHistoryPanel from "./ChatHistoryPanel.svelte";
   import IntegrationsPanel from "./IntegrationsPanel.svelte";
   import SystemWarningsPanel from "./SystemWarningsPanel.svelte";
@@ -46,6 +48,7 @@
   import { openExternalUrl } from "../services/open-external-url";
   import { applyMinimizeToTraySetting } from "../services/tray";
   import { applyShowWindowHotkey } from "../services/show-window-hotkey";
+  import { applySpeechHotkey, setSpeechHotkeyToggleHandler } from "../services/speech-hotkey";
   import {
     sendChatMessageWithConversation,
     stopActiveChatRequest,
@@ -107,8 +110,22 @@
   } from "../services/chat-ws-inbound";
   import { connectChatWebSocket, createWebSocketService } from "../services/chat-ws-connect";
   import { isChatError } from "../services/websocket";
+  import {
+    invokeShellSessionList,
+    invokeShellSessionStop,
+  } from "../services/shell-commands";
+  import { emitLocalActivity } from "../services/agent-activity-inbound";
   import { chatPlanState, isChatPlanPanelVisible } from "../stores/chat-plan";
+  import {
+    activityTimelineState,
+    isActivityTimelineVisible,
+  } from "../stores/activity-timeline";
+  import {
+    artifactInspectorState,
+    isArtifactInspectorVisible,
+  } from "../stores/artifact-inspector";
   import { agentMoodState } from "../stores/agent-mood";
+  import { activeSkillState } from "../stores/active-skill";
   import type {
     AppSettings,
     CertificateProbeResult,
@@ -124,10 +141,11 @@
     canUseChatAttachments,
     hasAdvertisedIntegrationsWebhosts,
     hasAdvertisedPlanUpdates,
+    hasAdvertisedAgentActivity,
     hasAdvertisedRemoteDesktopCapture,
     hasAdvertisedSystemWarnings,
     isTlsFatalError,
-    speechProviderRequiresGeminiApiKey,
+    speechProviderIsCloudRealtime,
   } from "../types/protocol";
 
   let pending = $state(false);
@@ -255,6 +273,16 @@
       !planDismissed,
   );
 
+  const activityTimelineVisible = $derived(
+    hasAdvertisedAgentActivity($sessionState.advertisedCapabilities) &&
+      isActivityTimelineVisible(
+        $activityTimelineState.activities,
+        $activityTimelineState.dismissed,
+      ),
+  );
+
+  const artifactInspectorVisible = $derived(isArtifactInspectorVisible($artifactInspectorState));
+
   const headerPanelOpen = $derived(
     $chatConversationState.historyOpen ||
       $chatMediaState.integrationsOpen ||
@@ -326,7 +354,9 @@
 
   function resetPlanAndMoodState(): void {
     chatPlanState.reset();
+    activityTimelineState.reset();
     agentMoodState.reset();
+    activeSkillState.reset();
   }
 
   function setPendingState(value: boolean): void {
@@ -411,6 +441,8 @@
     await applyOpenPetsSettings(loaded.openPets);
     await applyMinimizeToTraySetting(loaded.minimizeToTray);
     await applyShowWindowHotkey(loaded.showWindowHotkey);
+    setSpeechHotkeyToggleHandler(() => void handleSpeechToggle());
+    await applySpeechHotkey(loaded.speechHotkey);
     await connect(loaded.serverUrl);
   }
 
@@ -432,6 +464,17 @@
       toastService.show({
         type: "error",
         message: getTranslateFn()("chatView.error.showWindowHotkey"),
+      });
+    }
+    const speechHotkeyResult = await applySpeechHotkey(next.speechHotkey);
+    if (!speechHotkeyResult.ok) {
+      const speechError =
+        speechHotkeyResult.error === "hotkey_owned_by_show-window"
+          ? getTranslateFn()("chatView.error.speechHotkeyConflict")
+          : getTranslateFn()("chatView.error.speechHotkey");
+      toastService.show({
+        type: "error",
+        message: speechError,
       });
     }
 
@@ -624,8 +667,8 @@
   }
 
   async function handleSpeechTranscript(text: string): Promise<void> {
-    const localProvider = !speechProviderRequiresGeminiApiKey($settings.speech.provider);
-    if ($settings.speech.agentMode && !localProvider) {
+    const toolCapableRealtime = speechProviderIsCloudRealtime($settings.speech.provider);
+    if ($settings.speech.agentMode && toolCapableRealtime) {
       return;
     }
 
@@ -1037,6 +1080,7 @@
         uiSounds={$settings.uiSounds}
         minimizeToTray={$settings.minimizeToTray}
         showWindowHotkey={$settings.showWindowHotkey}
+        speechHotkey={$settings.speechHotkey}
         desktopControlEnabled={$settings.desktopControlEnabled}
         browserControlEnabled={$settings.browserControlEnabled}
         fileAccess={$settings.fileAccess}
@@ -1152,6 +1196,48 @@
           plan={$chatPlanState.plan}
           requestId={$chatPlanState.requestId}
           onDismiss={() => (planDismissed = true)}
+        />
+
+        <ActivityTimelinePanel
+          visible={activityTimelineVisible}
+          activities={$activityTimelineState.activities}
+          onDismiss={() => activityTimelineState.dismiss()}
+          onStopShell={(activity) => {
+            void (async () => {
+              try {
+                const sessions = await invokeShellSessionList();
+                const match = sessions.find(
+                  (session) =>
+                    session.status === "running" &&
+                    (session.command === activity.title ||
+                      activity.summary?.includes(session.shell_session_id)),
+                );
+                const target = match ?? sessions.find((session) => session.status === "running");
+                if (target) {
+                  await invokeShellSessionStop({ shellSessionId: target.shell_session_id });
+                  emitLocalActivity({
+                    activity_id: activity.activity_id,
+                    kind: "shell",
+                    phase: "cancelled",
+                    title: activity.title,
+                    summary: target.shell_session_id,
+                    finished_at: new Date().toISOString(),
+                  });
+                }
+              } catch {
+                // ignore stop failures in UI path
+              }
+            })();
+          }}
+        />
+
+        <ArtifactInspectorPanel
+          visible={artifactInspectorVisible}
+          item={$artifactInspectorState.selected}
+          activeTab={$artifactInspectorState.activeTab}
+          serverUrl={$settings.serverUrl}
+          onClose={() => artifactInspectorState.close()}
+          onTabChange={(tab) => artifactInspectorState.setTab(tab)}
         />
       </div>
 

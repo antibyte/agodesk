@@ -1,5 +1,5 @@
 import type { SpeechSettings } from "../types/protocol";
-import { speechProviderRequiresGeminiApiKey } from "../types/protocol";
+import { speechProviderIsCloudRealtime } from "../types/protocol";
 import {
   defaultEdgeTtsVoiceForSpeechLanguage,
   defaultPiperVoiceForSpeechLanguage,
@@ -65,7 +65,8 @@ export function registerActiveLocalSpeechSession(session: SpeakableLocalSession 
 }
 
 export function shouldSpeakAssistantText(speech: SpeechSettings): boolean {
-  return speech.voiceResponses && !speechProviderRequiresGeminiApiKey(speech.provider);
+  // Cloud realtime providers (Gemini Live / Grok Voice) synthesize speech themselves.
+  return speech.voiceResponses && !speechProviderIsCloudRealtime(speech.provider);
 }
 
 /** @deprecated Use shouldSpeakAssistantText */
@@ -241,6 +242,26 @@ export async function speakChatAssistantText(text: string, speech: SpeechSetting
     return;
   }
 
+  // 1) Live Grok session → same voice via force_message
+  try {
+    const { speakViaActiveSpeechSession } = await import("./speech-flow");
+    if (await speakViaActiveSpeechSession(spoken)) {
+      return;
+    }
+  } catch {
+    // Fall through.
+  }
+
+  // 2) Grok provider, mic off → unary Grok TTS API with the same voice_id
+  try {
+    const { speakWithGrokTts } = await import("./grok-tts");
+    if (await speakWithGrokTts(spoken, speech)) {
+      return;
+    }
+  } catch {
+    // Fall through to local TTS.
+  }
+
   if (activeLocalSession && !activeLocalSession.isClosed) {
     await activeLocalSession.speakText(spoken);
     return;
@@ -275,4 +296,9 @@ function notifyChatTtsFailure(error: unknown): void {
 export function interruptLocalSpeechPlayback(): void {
   activeLocalSession?.requestClientInterrupt();
   standalonePlayback.interrupt();
+  void import("./grok-tts")
+    .then((mod) => mod.interruptGrokTtsPlayback())
+    .catch(() => {
+      // ignore
+    });
 }

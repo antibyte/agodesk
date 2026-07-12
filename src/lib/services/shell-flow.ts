@@ -7,13 +7,65 @@ import type {
 } from "../types/protocol";
 import {
   hasAdvertisedShellExec,
+  hasAdvertisedShellSession,
+  isShellSessionPassiveOperation,
   normalizeShellExecParams,
+  normalizeShellSessionParams,
   shellAccessIsConfigured,
+  shellSessionRequiresApproval,
 } from "../types/protocol";
 import { settings } from "../stores/settings";
 import { sessionState } from "../stores/session";
-import { executeShellCommand, type DesktopResultSender } from "./desktop";
+import { chatConversationState } from "../stores/chat-conversation";
+import {
+  executeShellCommand,
+  executeShellSessionCommand,
+  type DesktopResultSender,
+} from "./desktop";
 import { auditShellAccess, validateShellExecRequest } from "./shell-access";
+import { emitLocalActivity } from "./agent-activity-inbound";
+import { appendActivityJournal } from "./activity-journal";
+import { createLocalJob, localJobState } from "../stores/local-jobs";
+
+function activityIdsForCommand(commandId: string) {
+  return {
+    activity_id: `shell:${commandId}`,
+    command_id: commandId,
+    conversation_id: get(chatConversationState).activeConversationId || "local",
+    session_id: get(sessionState).sessionId || "local",
+  };
+}
+
+function mirrorShellJob(
+  commandId: string,
+  status: "queued" | "running" | "completed" | "failed" | "cancelled",
+  title: string,
+  shellSessionId?: string,
+  errorCode?: string,
+): void {
+  const now = new Date().toISOString();
+  localJobState.upsert(
+    createLocalJob("shell", {
+      job_id: `job-shell-${commandId}`,
+      status: status === "queued" ? "queued" : status === "running" ? "running" : status,
+      title,
+      shell_session_id: shellSessionId,
+      error_code: errorCode,
+      created_at: now,
+      updated_at: now,
+    }),
+  );
+  appendActivityJournal({
+    timestamp: now,
+    conversation_id: get(chatConversationState).activeConversationId || undefined,
+    activity_id: `shell:${commandId}`,
+    kind: "shell",
+    status,
+    command_summary: title.slice(0, 200),
+    error_code: errorCode,
+    job_id: `job-shell-${commandId}`,
+  });
+}
 
 export interface ShellApprovalRequest {
   commandId: string;
@@ -59,10 +111,63 @@ async function rejectShellCommand(
   message: string,
   context?: DesktopCommandContext,
 ): Promise<void> {
-  await executeShellCommand(wsSend, command, {
+  if (command.operation === "shell_exec") {
+    await executeShellCommand(wsSend, command, {
+      context,
+      forcedError: { code: errorCode, message },
+    });
+    return;
+  }
+  await executeShellSessionCommand(wsSend, command, {
     context,
     forcedError: { code: errorCode, message },
   });
+}
+
+async function runValidatedShell(
+  wsSend: DesktopResultSender,
+  command: DesktopCommandPayload,
+  validation: Awaited<ReturnType<typeof validateShellExecRequest>> & { ok: true },
+  context?: DesktopCommandContext,
+): Promise<void> {
+  emitLocalActivity({
+    ...activityIdsForCommand(command.command_id),
+    kind: "shell",
+    phase: "started",
+    title: validation.command || command.operation,
+    summary: validation.cwd.pathDisplay,
+    risk: "execute",
+    started_at: new Date().toISOString(),
+  });
+  mirrorShellJob(command.command_id, "running", validation.command || command.operation);
+  try {
+    if (command.operation === "shell_exec") {
+      await executeShellCommand(wsSend, command, { context, prevalidated: validation });
+    } else {
+      await executeShellSessionCommand(wsSend, command, { context, prevalidated: validation });
+    }
+    emitLocalActivity({
+      ...activityIdsForCommand(command.command_id),
+      kind: "shell",
+      phase: command.operation === "shell_session_start" ? "progress" : "completed",
+      title: validation.command || command.operation,
+      finished_at: new Date().toISOString(),
+    });
+    mirrorShellJob(
+      command.command_id,
+      command.operation === "shell_session_start" ? "running" : "completed",
+      validation.command || command.operation,
+    );
+  } catch {
+    emitLocalActivity({
+      ...activityIdsForCommand(command.command_id),
+      kind: "shell",
+      phase: "failed",
+      title: validation.command || command.operation,
+      finished_at: new Date().toISOString(),
+    });
+    mirrorShellJob(command.command_id, "failed", validation.command || command.operation);
+  }
 }
 
 export async function handleIncomingShellCommand(
@@ -72,8 +177,84 @@ export async function handleIncomingShellCommand(
   options: { onApprovalPrompt?: () => void } = {},
 ): Promise<void> {
   const shellSettings = get(settings).shellAccess;
-  const params = normalizeShellExecParams((command.params ?? {}) as Record<string, unknown>);
-  const negotiated = hasAdvertisedShellExec(get(sessionState).advertisedCapabilities);
+  const caps = get(sessionState).advertisedCapabilities;
+  const isSessionOp = command.operation !== "shell_exec";
+  const negotiated = isSessionOp
+    ? hasAdvertisedShellSession(caps) || hasAdvertisedShellExec(caps)
+    : hasAdvertisedShellExec(caps);
+
+  if (isShellSessionPassiveOperation(command.operation)) {
+    if (!negotiated || !shellAccessIsConfigured(shellSettings)) {
+      await rejectShellCommand(
+        wsSend,
+        command,
+        negotiated ? "SHELL_ACCESS_DISABLED" : "SHELL_ACCESS_DENIED",
+        negotiated ? "Remote shell is disabled." : "Shell session capability not negotiated.",
+        context,
+      );
+      return;
+    }
+    await executeShellSessionCommand(wsSend, command, { context });
+    return;
+  }
+
+  const rawParams = normalizeShellSessionParams(
+    command.operation,
+    (command.params ?? {}) as Record<string, unknown>,
+  );
+  const params = normalizeShellExecParams(rawParams as Record<string, unknown>);
+
+  if (command.operation === "shell_session_input") {
+    const sessionId = String(rawParams.shell_session_id ?? "");
+    if (!sessionId) {
+      await rejectShellCommand(
+        wsSend,
+        command,
+        "SHELL_COMMAND_REJECTED",
+        "shell_session_id is required",
+        context,
+      );
+      return;
+    }
+    if (!negotiated || !shellAccessIsConfigured(shellSettings)) {
+      await rejectShellCommand(
+        wsSend,
+        command,
+        negotiated ? "SHELL_ACCESS_DISABLED" : "SHELL_ACCESS_DENIED",
+        negotiated ? "Remote shell is disabled." : "Shell session capability not negotiated.",
+        context,
+      );
+      return;
+    }
+    if (shellSettings.requiresApproval && shellSessionRequiresApproval(command.operation)) {
+      pendingShellCommands.push({
+        command,
+        params: { ...params, command: `stdin → ${sessionId}` },
+        context,
+        wsSend,
+      });
+      setShellApproval({
+        commandId: command.command_id,
+        command: `stdin → ${sessionId}`,
+        cwdLabel: sessionId,
+        cwdDisplay: sessionId,
+        timeoutMs: shellSettings.defaultTimeoutMs,
+      });
+      emitLocalActivity({
+        ...activityIdsForCommand(command.command_id),
+        kind: "shell",
+        phase: "waiting_approval",
+        title: `stdin → ${sessionId}`,
+        risk: "execute",
+        approval_required: true,
+        started_at: new Date().toISOString(),
+      });
+      options.onApprovalPrompt?.();
+      return;
+    }
+    await executeShellSessionCommand(wsSend, command, { context });
+    return;
+  }
 
   const validation = await validateShellExecRequest(shellSettings, params, { negotiated });
   if (!validation.ok) {
@@ -89,7 +270,11 @@ export async function handleIncomingShellCommand(
     return;
   }
 
-  if (shellSettings.requiresApproval) {
+  const needsApproval =
+    shellSettings.requiresApproval &&
+    (command.operation === "shell_exec" || shellSessionRequiresApproval(command.operation));
+
+  if (needsApproval) {
     pendingShellCommands.push({ command, params, context, wsSend });
     setShellApproval({
       commandId: command.command_id,
@@ -98,11 +283,21 @@ export async function handleIncomingShellCommand(
       cwdDisplay: validation.cwd.pathDisplay,
       timeoutMs: validation.timeoutMs,
     });
+    emitLocalActivity({
+      ...activityIdsForCommand(command.command_id),
+      kind: "shell",
+      phase: "waiting_approval",
+      title: validation.command,
+      summary: validation.cwd.pathDisplay,
+      risk: "execute",
+      approval_required: true,
+      started_at: new Date().toISOString(),
+    });
     options.onApprovalPrompt?.();
     return;
   }
 
-  await executeShellCommand(wsSend, command, { context, prevalidated: validation });
+  await runValidatedShell(wsSend, command, validation, context);
 }
 
 export async function approvePendingShellCommand(): Promise<void> {
@@ -114,26 +309,44 @@ export async function approvePendingShellCommand(): Promise<void> {
 
   setShellApproval(null);
   const shellSettings = get(settings).shellAccess;
-  const negotiated = hasAdvertisedShellExec(get(sessionState).advertisedCapabilities);
-  const validation = await validateShellExecRequest(shellSettings, next.params, { negotiated });
-  if (!validation.ok) {
-    await rejectShellCommand(
-      next.wsSend,
-      next.command,
-      validation.code,
-      validation.message,
-      next.context,
-    );
-    return;
-  }
+  const caps = get(sessionState).advertisedCapabilities;
+  const isSessionOp = next.command.operation !== "shell_exec";
+  const negotiated = isSessionOp
+    ? hasAdvertisedShellSession(caps) || hasAdvertisedShellExec(caps)
+    : hasAdvertisedShellExec(caps);
 
-  await executeShellCommand(next.wsSend, next.command, {
-    context: next.context,
-    prevalidated: validation,
-  });
+  if (next.command.operation === "shell_session_input") {
+    await executeShellSessionCommand(next.wsSend, next.command, { context: next.context });
+  } else {
+    const validation = await validateShellExecRequest(shellSettings, next.params, { negotiated });
+    if (!validation.ok) {
+      await rejectShellCommand(
+        next.wsSend,
+        next.command,
+        validation.code,
+        validation.message,
+        next.context,
+      );
+      return;
+    }
+    await runValidatedShell(next.wsSend, next.command, validation, next.context);
+  }
 
   if (pendingShellCommands.length > 0) {
     const queued = pendingShellCommands[0];
+    if (queued.command.operation === "shell_session_input") {
+      const sessionId = String(
+        (queued.command.params as Record<string, unknown> | undefined)?.shell_session_id ?? "",
+      );
+      setShellApproval({
+        commandId: queued.command.command_id,
+        command: `stdin → ${sessionId}`,
+        cwdLabel: sessionId,
+        cwdDisplay: sessionId,
+        timeoutMs: shellSettings.defaultTimeoutMs,
+      });
+      return;
+    }
     const queuedValidation = await validateShellExecRequest(shellSettings, queued.params, {
       negotiated,
     });
@@ -156,6 +369,14 @@ export async function denyPendingShellCommands(
   const queue = pendingShellCommands.splice(0, pendingShellCommands.length);
   setShellApproval(null);
   for (const entry of queue) {
+    emitLocalActivity({
+      ...activityIdsForCommand(entry.command.command_id),
+      kind: "shell",
+      phase: "cancelled",
+      title: entry.params.command || entry.command.command_id,
+      error_code: "SHELL_APPROVAL_DENIED",
+      finished_at: new Date().toISOString(),
+    });
     auditShellAccess({
       commandId: entry.command.command_id,
       cwdId: entry.params.cwd_id ?? "",

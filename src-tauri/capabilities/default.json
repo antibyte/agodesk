@@ -16,9 +16,20 @@
     "core:window:allow-show",
     "core:window:allow-set-focus",
     "core:window:allow-maximize",
+    "core:window:allow-unmaximize",
+    "core:window:allow-toggle-maximize",
+    "core:window:allow-is-maximized",
     "core:window:allow-is-visible",
     "core:window:allow-is-minimized",
-    "global-shortcut:default",
+    "core:window:allow-set-size",
+    "core:window:allow-outer-size",
+    "core:window:allow-inner-size",
+    "core:window:allow-set-position",
+    "core:window:allow-outer-position",
+    "global-shortcut:allow-is-registered",
+    "global-shortcut:allow-register",
+    "global-shortcut:allow-unregister",
+    "global-shortcut:allow-unregister-all",
     "updater:default",
     "process:allow-restart",
     "core:window:allow-set-shadow",
@@ -29,7 +40,10 @@
         "agodesk:message",
         "agodesk:error",
         "agodesk:oauth-callback",
-        "integration-embed-closed"
+        "integration-embed-closed",
+        "xai-realtime:message",
+        "xai-realtime:state",
+        "xai-realtime:error"
       ]
     }
   ]

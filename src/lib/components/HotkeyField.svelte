@@ -1,5 +1,6 @@
 <script lang="ts">
   import { i18n } from "../i18n";
+  import type { MessageKey } from "../i18n/types";
   import {
     DEFAULT_SHOW_WINDOW_HOTKEY,
     analyzeShowWindowHotkey,
@@ -7,21 +8,39 @@
     keyboardEventToHotkey,
   } from "../services/show-window-hotkey";
 
+  type HotkeyAnalysis = ReturnType<typeof analyzeShowWindowHotkey>;
+
   interface Props {
     value: string;
     disabled?: boolean;
+    defaultHotkey?: string;
+    analyze?: (hotkey: string) => HotkeyAnalysis;
+    i18nPrefix?: string;
     onchange?: (value: string) => void;
   }
 
-  let { value = "", disabled = false, onchange }: Props = $props();
+  let {
+    value = "",
+    disabled = false,
+    defaultHotkey = DEFAULT_SHOW_WINDOW_HOTKEY,
+    analyze = analyzeShowWindowHotkey,
+    i18nPrefix = "settings.appearance.showWindowHotkey",
+    onchange,
+  }: Props = $props();
 
   let recording = $state(false);
   let captureError = $state<string | null>(null);
+  /** Combo built on keydown; committed on the matching non-modifier keyup. */
+  let pendingHotkey = $state<string | null>(null);
 
-  const analysis = $derived(analyzeShowWindowHotkey(value));
+  const analysis = $derived(analyze(value));
   const displayLabel = $derived(
     value.trim() ? formatHotkeyLabel(analysis.normalized || value) : "",
   );
+
+  function t(key: string): string {
+    return $i18n(`${i18nPrefix}.${key}` as MessageKey);
+  }
 
   function emit(next: string): void {
     onchange?.(next);
@@ -32,11 +51,26 @@
       return;
     }
     captureError = null;
+    pendingHotkey = null;
     recording = true;
   }
 
   function stopRecording(): void {
     recording = false;
+    pendingHotkey = null;
+  }
+
+  function acceptHotkey(raw: string): void {
+    const nextAnalysis = analyze(raw);
+    if (!nextAnalysis.valid || !nextAnalysis.normalized) {
+      captureError =
+        nextAnalysis.warning === "reserved" ? t("reservedWarning") : t("captureInvalid");
+      return;
+    }
+
+    captureError = null;
+    emit(nextAnalysis.normalized);
+    stopRecording();
   }
 
   function handleKeydown(event: KeyboardEvent): void {
@@ -53,40 +87,60 @@
 
     const hotkey = keyboardEventToHotkey(event);
     if (!hotkey) {
-      captureError = $i18n("settings.appearance.showWindowHotkey.captureInvalid");
       return;
     }
 
-    const nextAnalysis = analyzeShowWindowHotkey(hotkey);
-    if (!nextAnalysis.valid) {
-      captureError = $i18n("settings.appearance.showWindowHotkey.captureInvalid");
-      return;
-    }
-
+    pendingHotkey = hotkey;
     captureError = null;
-    emit(nextAnalysis.normalized);
-    stopRecording();
+  }
+
+  function handleKeyup(event: KeyboardEvent): void {
+    if (!recording || !pendingHotkey) {
+      return;
+    }
+
+    if (
+      event.key === "Alt" ||
+      event.key === "Control" ||
+      event.key === "Shift" ||
+      event.key === "Meta" ||
+      event.key === "OS"
+    ) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    const hotkey = pendingHotkey;
+    pendingHotkey = null;
+    acceptHotkey(hotkey);
   }
 
   function handleDisable(): void {
     captureError = null;
+    pendingHotkey = null;
     emit("");
   }
 
   function handleResetDefault(): void {
-    captureError = null;
-    emit(DEFAULT_SHOW_WINDOW_HOTKEY);
+    if (disabled) {
+      return;
+    }
+    acceptHotkey(defaultHotkey);
   }
 </script>
 
-<svelte:window onkeydown={handleKeydown} />
+<svelte:window onkeydown={handleKeydown} onkeyup={handleKeyup} />
 
 <div class="hotkey-field" class:recording class:disabled>
   <div class="hotkey-display" aria-live={recording ? "assertive" : "polite"}>
-    {#if displayLabel}
+    {#if pendingHotkey}
+      {formatHotkeyLabel(pendingHotkey)}
+    {:else if displayLabel}
       {displayLabel}
     {:else}
-      {$i18n("settings.appearance.showWindowHotkey.disabled")}
+      {t("disabled")}
     {/if}
   </div>
 
@@ -94,12 +148,10 @@
     <button
       type="button"
       class="ui-btn ui-btn-secondary"
-      {disabled}
+      disabled={disabled}
       onclick={recording ? stopRecording : startRecording}
     >
-      {recording
-        ? $i18n("settings.appearance.showWindowHotkey.recording")
-        : $i18n("settings.appearance.showWindowHotkey.record")}
+      {recording ? t("recording") : t("record")}
     </button>
     <button
       type="button"
@@ -107,23 +159,23 @@
       disabled={disabled || !value.trim()}
       onclick={handleDisable}
     >
-      {$i18n("settings.appearance.showWindowHotkey.disable")}
+      {t("disable")}
     </button>
-    <button type="button" class="ui-btn ui-btn-secondary" {disabled} onclick={handleResetDefault}>
-      {$i18n("settings.appearance.showWindowHotkey.reset")}
+    <button type="button" class="ui-btn ui-btn-secondary" disabled={disabled} onclick={handleResetDefault}>
+      {t("reset")}
     </button>
   </div>
 
   {#if recording}
-    <p class="help recording-hint">{$i18n("settings.appearance.showWindowHotkey.recordingHelp")}</p>
+    <p class="help recording-hint">{t("recordingHelp")}</p>
   {/if}
 
   {#if captureError}
     <p class="help warning">{captureError}</p>
   {:else if analysis.warning === "reserved"}
-    <p class="help warning">{$i18n("settings.appearance.showWindowHotkey.reservedWarning")}</p>
+    <p class="help warning">{t("reservedWarning")}</p>
   {:else if !analysis.valid && value.trim()}
-    <p class="help warning">{$i18n("settings.appearance.showWindowHotkey.invalidWarning")}</p>
+    <p class="help warning">{t("invalidWarning")}</p>
   {/if}
 </div>
 

@@ -21,6 +21,11 @@ export interface ActiveSpeechSession {
   requestClientInterrupt(): void;
   readonly isAiSpeaking: boolean;
   getPlaybackAnalyser(): AnalyserNode | null;
+  /**
+   * Speak arbitrary text in the live session voice (e.g. AuraGo chat replies).
+   * Optional — cloud providers that support scripted TTS (Grok force_message) implement this.
+   */
+  speakText?(text: string): Promise<void>;
 }
 
 export type { SpeechAgentContext };

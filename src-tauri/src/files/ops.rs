@@ -5,6 +5,7 @@ use std::time::UNIX_EPOCH;
 
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use tauri::AppHandle;
 
@@ -211,10 +212,10 @@ pub fn file_write(
                 .map_err(|_| "FILE_ACCESS_DENIED".to_string())?;
             let hash = hex::encode(Sha256::digest(&existing));
             if hash != expected.trim().to_lowercase() {
-                return Err("FILE_CONFLICT".to_string());
+                return Err("FILE_HASH_MISMATCH".to_string());
             }
         } else {
-            return Err("FILE_CONFLICT".to_string());
+            return Err("FILE_HASH_MISMATCH".to_string());
         }
     }
 
@@ -225,6 +226,141 @@ pub fn file_write(
         path: resolved.relative_path,
         bytes_written: bytes.len() as u64,
     })
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct FilePatchHunk {
+    pub old_text: String,
+    pub new_text: String,
+    pub expected_occurrences: Option<u32>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct FilePatchArgs {
+    pub root_id: Option<String>,
+    pub path: String,
+    pub expected_sha256: Option<String>,
+    pub patches: Vec<FilePatchHunk>,
+    pub dry_run: bool,
+    pub max_bytes: u64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct FilePatchResult {
+    pub root_id: String,
+    pub path: String,
+    pub dry_run: bool,
+    pub applied: bool,
+    pub diff: String,
+    pub sha256_before: String,
+    pub sha256_after: String,
+    pub replacements: u32,
+}
+
+#[tauri::command]
+pub fn file_patch(
+    app: AppHandle,
+    roots: Vec<FileAccessRootInput>,
+    args: FilePatchArgs,
+) -> Result<FilePatchResult, String> {
+    let FilePatchArgs {
+        root_id,
+        path,
+        expected_sha256,
+        patches,
+        dry_run,
+        max_bytes,
+    } = args;
+
+    if patches.is_empty() {
+        return Err("FILE_COMMAND_INVALID: patches must not be empty".to_string());
+    }
+
+    let max_bytes = clamp_write_bytes(&app, max_bytes)?;
+    let roots = resolve_authorized_file_roots(&app, &roots)?;
+    let resolved = resolve_file_path_for_write(&roots, root_id.as_deref(), &path)?;
+    ensure_permission(&roots, &resolved.root_id, FilePermission::Write)?;
+
+    if !resolved.absolute_path.exists() {
+        return Err("FILE_NOT_FOUND".to_string());
+    }
+
+    let existing = fs::read(&resolved.absolute_path).map_err(|_| "FILE_ACCESS_DENIED".to_string())?;
+    if existing.len() as u64 > max_bytes {
+        return Err("FILE_TOO_LARGE".to_string());
+    }
+
+    let sha_before = hex::encode(Sha256::digest(&existing));
+    if let Some(expected) = expected_sha256 {
+        if sha_before != expected.trim().to_lowercase() {
+            return Err("FILE_HASH_MISMATCH".to_string());
+        }
+    }
+
+    let original = decode_utf8_text(&existing)?;
+    let mut updated = original.clone();
+    let mut replacements: u32 = 0;
+
+    for hunk in &patches {
+        if hunk.old_text.is_empty() {
+            return Err("FILE_COMMAND_INVALID: old_text must not be empty".to_string());
+        }
+        let expected = hunk.expected_occurrences.unwrap_or(1);
+        let count = updated.matches(&hunk.old_text).count() as u32;
+        if count != expected {
+            return Err(format!(
+                "FILE_PATCH_MISMATCH: expected {expected} occurrence(s) of old_text, found {count}"
+            ));
+        }
+        updated = updated.replacen(&hunk.old_text, &hunk.new_text, expected as usize);
+        replacements += expected;
+    }
+
+    let diff = build_simple_diff(&original, &updated);
+    let sha_after = hex::encode(Sha256::digest(updated.as_bytes()));
+
+    if !dry_run {
+        if updated.as_bytes().len() as u64 > max_bytes {
+            return Err("FILE_TOO_LARGE".to_string());
+        }
+        validate_parent_directory(&resolved.absolute_path)?;
+        atomic_write(&resolved.absolute_path, updated.as_bytes())?;
+    }
+
+    Ok(FilePatchResult {
+        root_id: resolved.root_id,
+        path: resolved.relative_path,
+        dry_run,
+        applied: !dry_run,
+        diff,
+        sha256_before: sha_before,
+        sha256_after: sha_after,
+        replacements,
+    })
+}
+
+fn build_simple_diff(before: &str, after: &str) -> String {
+    if before == after {
+        return String::new();
+    }
+    let before_lines: Vec<&str> = before.lines().collect();
+    let after_lines: Vec<&str> = after.lines().collect();
+    let mut out = String::new();
+    let max = before_lines.len().max(after_lines.len());
+    for index in 0..max {
+        let left = before_lines.get(index).copied();
+        let right = after_lines.get(index).copied();
+        match (left, right) {
+            (Some(a), Some(b)) if a == b => {}
+            (Some(a), Some(b)) => {
+                out.push_str(&format!("-{a}\n+{b}\n"));
+            }
+            (Some(a), None) => out.push_str(&format!("-{a}\n")),
+            (None, Some(b)) => out.push_str(&format!("+{b}\n")),
+            (None, None) => {}
+        }
+    }
+    out
 }
 
 fn atomic_write(target: &Path, bytes: &[u8]) -> Result<(), String> {

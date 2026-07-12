@@ -22,16 +22,46 @@
     if (!visible) {
       return;
     }
+
+    let disposed = false;
+    let unlistenResized: (() => void) | undefined;
+    let unlistenMoved: (() => void) | undefined;
+
     void import("@tauri-apps/api/window").then(async ({ getCurrentWindow }) => {
       const win = getCurrentWindow();
-      maximized = await win.isMaximized();
-      const unlisten = await win.onResized(async () => {
-        maximized = await win.isMaximized();
-      });
-      return () => {
-        void unlisten();
+      const syncMaximized = async () => {
+        try {
+          const next = await win.isMaximized();
+          if (!disposed) {
+            maximized = next;
+          }
+        } catch {
+          // ignore
+        }
       };
+      await syncMaximized();
+      try {
+        unlistenResized = await win.onResized(() => {
+          void syncMaximized();
+        });
+      } catch {
+        // ignore
+      }
+      try {
+        // Some platforms only settle maximize state after move events.
+        unlistenMoved = await win.onMoved(() => {
+          void syncMaximized();
+        });
+      } catch {
+        // ignore
+      }
     });
+
+    return () => {
+      disposed = true;
+      unlistenResized?.();
+      unlistenMoved?.();
+    };
   });
 
   const closeLabel = $derived(
@@ -41,7 +71,11 @@
   );
 
   async function handleToggleMaximize(): Promise<void> {
-    maximized = await toggleMaximizeMainWindow();
+    // Optimistic flip for snappy UI; confirm with the return value afterwards.
+    const previous = maximized;
+    maximized = !previous;
+    const next = await toggleMaximizeMainWindow(previous);
+    maximized = next;
   }
 </script>
 

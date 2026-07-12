@@ -24,6 +24,8 @@
     registerActiveChatMediaElement,
   } from "../services/chat-media-playback";
   import { isInlineImageSrc, resolveInlineImageFallback } from "../services/chat-media-inline";
+  import { isInspectableArtifact } from "../types/protocol";
+  import { artifactInspectorState } from "../stores/artifact-inspector";
 
   interface Props {
     item: ChatMediaItem;
@@ -40,6 +42,22 @@
   let openingExternal = $state(false);
   let youtubeEmbedBlocked = $state(false);
   let unregisterMedia: (() => void) | null = null;
+
+  const inspectable = $derived(isInspectableArtifact(item));
+
+  function handleOpenInspector(event: MouseEvent): void {
+    if (!inspectable) {
+      return;
+    }
+    const target = event.target;
+    if (
+      target instanceof HTMLElement &&
+      target.closest("button, a, audio, video, input, textarea, select")
+    ) {
+      return;
+    }
+    artifactInspectorState.select(item, item.kind === "diff" ? "diff" : "preview");
+  }
 
   const displayTitle = $derived(item.title || item.filename || item.kind);
   const resolvedPath = $derived(
@@ -225,7 +243,19 @@
   }
 </script>
 
-<article class="chat-media-block glass-panel-subtle" data-kind={item.kind}>
+<article
+  class="chat-media-block glass-panel-subtle"
+  class:is-inspectable={inspectable}
+  data-kind={item.kind}
+  onclick={handleOpenInspector}
+  onkeydown={(event) => {
+    if (inspectable && (event.key === "Enter" || event.key === " ")) {
+      event.preventDefault();
+      artifactInspectorState.select(item, item.kind === "diff" ? "diff" : "preview");
+    }
+  }}
+  {...inspectable ? { role: "button", tabindex: 0 } : {}}
+>
   {#if displayTitle}
     <h4 class="media-title">{displayTitle}</h4>
   {/if}
@@ -333,6 +363,15 @@
     padding: var(--space-3);
     border-radius: var(--radius-lg);
     margin-top: var(--space-2);
+  }
+
+  .chat-media-block.is-inspectable {
+    cursor: pointer;
+  }
+
+  .chat-media-block.is-inspectable:focus-visible {
+    outline: 2px solid color-mix(in srgb, var(--ui-accent, #6af) 55%, transparent);
+    outline-offset: 2px;
   }
 
   .media-title {

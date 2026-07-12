@@ -395,13 +395,19 @@ body {
   app-region: drag;
 }
 
+/* Interactive controls must never steal the whole titlebar drag surface. */
 button,
 textarea,
 input,
 select,
 a,
+label,
 .window-controls,
-.window-controls * {
+.window-controls *,
+.status-cluster,
+.status-cluster *,
+.actions,
+.actions * {
   -webkit-app-region: no-drag;
   app-region: no-drag;
 }

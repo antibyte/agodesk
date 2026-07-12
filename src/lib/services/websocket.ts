@@ -180,6 +180,12 @@ export function isChatPlanUpdate(
   return message.type === "chat.plan_update";
 }
 
+export function isAgentActivity(
+  message: WsMessage,
+): message is WsMessage<import("../types/protocol").AgentActivityPayload> {
+  return message.type === "agent.activity";
+}
+
 export function isChatError(
   message: WsMessage,
 ): message is WsMessage<import("../types/protocol").ChatErrorPayload> {

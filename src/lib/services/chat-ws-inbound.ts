@@ -9,6 +9,7 @@ import { getTranslateFn } from "../i18n/store";
 import { handleChatResponseChunk } from "./chat-inbound";
 import { applySessionClear } from "./session-clear";
 import { handleChatPlanUpdate, reconcilePlanFromResponse } from "./chat-plan-inbound";
+import { handleAgentActivity } from "./agent-activity-inbound";
 import { handleChatResponseMood, handleChatChunkMood } from "./agent-mood-inbound";
 import { applyPersonaAssets, clearPersonaAssets, requestPersonaAssets } from "./persona-flow";
 import { handleSessionAccepted, handleSessionError, handleSystemConnected } from "./session-flow";
@@ -60,6 +61,7 @@ import {
   isChatAttachmentAccepted,
   isChatMedia,
   isChatPlanUpdate,
+  isAgentActivity,
   isChatResponse,
   isChatResponseChunk,
   isChatSession,
@@ -82,6 +84,7 @@ import type { WsMessage } from "../types/protocol";
 import {
   auragoServerTtsAvailable,
   hasAdvertisedAgentMetadata,
+  hasAdvertisedAgentActivity,
   hasAdvertisedChatMediaEvents,
   hasAdvertisedPlanUpdates,
   normalizeChatAudioPayload,
@@ -142,19 +145,60 @@ function maybeSpeakAssistantResponse(requestId: string, text: string): void {
   if (convo.stoppedRequestIds.includes(requestId)) {
     return;
   }
-  const appSettings = get(settings);
-  const caps = get(sessionState).advertisedCapabilities;
-  const serverAudio = convo.serverAudioRequestIds.includes(requestId);
-  if (!shouldUseFrontendTtsForSettings(appSettings, caps, serverAudio)) {
-    return;
-  }
 
-  const delayMs =
-    appSettings.chatTtsMode === "auto" && auragoServerTtsAvailable(caps) && !serverAudio
-      ? AUTO_TTS_FALLBACK_DELAY_MS
-      : 0;
+  // Prefer Grok voice for AuraGo replies:
+  // - live session → force_message
+  // - mic off + provider grok_voice → unary Grok TTS (same voice_id)
+  void (async () => {
+    const appSettings = get(settings);
+    try {
+      const { canActiveSpeechSessionSpeakText, speakViaActiveSpeechSession } =
+        await import("./speech-flow");
+      if (canActiveSpeechSessionSpeakText()) {
+        cancelAssistantFrontendTts(requestId);
+        if (await speakViaActiveSpeechSession(text)) {
+          return;
+        }
+      }
+    } catch {
+      // Fall through.
+    }
 
-  scheduleAssistantFrontendTts({ requestId, text, delayMs });
+    try {
+      const { shouldUseGrokTtsForChat, speakWithGrokTts } = await import("./grok-tts");
+      const { resolveChatSpeakerMode } = await import("./chat-voice-output-status");
+      if (
+        shouldUseGrokTtsForChat(appSettings.speech, {
+          chatTtsOff: appSettings.chatTtsMode === "off",
+          speakerMuted: !resolveChatSpeakerMode(appSettings),
+        })
+      ) {
+        cancelAssistantFrontendTts(requestId);
+        if (await speakWithGrokTts(text, appSettings.speech)) {
+          return;
+        }
+      }
+    } catch {
+      // Fall through to normal chat TTS.
+    }
+
+    const caps = get(sessionState).advertisedCapabilities;
+    const latest = get(chatConversationState);
+    if (latest.stoppedRequestIds.includes(requestId)) {
+      return;
+    }
+    const serverAudio = latest.serverAudioRequestIds.includes(requestId);
+    if (!shouldUseFrontendTtsForSettings(appSettings, caps, serverAudio)) {
+      return;
+    }
+
+    const delayMs =
+      appSettings.chatTtsMode === "auto" && auragoServerTtsAvailable(caps) && !serverAudio
+        ? AUTO_TTS_FALLBACK_DELAY_MS
+        : 0;
+
+    scheduleAssistantFrontendTts({ requestId, text, delayMs });
+  })();
 }
 
 function finishRequest(requestId?: string): void {
@@ -347,6 +391,11 @@ export async function handleChatWsMessage(
 
   if (isChatPlanUpdate(message) && hasAdvertisedPlanUpdates(caps)) {
     handleChatPlanUpdate(message.payload);
+    return;
+  }
+
+  if (isAgentActivity(message) && hasAdvertisedAgentActivity(caps)) {
+    handleAgentActivity(message.payload);
     return;
   }
 

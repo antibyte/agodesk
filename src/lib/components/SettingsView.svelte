@@ -29,11 +29,21 @@
     type SpeechProvider,
     type LocalAsrModel,
     isGeminiSpeechProvider,
+    isGrokSpeechProvider,
+    speechProviderIsCloudRealtime,
     hasAdvertisedFileRead,
     hasAdvertisedFileWrite,
     hasAdvertisedShellExec,
     shellAccessIsConfigured,
   } from "../types/protocol";
+  import {
+    DEFAULT_GROK_VOICE_MODEL,
+    DEFAULT_GROK_VOICE_NAME,
+    GROK_VOICE_OPTIONS,
+    grokVoiceOptionLabel,
+    mergeGrokVoiceOptions,
+    type GrokVoiceOption,
+  } from "../types/grok-voice";
   import { APP_LOCALES, LOCALE_LABELS, applyLocaleSetting, getTranslateFn, i18n, type UiLocaleSetting } from "../i18n";
   import type { MessageKey } from "../i18n/types";
   import { loadDeviceId } from "../services/credentials";
@@ -43,7 +53,13 @@
     loadGeminiApiKey,
     saveGeminiApiKey,
   } from "../services/gemini-credentials";
-  import { testGeminiConnection, testLocalSpeechTts } from "../services/speech-flow";
+  import {
+    clearXaiApiKey,
+    hasXaiApiKey,
+    listXaiTtsVoices,
+    saveXaiApiKey,
+  } from "../services/xai-credentials";
+  import { testGeminiConnection, testGrokConnection, testLocalSpeechTts } from "../services/speech-flow";
   import { applyTheme, applyUiTheme } from "../services/theme";
   import LlmProvidersSection from "./LlmProvidersSection.svelte";
   import type { WsMessage } from "../types/protocol";
@@ -84,7 +100,7 @@
   } from "../services/file-access";
   import { buildShellCwdFromFolder, cloneShellAccessSettings } from "../services/shell-access";
   import { canonicalizeFolderPath, pickFolderPath } from "../services/file-commands";
-  import { GEMINI_API_KEY_URL, openExternalUrl } from "../services/open-external-url";
+  import { GEMINI_API_KEY_URL, XAI_API_KEY_URL, openExternalUrl } from "../services/open-external-url";
   import { SERVER_PRESETS } from "../services/settings-presets";
   import { normalizeServerUrl } from "../services/server-url";
   import { previewUiSoundTheme } from "../services/ui-sounds";
@@ -100,6 +116,11 @@
   import WindowControls from "./WindowControls.svelte";
   import SettingsHealthSummary from "./SettingsHealthSummary.svelte";
   import HotkeyField from "./HotkeyField.svelte";
+  import {
+    DEFAULT_SPEECH_HOTKEY,
+    analyzeSpeechHotkey,
+  } from "../services/speech-hotkey";
+  import { analyzeShowWindowHotkey } from "../services/show-window-hotkey";
   import { isDesktopShell } from "../services/window-controls";
   import { onMount } from "svelte";
 
@@ -113,6 +134,7 @@
     | "uiSounds"
     | "minimizeToTray"
     | "showWindowHotkey"
+    | "speechHotkey"
     | "desktopControlEnabled"
     | "browserControlEnabled"
     | "fileAccess"
@@ -155,6 +177,7 @@
     uiSounds?: UiSoundSettings;
     minimizeToTray?: boolean;
     showWindowHotkey?: string;
+    speechHotkey?: string;
     desktopControlEnabled?: boolean;
     browserControlEnabled?: boolean;
     fileAccess?: FileAccessSettings;
@@ -189,6 +212,7 @@
     uiSounds = DEFAULT_UI_SOUND_SETTINGS,
     minimizeToTray = false,
     showWindowHotkey = "Alt+Shift+G",
+    speechHotkey = DEFAULT_SPEECH_HOTKEY,
     desktopControlEnabled = true,
     browserControlEnabled = false,
     fileAccess = DEFAULT_FILE_ACCESS_SETTINGS,
@@ -222,6 +246,7 @@
   let draftLocale = $state<UiLocaleSetting>("system");
   let draftMinimizeToTray = $state(false);
   let draftShowWindowHotkey = $state("Alt+Shift+G");
+  let draftSpeechHotkey = $state(DEFAULT_SPEECH_HOTKEY);
   let draftDesktopControlEnabled = $state(true);
   let draftBrowserControlEnabled = $state(false);
   let draftFileAccess = $state<FileAccessSettings>(
@@ -259,6 +284,17 @@
   let apiKeyBusy = $state(false);
   let apiKeyMessage = $state("");
   let apiKeyMessageTone = $state<"success" | "error" | "">("");
+
+  let xaiApiKeyInput = $state("");
+  let xaiApiKeyStored = $state(false);
+  let xaiApiKeyBusy = $state(false);
+  let xaiApiKeyMessage = $state("");
+  let xaiApiKeyMessageTone = $state<"success" | "error" | "">("");
+  let grokVoiceCatalog = $state<GrokVoiceOption[]>(
+    mergeGrokVoiceOptions([], DEFAULT_GROK_VOICE_NAME),
+  );
+  let grokVoicesLoading = $state(false);
+  let grokVoicesMessage = $state("");
 
   let browserTestBusy = $state(false);
   let browserTestMessage = $state("");
@@ -318,6 +354,11 @@
   );
 
   const isGeminiSpeechSelected = $derived(isGeminiSpeechProvider(draftSpeech.provider));
+  const isGrokSpeechSelected = $derived(isGrokSpeechProvider(draftSpeech.provider));
+  const isCloudRealtimeSpeechSelected = $derived(speechProviderIsCloudRealtime(draftSpeech.provider));
+  const grokVoiceSelectOptions = $derived(
+    mergeGrokVoiceOptions(grokVoiceCatalog, draftSpeech.voiceName),
+  );
   const isHybridSpeechSelected = $derived(draftSpeech.provider === "hybrid");
   const isOfflineSpeechSelected = $derived(draftSpeech.provider === "offline");
   const usesLocalAsr = $derived(isHybridSpeechSelected || isOfflineSpeechSelected);
@@ -349,7 +390,7 @@
     if (draftSpeech.enabled && (isHybridSpeechSelected || isOfflineSpeechSelected)) {
       items.push({ id: "tts", labelKey: "settings.speech.subsection.tts" });
     }
-    if (draftSpeech.enabled && isGeminiSpeechSelected) {
+    if (draftSpeech.enabled && isCloudRealtimeSpeechSelected) {
       items.push({ id: "tests", labelKey: "settings.speech.subsection.tests" });
     }
     return items;
@@ -424,7 +465,7 @@
     blossom: ["#f472b6", "#c084fc", "#fbbf24"],
     cyberpunk: ["#00f0ff", "#ff4500", "#faff00"],
     papyrus: ["#5e3c20", "#c9a227", "#e9dec4"],
-    chaos: ["#ff0080", "#00ff88", "#00d0ff"],
+    chaos: ["#7e22ce", "#9d174d", "#0f766e"],
   };
 
   function selectUiTheme(next: UiTheme): void {
@@ -456,6 +497,7 @@
       draftLocale = locale;
       draftMinimizeToTray = minimizeToTray;
       draftShowWindowHotkey = showWindowHotkey;
+      draftSpeechHotkey = speechHotkey;
       draftDesktopControlEnabled = desktopControlEnabled;
       draftBrowserControlEnabled = browserControlEnabled;
       draftFileAccess = cloneFileAccessSettings(fileAccess);
@@ -471,7 +513,8 @@
       draftUiSoundVolume = uiSounds.volume;
       draftReduceMotion = reduceMotion;
       draftSpeechVisualizerEnabled = speechVisualizerEnabled;
-      ttsTestSampleText = localTtsTestPhraseForAppLocale(draftLocale);
+      // Prefer prop over draftLocale so this effect does not re-run on radio clicks.
+      ttsTestSampleText = localTtsTestPhraseForAppLocale(locale);
     }
   });
 
@@ -757,19 +800,165 @@
         apiKeyInput = "";
       }
     }
+    xaiApiKeyStored = await hasXaiApiKey();
+    if (isGrokSpeechProvider(draftSpeech.provider) && xaiApiKeyStored) {
+      void refreshGrokVoiceCatalog();
+    }
   }
 
-  function handleAppLocaleChange(): void {
-    void applyLocaleSetting(draftLocale);
+  async function refreshGrokVoiceCatalog(): Promise<void> {
+    if (!isDesktopShell()) {
+      grokVoiceCatalog = mergeGrokVoiceOptions([], draftSpeech.voiceName);
+      return;
+    }
+    grokVoicesLoading = true;
+    grokVoicesMessage = "";
+    try {
+      if (!(await hasXaiApiKey())) {
+        grokVoiceCatalog = mergeGrokVoiceOptions([], draftSpeech.voiceName);
+        grokVoicesMessage = $i18n("settings.speech.grokVoices.needKey");
+        return;
+      }
+      const remote = await listXaiTtsVoices();
+      grokVoiceCatalog = mergeGrokVoiceOptions(remote, draftSpeech.voiceName);
+      grokVoicesMessage = $i18n("settings.speech.grokVoices.loaded", {
+        count: String(grokVoiceCatalog.length),
+      });
+    } catch (error) {
+      grokVoiceCatalog = mergeGrokVoiceOptions([], draftSpeech.voiceName);
+      const detail = error instanceof Error ? error.message : String(error ?? "");
+      grokVoicesMessage = detail.trim()
+        ? `${$i18n("settings.speech.grokVoices.loadFailed")} ${detail.trim()}`
+        : $i18n("settings.speech.grokVoices.loadFailed");
+    } finally {
+      grokVoicesLoading = false;
+    }
+  }
+
+  function setXaiApiKeyFeedback(key: MessageKey, tone: "success" | "error"): void {
+    xaiApiKeyMessage = $i18n(key);
+    xaiApiKeyMessageTone = tone;
+  }
+
+  async function handleSaveXaiApiKey(): Promise<void> {
+    const trimmed = xaiApiKeyInput.trim();
+    if (!trimmed) {
+      setXaiApiKeyFeedback("settings.speech.xaiApiKey.error.empty", "error");
+      return;
+    }
+
+    xaiApiKeyBusy = true;
+    try {
+      await saveXaiApiKey(trimmed);
+      xaiApiKeyStored = true;
+      xaiApiKeyInput = "";
+      setXaiApiKeyFeedback("settings.speech.xaiApiKey.success.saved", "success");
+    } catch {
+      setXaiApiKeyFeedback("settings.speech.xaiApiKey.error.saveFailed", "error");
+    } finally {
+      xaiApiKeyBusy = false;
+    }
+  }
+
+  async function handleRemoveXaiApiKey(): Promise<void> {
+    xaiApiKeyBusy = true;
+    try {
+      await clearXaiApiKey();
+      xaiApiKeyStored = false;
+      xaiApiKeyInput = "";
+      setXaiApiKeyFeedback("settings.speech.xaiApiKey.success.removed", "success");
+    } catch {
+      setXaiApiKeyFeedback("settings.speech.xaiApiKey.error.removeFailed", "error");
+    } finally {
+      xaiApiKeyBusy = false;
+    }
+  }
+
+  async function handleTestXaiApiKey(): Promise<void> {
+    xaiApiKeyBusy = true;
+    setXaiApiKeyFeedback("settings.speech.xaiApiKey.testing", "success");
+    try {
+      if (xaiApiKeyInput.trim()) {
+        await saveXaiApiKey(xaiApiKeyInput.trim());
+        xaiApiKeyStored = true;
+        xaiApiKeyInput = "";
+      }
+      if (!(await hasXaiApiKey())) {
+        setXaiApiKeyFeedback("settings.speech.xaiApiKey.error.testNoKey", "error");
+        return;
+      }
+      // Local-only by default: does not call xAI (avoids 429 from repeated test clicks).
+      // Network check only if Shift is held while clicking would need a separate control;
+      // keep simple: no network here.
+      const message = await testGrokConnection(
+        { ...draftSpeech, provider: "grok_voice" },
+        { network: false },
+      );
+      xaiApiKeyMessage = message;
+      xaiApiKeyMessageTone = "success";
+    } catch (error) {
+      const detail =
+        error instanceof Error
+          ? error.message
+          : typeof error === "string"
+            ? error
+            : "";
+      const lower = detail.toLowerCase();
+      if (lower.includes("429") || lower.includes("rate-limit") || lower.includes("too many")) {
+        xaiApiKeyMessage = detail.trim() || $i18n("settings.speech.xaiApiKey.error.rateLimited");
+      } else {
+        xaiApiKeyMessage = detail.trim()
+          ? `${$i18n("settings.speech.xaiApiKey.error.testFailed")} ${detail.trim()}`
+          : $i18n("settings.speech.xaiApiKey.error.testFailed");
+      }
+      xaiApiKeyMessageTone = "error";
+    } finally {
+      xaiApiKeyBusy = false;
+    }
+  }
+
+  async function handleTestXaiApiKeyNetwork(): Promise<void> {
+    xaiApiKeyBusy = true;
+    setXaiApiKeyFeedback("settings.speech.xaiApiKey.testing", "success");
+    try {
+      if (!(await hasXaiApiKey())) {
+        setXaiApiKeyFeedback("settings.speech.xaiApiKey.error.testNoKey", "error");
+        return;
+      }
+      const message = await testGrokConnection(
+        { ...draftSpeech, provider: "grok_voice" },
+        { network: true },
+      );
+      xaiApiKeyMessage = message;
+      xaiApiKeyMessageTone = "success";
+    } catch (error) {
+      const detail =
+        error instanceof Error
+          ? error.message
+          : typeof error === "string"
+            ? error
+            : "";
+      xaiApiKeyMessage =
+        detail.trim() || $i18n("settings.speech.xaiApiKey.error.testFailed");
+      xaiApiKeyMessageTone = "error";
+    } finally {
+      xaiApiKeyBusy = false;
+    }
+  }
+
+  function handleAppLocaleChange(next: UiLocaleSetting): void {
+    // Mark dirty first so the props→draft sync effect cannot overwrite the choice.
+    dirty = true;
+    draftLocale = next;
+    void applyLocaleSetting(next);
     draftSpeech = applySpeechLocaleDefaults(
       {
         ...draftSpeech,
-        localAsrModel: defaultLocalAsrModelForAppLocale(draftLocale),
+        localAsrModel: defaultLocalAsrModelForAppLocale(next),
       },
-      draftLocale,
+      next,
     );
-    ttsTestSampleText = localTtsTestPhraseForAppLocale(draftLocale);
-    markDirty();
+    ttsTestSampleText = localTtsTestPhraseForAppLocale(next);
     if (usesLocalAsr) {
       void refreshAsrStatus(draftSpeech.localAsrModel);
     }
@@ -804,6 +993,7 @@
       },
       minimizeToTray: draftMinimizeToTray,
       showWindowHotkey: draftShowWindowHotkey.trim(),
+      speechHotkey: draftSpeechHotkey.trim(),
       desktopControlEnabled: draftDesktopControlEnabled,
       browserControlEnabled: draftBrowserControlEnabled,
       fileAccess: cloneFileAccessSettings(draftFileAccess),
@@ -869,10 +1059,36 @@
   }
 
   function setSpeechProvider(provider: SpeechProvider): void {
-    draftSpeech = {
+    const next: SpeechSettings = {
       ...draftSpeech,
       provider,
     };
+    if (provider === "grok_voice") {
+      if (!next.modelId.includes("grok-voice")) {
+        next.modelId = DEFAULT_GROK_VOICE_MODEL;
+      }
+      const geminiVoices = GEMINI_VOICE_OPTIONS as readonly string[];
+      if (geminiVoices.includes(next.voiceName) || !next.voiceName.trim()) {
+        next.voiceName = DEFAULT_GROK_VOICE_NAME;
+      } else {
+        next.voiceName = next.voiceName.trim().toLowerCase();
+      }
+      void refreshGrokVoiceCatalog();
+    } else if (provider === "gemini_live") {
+      if (next.modelId.includes("grok-voice")) {
+        next.modelId = DEFAULT_SPEECH_SETTINGS.modelId;
+      }
+      // Leaving Grok: reset only if current voice looks like a Grok id (lowercase builtin/custom).
+      const current = next.voiceName.trim().toLowerCase();
+      if (
+        current &&
+        !GEMINI_VOICE_OPTIONS.some((v) => v.toLowerCase() === current) &&
+        (GROK_VOICE_OPTIONS as readonly string[]).includes(current)
+      ) {
+        next.voiceName = DEFAULT_SPEECH_SETTINGS.voiceName;
+      }
+    }
+    draftSpeech = next;
     markDirty();
   }
 
@@ -1631,9 +1847,9 @@
                 <label class="locale-card" class:selected={draftLocale === "system"}>
                   <input
                     type="radio"
-                    bind:group={draftLocale}
-                    value="system"
-                    onchange={handleAppLocaleChange}
+                    name="app-locale"
+                    checked={draftLocale === "system"}
+                    onchange={() => handleAppLocaleChange("system")}
                   />
                   <strong>{$i18n("locale.setting.system")}</strong>
                 </label>
@@ -1641,9 +1857,9 @@
                   <label class="locale-card" class:selected={draftLocale === appLocale}>
                     <input
                       type="radio"
-                      bind:group={draftLocale}
-                      value={appLocale}
-                      onchange={handleAppLocaleChange}
+                      name="app-locale"
+                      checked={draftLocale === appLocale}
+                      onchange={() => handleAppLocaleChange(appLocale)}
                     />
                     <strong>{LOCALE_LABELS[appLocale]}</strong>
                   </label>
@@ -2128,6 +2344,31 @@
                   <span>{$i18n("settings.speech.enable")}</span>
                 </label>
 
+                {#if isDesktopShell()}
+                  <div class="field">
+                    <span class="field-label">{$i18n("settings.speech.hotkey.title")}</span>
+                    <p class="help">{$i18n("settings.speech.hotkey.help")}</p>
+                    <HotkeyField
+                      value={draftSpeechHotkey}
+                      defaultHotkey={DEFAULT_SPEECH_HOTKEY}
+                      analyze={analyzeSpeechHotkey}
+                      i18nPrefix="settings.speech.hotkey"
+                      disabled={!draftSpeech.enabled}
+                      onchange={(next) => {
+                        draftSpeechHotkey = next;
+                        markDirty();
+                      }}
+                    />
+                    {#if draftSpeechHotkey.trim() && draftShowWindowHotkey.trim()}
+                      {@const speechAnalysis = analyzeSpeechHotkey(draftSpeechHotkey)}
+                      {@const windowAnalysis = analyzeShowWindowHotkey(draftShowWindowHotkey)}
+                      {#if speechAnalysis.normalized && speechAnalysis.normalized === windowAnalysis.normalized}
+                        <p class="help warning">{$i18n("settings.speech.hotkey.conflictWarning")}</p>
+                      {/if}
+                    {/if}
+                  </div>
+                {/if}
+
                 <fieldset class="provider-fieldset" disabled={!draftSpeech.enabled}>
                   <legend>{$i18n("settings.speech.provider.legend")}</legend>
                   <div class="provider-grid">
@@ -2158,7 +2399,7 @@
                   <p class="help">{$i18n("settings.speech.provider.localEngineHelp")}</p>
                 {/if}
 
-                {#if isGeminiSpeechSelected}
+                {#if isCloudRealtimeSpeechSelected}
                   <label class="field checkbox-field">
                     <input
                       type="checkbox"
@@ -2172,9 +2413,17 @@
                       }}
                       disabled={!draftSpeech.enabled}
                     />
-                    <span>{$i18n("settings.speech.voiceResponses")}</span>
+                    <span
+                      >{$i18n(
+                        `settings.speech.voiceResponses.${draftSpeech.provider}` as MessageKey,
+                      )}</span
+                    >
                   </label>
-                  <p class="help">{$i18n("settings.speech.voiceResponsesHelp")}</p>
+                  <p class="help">
+                    {$i18n(
+                      `settings.speech.voiceResponsesHelp.${draftSpeech.provider}` as MessageKey,
+                    )}
+                  </p>
                 {/if}
 
                 {#if isHybridSpeechSelected || isOfflineSpeechSelected}
@@ -2217,18 +2466,26 @@
                   />
                   <span>{$i18n("settings.speech.agentMode")}</span>
                 </label>
-                <p class="help">{$i18n("settings.speech.modeExclusionHelp")}</p>
-                <p class="help">{$i18n("settings.speech.agentModeHelp")}</p>
+                <p class="help">
+                  {$i18n(
+                    `settings.speech.modeExclusionHelp.${draftSpeech.provider}` as MessageKey,
+                  )}
+                </p>
+                <p class="help">
+                  {$i18n(`settings.speech.agentModeHelp.${draftSpeech.provider}` as MessageKey)}
+                </p>
                 <p class="help">{$i18n("settings.speech.manualEditHelp")}</p>
 
-                {#if isGeminiSpeechSelected}
+                {#if isCloudRealtimeSpeechSelected}
                   <label class="field">
                     <span class="field-label">{$i18n("settings.speech.modelId.label")}</span>
                     <input
                       type="text"
                       bind:value={draftSpeech.modelId}
                       oninput={markDirty}
-                      placeholder={$i18n("settings.speech.modelId.placeholder")}
+                      placeholder={isGrokSpeechSelected
+                        ? DEFAULT_GROK_VOICE_MODEL
+                        : $i18n("settings.speech.modelId.placeholder")}
                       disabled={!draftSpeech.enabled}
                     />
                   </label>
@@ -2247,7 +2504,9 @@
 
                 {#if isGeminiSpeechSelected}
                   <label class="field">
-                    <span class="field-label">{$i18n("settings.speech.voiceName.label")}</span>
+                    <span class="field-label"
+                      >{$i18n("settings.speech.voiceName.label.gemini_live")}</span
+                    >
                     <select
                       bind:value={draftSpeech.voiceName}
                       onchange={markDirty}
@@ -2258,6 +2517,59 @@
                       {/each}
                     </select>
                   </label>
+                {/if}
+
+                {#if isGrokSpeechSelected}
+                  <label class="field">
+                    <span class="field-label"
+                      >{$i18n("settings.speech.voiceName.label.grok_voice")}</span
+                    >
+                    <select
+                      bind:value={draftSpeech.voiceName}
+                      onchange={markDirty}
+                      disabled={!draftSpeech.enabled || grokVoicesLoading}
+                    >
+                      {#each grokVoiceSelectOptions as voice (voice.voiceId)}
+                        <option value={voice.voiceId}>{grokVoiceOptionLabel(voice)}</option>
+                      {/each}
+                    </select>
+                  </label>
+                  <label class="field">
+                    <span class="field-label">{$i18n("settings.speech.grokVoiceCustomId")}</span>
+                    <input
+                      type="text"
+                      value={draftSpeech.voiceName}
+                      oninput={(event) => {
+                        draftSpeech = {
+                          ...draftSpeech,
+                          voiceName: (event.currentTarget as HTMLInputElement).value
+                            .trim()
+                            .toLowerCase(),
+                        };
+                        markDirty();
+                      }}
+                      placeholder={$i18n("settings.speech.grokVoiceCustomIdPlaceholder")}
+                      disabled={!draftSpeech.enabled}
+                      autocomplete="off"
+                      spellcheck="false"
+                    />
+                  </label>
+                  <div class="action-row">
+                    <button
+                      type="button"
+                      class="ui-btn ui-btn-secondary"
+                      onclick={() => void refreshGrokVoiceCatalog()}
+                      disabled={!draftSpeech.enabled || grokVoicesLoading}
+                    >
+                      {grokVoicesLoading
+                        ? $i18n("settings.speech.grokVoices.loading")
+                        : $i18n("settings.speech.grokVoices.refresh")}
+                    </button>
+                  </div>
+                  {#if grokVoicesMessage}
+                    <p class="help">{grokVoicesMessage}</p>
+                  {/if}
+                  <p class="help">{$i18n("settings.speech.grokVoiceHelp")}</p>
                 {/if}
 
                 <label class="field">
@@ -2670,6 +2982,100 @@
                     {$i18n("settings.speech.apiKey.remove")}
                   </button>
                 </div>
+              </section>
+            {/if}
+
+            {#if speechSubSection === "tests" && isGrokSpeechSelected}
+              <section class="ui-card">
+                <div class="card-header">
+                  <h2>{$i18n("settings.speech.xaiApiKey.title")}</h2>
+                  <p>
+                    {$i18n("settings.speech.xaiApiKeyHelp")}
+                  </p>
+                </div>
+
+                <p class="help">
+                  {$i18n("settings.speech.xaiApiKey.freeKeyPrompt")}
+                  <button
+                    type="button"
+                    class="ui-btn ui-btn-link"
+                    onclick={() => void openExternalUrl(XAI_API_KEY_URL)}
+                  >
+                    {$i18n("settings.speech.xaiApiKey.freeKeyLink")}
+                  </button>
+                </p>
+
+                <dl class="info-grid compact">
+                  <div>
+                    <dt>{$i18n("settings.speech.xaiApiKey.statusLabel")}</dt>
+                    <dd>
+                      <span class="ui-chip" data-tone={xaiApiKeyStored ? "accepted" : "idle"}>
+                        {xaiApiKeyStored
+                          ? $i18n("settings.speech.xaiApiKey.stored")
+                          : $i18n("settings.speech.xaiApiKey.notStored")}
+                      </span>
+                    </dd>
+                  </div>
+                </dl>
+
+                <label class="field">
+                  <span class="field-label">{$i18n("settings.speech.xaiApiKey.fieldLabel")}</span>
+                  <input
+                    type="password"
+                    bind:value={xaiApiKeyInput}
+                    placeholder={xaiApiKeyStored
+                      ? $i18n("settings.speech.xaiApiKey.placeholderReplace")
+                      : $i18n("settings.speech.xaiApiKey.placeholderNew")}
+                    autocomplete="off"
+                  />
+                </label>
+
+                {#if xaiApiKeyMessage}
+                  <p
+                    class="api-key-message"
+                    class:success={xaiApiKeyMessageTone === "success"}
+                    class:error={xaiApiKeyMessageTone === "error"}
+                  >
+                    {xaiApiKeyMessage}
+                  </p>
+                {/if}
+
+                <div class="action-row">
+                  <button
+                    type="button"
+                    class="ui-btn ui-btn-primary"
+                    onclick={() => void handleSaveXaiApiKey()}
+                    disabled={xaiApiKeyBusy}
+                  >
+                    {$i18n("settings.speech.xaiApiKey.save")}
+                  </button>
+                  <button
+                    type="button"
+                    class="ui-btn ui-btn-secondary"
+                    onclick={() => void handleTestXaiApiKey()}
+                    disabled={xaiApiKeyBusy}
+                  >
+                    {$i18n("settings.speech.xaiApiKey.test")}
+                  </button>
+                  <button
+                    type="button"
+                    class="ui-btn ui-btn-secondary"
+                    onclick={() => void handleTestXaiApiKeyNetwork()}
+                    disabled={xaiApiKeyBusy}
+                    title={$i18n("settings.speech.xaiApiKey.testNetworkHelp")}
+                  >
+                    {$i18n("settings.speech.xaiApiKey.testNetwork")}
+                  </button>
+                  <button
+                    type="button"
+                    class="ui-btn ui-btn-secondary ui-btn-danger"
+                    onclick={() => void handleRemoveXaiApiKey()}
+                    disabled={xaiApiKeyBusy || !xaiApiKeyStored}
+                  >
+                    {$i18n("settings.speech.xaiApiKey.remove")}
+                  </button>
+                </div>
+                <p class="help">{$i18n("settings.speech.xaiApiKey.testNetworkHelp")}</p>
               </section>
             {/if}
           {/if}

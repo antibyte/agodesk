@@ -11,12 +11,14 @@ mod shell;
 mod tray;
 mod window_effects;
 mod ws;
+mod xai_realtime;
 
 use std::sync::atomic::Ordering;
 
 use tauri::{Emitter, Manager, RunEvent, WindowEvent};
 use tray::TrayState;
 use ws::transport::WsTransportState;
+use xai_realtime::XaiRealtimeState;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -26,6 +28,7 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
         .manage(WsTransportState::default())
+        .manage(XaiRealtimeState::default())
         .manage(TrayState::default())
         .manage(computer_use::browser::BrowserState::default())
         .manage(openpets::OpenPetsState::default())
@@ -86,6 +89,18 @@ pub fn run() {
             commands::get_gemini_api_key,
             commands::delete_gemini_api_key,
             commands::has_gemini_api_key,
+            commands::store_xai_api_key,
+            commands::get_xai_api_key,
+            commands::delete_xai_api_key,
+            commands::has_xai_api_key,
+            commands::create_xai_realtime_client_secret,
+            commands::test_xai_api_key,
+            commands::list_xai_tts_voices,
+            commands::xai_tts_synthesize,
+            xai_realtime::xai_realtime_connect,
+            xai_realtime::xai_realtime_send,
+            xai_realtime::xai_realtime_disconnect,
+            xai_realtime::test_xai_realtime_connection,
             commands::collect_host_info,
             commands::list_displays,
             commands::list_windows,
@@ -107,12 +122,18 @@ pub fn run() {
             files::ops::file_list,
             files::ops::file_read,
             files::ops::file_write,
+            files::ops::file_patch,
             files::search::ops::file_search,
             files::search::ops::file_search_sync_roots,
             files::search::ops::file_search_rescan,
             files::ops::pick_folder_path,
             files::ops::canonicalize_folder_path,
             shell::exec::shell_exec,
+            shell::session::shell_session_start,
+            shell::session::shell_session_read,
+            shell::session::shell_session_input,
+            shell::session::shell_session_stop,
+            shell::session::shell_session_list,
             tray::set_minimize_to_tray,
             tray::update_tray_labels,
             tray::show_main_window,

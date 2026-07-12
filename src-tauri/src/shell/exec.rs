@@ -143,18 +143,33 @@ fn run_shell_command(
     })
 }
 
-fn build_shell_command(shell: &str, command: &str) -> Result<Command, String> {
+pub(crate) fn build_shell_command(shell: &str, command: &str) -> Result<Command, String> {
+    build_shell_command_with_options(shell, command, true)
+}
+
+pub(crate) fn build_shell_session_command(shell: &str, command: &str) -> Result<Command, String> {
+    build_shell_command_with_options(shell, command, false)
+}
+
+fn build_shell_command_with_options(
+    shell: &str,
+    command: &str,
+    non_interactive: bool,
+) -> Result<Command, String> {
     match shell {
         "powershell" => {
             let mut cmd = Command::new("powershell");
-            cmd.args([
-                "-NoProfile",
-                "-NonInteractive",
-                "-ExecutionPolicy",
-                "Bypass",
-                "-Command",
-                command,
+            let mut args = vec!["-NoProfile".to_string()];
+            if non_interactive {
+                args.push("-NonInteractive".to_string());
+            }
+            args.extend([
+                "-ExecutionPolicy".to_string(),
+                "Bypass".to_string(),
+                "-Command".to_string(),
+                command.to_string(),
             ]);
+            cmd.args(args);
             Ok(cmd)
         }
         "cmd" => {
@@ -181,7 +196,7 @@ fn build_shell_command(shell: &str, command: &str) -> Result<Command, String> {
     }
 }
 
-fn apply_minimal_environment(command: &mut Command, shell: &str) {
+pub(crate) fn apply_minimal_environment(command: &mut Command, shell: &str) {
     command.env_clear();
     if cfg!(windows) {
         if let Ok(system_root) = std::env::var("SystemRoot") {
@@ -246,7 +261,7 @@ fn is_valid_utf8_prefix(bytes: &[u8]) -> bool {
     std::str::from_utf8(bytes).is_ok()
 }
 
-fn kill_process_tree(pid: u32) {
+pub(crate) fn kill_process_tree(pid: u32) {
     #[cfg(windows)]
     {
         let _ = Command::new("taskkill")

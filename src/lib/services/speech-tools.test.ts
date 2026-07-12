@@ -8,15 +8,15 @@ import {
 } from "./speech-tools.ts";
 
 describe("speech-tools persona forwarding", () => {
-  it("buildAgentSystemInstruction nutzt persona_prompt von AuraGo", () => {
+  it("buildAgentSystemInstruction nutzt persona_prompt und verankert AuraGo-Namen", () => {
     personaState.setAssets({
-      persona: "Aura",
-      iconKey: "aura",
+      persona: "Nova",
+      iconKey: "nova",
       avatarUrl: "",
       avatarFallbackUrl: "",
       iconUrl: "",
       iconFallbackUrl: "",
-      personaPrompt: "Du bist Aura, freundlich und präzise.",
+      personaPrompt: "Du bist Nova, freundlich und präzise.",
       assetVersion: "v1",
     });
 
@@ -28,7 +28,11 @@ describe("speech-tools persona forwarding", () => {
       canSendChat: true,
     });
 
-    assert.match(text, /Du bist Aura, freundlich und präzise/);
+    assert.match(text, /Du bist Nova, freundlich und präzise/);
+    assert.match(text, /AuraGo/);
+    assert.match(text, /Auramon/);
+    assert.match(text, /send_message_to_aurago/);
+    assert.match(text, /Behaupte nie.*nicht/i);
     personaState.reset();
   });
 

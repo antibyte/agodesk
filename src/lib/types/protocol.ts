@@ -33,6 +33,7 @@ export type MessageType =
   | "chat.response"
   | "chat.response.chunk"
   | "chat.plan_update"
+  | "agent.activity"
   | "chat.error"
   | "chat.sessions.list"
   | "chat.sessions"
@@ -339,6 +340,15 @@ export interface ChatAudioPayload {
   filename?: string;
 }
 
+export type ArtifactMediaKind =
+  | "file"
+  | "directory"
+  | "diff"
+  | "terminal"
+  | "search_results"
+  | "table"
+  | "web_page";
+
 export type ChatMediaKind =
   | "image"
   | "audio"
@@ -348,17 +358,42 @@ export type ChatMediaKind =
   | "youtube_video"
   | "stl"
   | "link"
+  | ArtifactMediaKind
   | string;
+
+export const ARTIFACT_MEDIA_KINDS = new Set<string>([
+  "file",
+  "directory",
+  "diff",
+  "terminal",
+  "search_results",
+  "table",
+  "image",
+  "document",
+  "web_page",
+]);
+
+export type ArtifactActionKind = "open" | "open_folder" | "copy" | "save";
+
+export interface ArtifactAction {
+  kind: ArtifactActionKind;
+  label?: string;
+  target?: string;
+}
 
 export interface ChatMediaItem {
   id: string;
   conversation_id: string;
   request_id?: string;
   attachment_id?: string;
+  artifact_id?: string;
   kind: ChatMediaKind;
   path?: string;
   agent_path?: string;
   preview_url?: string;
+  preview?: string;
+  content?: string;
+  content_ref?: string;
   url?: string;
   embed_url?: string;
   title?: string;
@@ -368,6 +403,15 @@ export interface ChatMediaItem {
   description?: string;
   mime_type?: string;
   timestamp?: string;
+  actions?: ArtifactAction[];
+  source_activity_id?: string;
+}
+
+export function isInspectableArtifact(item: ChatMediaItem): boolean {
+  if (item.artifact_id) {
+    return true;
+  }
+  return ARTIFACT_MEDIA_KINDS.has(item.kind);
 }
 
 export interface ChatMediaPayload {
@@ -517,6 +561,54 @@ export interface ChatPlanUpdatePayload {
   conversation_id?: string;
   request_id?: string;
   plan: AgoDeskPlan | null;
+}
+
+export type AgentActivityPhase =
+  | "queued"
+  | "started"
+  | "progress"
+  | "waiting_approval"
+  | "completed"
+  | "failed"
+  | "cancelled";
+
+export type AgentActivityKind =
+  | "agent"
+  | "tool"
+  | "shell"
+  | "search"
+  | "file_read"
+  | "file_edit"
+  | "browser"
+  | "desktop";
+
+export type AgentActivityRisk = "observe" | "read" | "write" | "execute" | "control";
+
+export interface AgentActivityProgress {
+  current?: number;
+  total?: number;
+  unit?: string;
+}
+
+export interface AgentActivityPayload {
+  activity_id: string;
+  parent_activity_id?: string;
+  session_id: string;
+  conversation_id: string;
+  request_id?: string;
+  command_id?: string;
+  kind: AgentActivityKind;
+  phase: AgentActivityPhase;
+  title: string;
+  summary?: string;
+  risk?: AgentActivityRisk;
+  approval_required?: boolean;
+  progress?: AgentActivityProgress;
+  artifact_ids?: string[];
+  started_at?: string;
+  finished_at?: string;
+  duration_ms?: number;
+  error_code?: string;
 }
 
 export interface ChatErrorPayload {
@@ -732,6 +824,123 @@ export function normalizeChatPlanUpdatePayload(payload: unknown): ChatPlanUpdate
     ...(conversationId ? { conversation_id: conversationId } : {}),
     ...(requestId ? { request_id: requestId } : {}),
     plan,
+  };
+}
+
+const AGENT_ACTIVITY_PHASES = new Set<AgentActivityPhase>([
+  "queued",
+  "started",
+  "progress",
+  "waiting_approval",
+  "completed",
+  "failed",
+  "cancelled",
+]);
+
+const AGENT_ACTIVITY_KINDS = new Set<AgentActivityKind>([
+  "agent",
+  "tool",
+  "shell",
+  "search",
+  "file_read",
+  "file_edit",
+  "browser",
+  "desktop",
+]);
+
+const AGENT_ACTIVITY_RISKS = new Set<AgentActivityRisk>([
+  "observe",
+  "read",
+  "write",
+  "execute",
+  "control",
+]);
+
+function normalizeAgentActivityProgress(raw: unknown): AgentActivityProgress | undefined {
+  if (!raw || typeof raw !== "object") {
+    return undefined;
+  }
+  const record = raw as Record<string, unknown>;
+  const current = readOptionalFiniteNumber(record.current);
+  const total = readOptionalFiniteNumber(record.total);
+  const unit = readString(record, "unit");
+  if (current === undefined && total === undefined && !unit) {
+    return undefined;
+  }
+  return {
+    ...(current !== undefined ? { current } : {}),
+    ...(total !== undefined ? { total } : {}),
+    ...(unit ? { unit } : {}),
+  };
+}
+
+export function normalizeAgentActivityPayload(payload: unknown): AgentActivityPayload | null {
+  if (!payload || typeof payload !== "object") {
+    return null;
+  }
+
+  const record = payload as Record<string, unknown>;
+  const activityId = readString(record, "activity_id", "activityId");
+  const sessionId = readString(record, "session_id", "sessionId");
+  const conversationId = readString(record, "conversation_id", "conversationId");
+  const title = readString(record, "title");
+  const kindRaw = readString(record, "kind");
+  const phaseRaw = readString(record, "phase");
+
+  if (!activityId || !sessionId || !conversationId || !title || !kindRaw || !phaseRaw) {
+    return null;
+  }
+
+  const kind = kindRaw as AgentActivityKind;
+  const phase = phaseRaw as AgentActivityPhase;
+  if (!AGENT_ACTIVITY_KINDS.has(kind) || !AGENT_ACTIVITY_PHASES.has(phase)) {
+    return null;
+  }
+
+  const parentActivityId = readString(record, "parent_activity_id", "parentActivityId");
+  const requestId = readString(record, "request_id", "requestId");
+  const commandId = readString(record, "command_id", "commandId");
+  const summary = readString(record, "summary");
+  const riskRaw = readString(record, "risk");
+  const risk =
+    riskRaw && AGENT_ACTIVITY_RISKS.has(riskRaw as AgentActivityRisk)
+      ? (riskRaw as AgentActivityRisk)
+      : undefined;
+  const approvalRequired =
+    typeof record.approval_required === "boolean"
+      ? record.approval_required
+      : typeof record.approvalRequired === "boolean"
+        ? record.approvalRequired
+        : undefined;
+  const progress = normalizeAgentActivityProgress(record.progress);
+  const artifactIdsRaw = record.artifact_ids ?? record.artifactIds;
+  const artifactIds = Array.isArray(artifactIdsRaw)
+    ? artifactIdsRaw.filter((id): id is string => typeof id === "string" && id.length > 0)
+    : undefined;
+  const startedAt = readString(record, "started_at", "startedAt");
+  const finishedAt = readString(record, "finished_at", "finishedAt");
+  const durationMs = readOptionalFiniteNumber(record.duration_ms ?? record.durationMs);
+  const errorCode = readString(record, "error_code", "errorCode");
+
+  return {
+    activity_id: activityId,
+    session_id: sessionId,
+    conversation_id: conversationId,
+    kind,
+    phase,
+    title,
+    ...(parentActivityId ? { parent_activity_id: parentActivityId } : {}),
+    ...(requestId ? { request_id: requestId } : {}),
+    ...(commandId ? { command_id: commandId } : {}),
+    ...(summary ? { summary } : {}),
+    ...(risk ? { risk } : {}),
+    ...(approvalRequired !== undefined ? { approval_required: approvalRequired } : {}),
+    ...(progress ? { progress } : {}),
+    ...(artifactIds && artifactIds.length > 0 ? { artifact_ids: artifactIds } : {}),
+    ...(startedAt ? { started_at: startedAt } : {}),
+    ...(finishedAt ? { finished_at: finishedAt } : {}),
+    ...(durationMs !== undefined ? { duration_ms: durationMs } : {}),
+    ...(errorCode ? { error_code: errorCode } : {}),
   };
 }
 
@@ -1060,6 +1269,49 @@ function normalizeChatMediaKind(value: unknown): ChatMediaKind | null {
   return value.trim() as ChatMediaKind;
 }
 
+function normalizeArtifactActionKind(value: unknown): ArtifactActionKind | null {
+  if (typeof value !== "string" || !value.trim()) {
+    return null;
+  }
+  const normalized = value.trim().toLowerCase();
+  if (
+    normalized === "open" ||
+    normalized === "open_folder" ||
+    normalized === "copy" ||
+    normalized === "save"
+  ) {
+    return normalized;
+  }
+  return null;
+}
+
+function normalizeArtifactActions(raw: unknown): ArtifactAction[] | undefined {
+  if (!Array.isArray(raw)) {
+    return undefined;
+  }
+
+  const actions: ArtifactAction[] = [];
+  for (const entry of raw) {
+    if (!entry || typeof entry !== "object") {
+      continue;
+    }
+    const record = entry as Record<string, unknown>;
+    const kind = normalizeArtifactActionKind(record.kind ?? record.action);
+    if (!kind) {
+      continue;
+    }
+    const label = readString(record, "label");
+    const target = readString(record, "target", "path", "url");
+    actions.push({
+      kind,
+      ...(label ? { label } : {}),
+      ...(target ? { target } : {}),
+    });
+  }
+
+  return actions.length > 0 ? actions : undefined;
+}
+
 function normalizeChatMediaItem(
   raw: unknown,
   fallbackConversationId: string,
@@ -1080,8 +1332,12 @@ function normalizeChatMediaItem(
     readString(record, "conversation_id", "conversationId") ?? fallbackConversationId;
   const requestId = readString(record, "request_id", "requestId") ?? fallbackRequestId;
   const attachmentId = readString(record, "attachment_id", "attachmentId");
+  const artifactId = readString(record, "artifact_id", "artifactId");
   const mediaLocation = readAgodeskMediaLocation(record);
   const previewUrl = readString(record, "preview_url", "previewUrl");
+  const preview = readString(record, "preview");
+  const content = readString(record, "content");
+  const contentRef = readString(record, "content_ref", "contentRef");
   const url = readString(record, "url");
   const embedUrl = readString(record, "embed_url", "embedUrl");
   const title = readString(record, "title");
@@ -1090,6 +1346,8 @@ function normalizeChatMediaItem(
   const description = readString(record, "description");
   const mimeType = readString(record, "mime_type", "mimeType");
   const timestamp = readString(record, "timestamp") ?? fallbackTimestamp;
+  const sourceActivityId = readString(record, "source_activity_id", "sourceActivityId");
+  const actions = normalizeArtifactActions(record.actions);
 
   return {
     id,
@@ -1097,10 +1355,14 @@ function normalizeChatMediaItem(
     kind,
     ...(requestId ? { request_id: requestId } : {}),
     ...(attachmentId ? { attachment_id: attachmentId } : {}),
+    ...(artifactId ? { artifact_id: artifactId } : {}),
     ...(mediaLocation.path ? { path: mediaLocation.path } : {}),
     ...(mediaLocation.agentPath ? { agent_path: mediaLocation.agentPath } : {}),
     ...(mediaLocation.storageFilename ? { storage_filename: mediaLocation.storageFilename } : {}),
     ...(previewUrl ? { preview_url: previewUrl } : {}),
+    ...(preview ? { preview } : {}),
+    ...(content ? { content } : {}),
+    ...(contentRef ? { content_ref: contentRef } : {}),
     ...(url ? { url } : {}),
     ...(embedUrl ? { embed_url: embedUrl } : {}),
     ...(title ? { title } : {}),
@@ -1109,6 +1371,8 @@ function normalizeChatMediaItem(
     ...(description ? { description } : {}),
     ...(mimeType ? { mime_type: mimeType } : {}),
     ...(timestamp ? { timestamp } : {}),
+    ...(sourceActivityId ? { source_activity_id: sourceActivityId } : {}),
+    ...(actions ? { actions } : {}),
   };
 }
 
@@ -1717,12 +1981,31 @@ export type DesktopOperation =
   | "file_list"
   | "file_read"
   | "file_write"
+  | "file_patch"
   | "file_search"
-  | "shell_exec";
+  | "shell_exec"
+  | "shell_session_start"
+  | "shell_session_read"
+  | "shell_session_input"
+  | "shell_session_stop"
+  | "shell_session_list";
 
-export const FILE_OPERATIONS = ["file_list", "file_read", "file_write", "file_search"] as const;
+export const FILE_OPERATIONS = [
+  "file_list",
+  "file_read",
+  "file_write",
+  "file_patch",
+  "file_search",
+] as const;
 
-export const SHELL_OPERATIONS = ["shell_exec"] as const;
+export const SHELL_OPERATIONS = [
+  "shell_exec",
+  "shell_session_start",
+  "shell_session_read",
+  "shell_session_input",
+  "shell_session_stop",
+  "shell_session_list",
+] as const;
 
 export type ShellOperation = (typeof SHELL_OPERATIONS)[number];
 
@@ -1828,6 +2111,9 @@ export type DesktopErrorCode =
   | "FILE_TOO_LARGE"
   | "FILE_WRITE_DENIED"
   | "FILE_HASH_MISMATCH"
+  | "FILE_CONFLICT"
+  | "FILE_PATCH_MISMATCH"
+  | "FILE_COMMAND_INVALID"
   | "DESKTOP_UI_UNAVAILABLE"
   | "DESKTOP_ELEMENT_NOT_FOUND"
   | "DESKTOP_ACCESSIBILITY_DENIED"
@@ -1841,6 +2127,12 @@ export type DesktopErrorCode =
   | "SHELL_OUTPUT_TOO_LARGE"
   | "SHELL_SPAWN_FAILED";
 
+export interface FilePatchHunk {
+  old_text: string;
+  new_text: string;
+  expected_occurrences?: number;
+}
+
 export interface FileCommandParams {
   root_id?: string;
   path: string;
@@ -1848,7 +2140,10 @@ export interface FileCommandParams {
   encoding?: "utf-8" | "base64" | "auto";
   content?: string;
   expected_hash?: string;
+  expected_sha256?: string;
   create_only?: boolean;
+  dry_run?: boolean;
+  patches?: FilePatchHunk[];
   operation?: string;
   pattern?: string;
   glob?: string;
@@ -2017,7 +2312,7 @@ export function normalizeDesktopCommandPayload(raw: unknown): DesktopCommandPayl
   } else if (isFileOperation(operation)) {
     params = normalizeFileCommandParams(paramsRecord);
   } else if (isShellOperation(operation)) {
-    params = normalizeShellExecParams(paramsRecord);
+    params = normalizeShellSessionParams(operation, paramsRecord);
   } else if (Object.keys(paramsRecord).length > 0) {
     params = paramsRecord;
   }
@@ -2100,6 +2395,29 @@ export interface ShellExecParams {
   timeout_ms?: number;
 }
 
+export interface ShellSessionStartParams extends ShellExecParams {
+  interactive?: boolean;
+  initial_wait_ms?: number;
+}
+
+export interface ShellSessionReadParams {
+  shell_session_id: string;
+  offset?: number;
+  limit?: number;
+  wait_ms?: number;
+  stream?: "stdout" | "stderr";
+}
+
+export interface ShellSessionInputParams {
+  shell_session_id: string;
+  input: string;
+  append_newline?: boolean;
+}
+
+export interface ShellSessionStopParams {
+  shell_session_id: string;
+}
+
 export interface ShellExecResult {
   exit_code: number;
   stdout: string;
@@ -2109,6 +2427,30 @@ export interface ShellExecResult {
   truncated: boolean;
   cwd_display: string;
   shell: string;
+}
+
+export const SHELL_SESSION_START_OPS = ["shell_session_start"] as const;
+export const SHELL_SESSION_INPUT_OPS = ["shell_session_input"] as const;
+export const SHELL_SESSION_PASSIVE_OPS = [
+  "shell_session_read",
+  "shell_session_stop",
+  "shell_session_list",
+] as const;
+
+export function isShellSessionStartOperation(operation: string): boolean {
+  return operation === "shell_session_start";
+}
+
+export function isShellSessionInputOperation(operation: string): boolean {
+  return operation === "shell_session_input";
+}
+
+export function isShellSessionPassiveOperation(operation: string): boolean {
+  return (SHELL_SESSION_PASSIVE_OPS as readonly string[]).includes(operation);
+}
+
+export function shellSessionRequiresApproval(operation: string): boolean {
+  return isShellSessionStartOperation(operation) || isShellSessionInputOperation(operation);
 }
 
 export const DEFAULT_SHELL_ACCESS_SETTINGS: ShellAccessSettings = {
@@ -2138,6 +2480,62 @@ export function normalizeShellExecParams(raw: Record<string, unknown>): ShellExe
   };
 }
 
+export function normalizeShellSessionParams(
+  operation: string,
+  raw: Record<string, unknown>,
+): Record<string, unknown> {
+  if (operation === "shell_session_start") {
+    const base = normalizeShellExecParams(raw);
+    return {
+      ...base,
+      interactive: raw.interactive === true,
+      initial_wait_ms:
+        typeof raw.initial_wait_ms === "number" && Number.isFinite(raw.initial_wait_ms)
+          ? raw.initial_wait_ms
+          : typeof raw.initialWaitMs === "number" && Number.isFinite(raw.initialWaitMs)
+            ? raw.initialWaitMs
+            : undefined,
+    };
+  }
+  if (operation === "shell_session_read") {
+    return {
+      shell_session_id:
+        readString(raw, "shell_session_id", "shellSessionId", "session_id", "sessionId") ?? "",
+      offset:
+        typeof raw.offset === "number" && Number.isFinite(raw.offset) ? raw.offset : undefined,
+      limit: typeof raw.limit === "number" && Number.isFinite(raw.limit) ? raw.limit : undefined,
+      wait_ms:
+        typeof raw.wait_ms === "number" && Number.isFinite(raw.wait_ms)
+          ? raw.wait_ms
+          : typeof raw.waitMs === "number" && Number.isFinite(raw.waitMs)
+            ? raw.waitMs
+            : undefined,
+      stream: raw.stream === "stderr" ? "stderr" : "stdout",
+    };
+  }
+  if (operation === "shell_session_input") {
+    return {
+      shell_session_id:
+        readString(raw, "shell_session_id", "shellSessionId", "session_id", "sessionId") ?? "",
+      input: readString(raw, "input") ?? "",
+      append_newline:
+        raw.append_newline === undefined && raw.appendNewline === undefined
+          ? true
+          : raw.append_newline === true || raw.appendNewline === true,
+    };
+  }
+  if (operation === "shell_session_stop") {
+    return {
+      shell_session_id:
+        readString(raw, "shell_session_id", "shellSessionId", "session_id", "sessionId") ?? "",
+    };
+  }
+  if (operation === "shell_session_list") {
+    return {};
+  }
+  return { ...normalizeShellExecParams(raw) };
+}
+
 export function normalizeFileCommandParams(raw: Record<string, unknown>): FileCommandParams {
   return {
     root_id: readString(raw, "root_id", "rootId"),
@@ -2160,7 +2558,23 @@ export function normalizeFileCommandParams(raw: Record<string, unknown>): FileCo
         : undefined,
     content: readString(raw, "content"),
     expected_hash: readString(raw, "expected_hash", "expectedHash"),
+    expected_sha256: readString(raw, "expected_sha256", "expectedSha256"),
     create_only: raw.create_only === true || raw.createOnly === true,
+    dry_run: raw.dry_run === true || raw.dryRun === true,
+    patches: Array.isArray(raw.patches)
+      ? raw.patches
+          .filter((entry): entry is Record<string, unknown> => !!entry && typeof entry === "object")
+          .map((entry) => ({
+            old_text: readString(entry, "old_text", "oldText") ?? "",
+            new_text: readString(entry, "new_text", "newText") ?? "",
+            expected_occurrences:
+              typeof entry.expected_occurrences === "number"
+                ? entry.expected_occurrences
+                : typeof entry.expectedOccurrences === "number"
+                  ? entry.expectedOccurrences
+                  : undefined,
+          }))
+      : undefined,
     operation:
       readString(raw, "operation") ??
       readString(raw, "search_type", "searchType", "search_mode", "searchMode"),
@@ -2307,11 +2721,12 @@ export const DEFAULT_OPENPETS_SETTINGS: OpenPetsSettings = {
   showMessages: false,
 };
 
-/** Speech pipeline backend: cloud Gemini, hybrid local ASR + online TTS, or fully offline. */
-export type SpeechProvider = "gemini_live" | "hybrid" | "offline";
+/** Speech pipeline backend: cloud Gemini/Grok, hybrid local ASR + online TTS, or fully offline. */
+export type SpeechProvider = "gemini_live" | "grok_voice" | "hybrid" | "offline";
 
 export const SPEECH_PROVIDERS: readonly SpeechProvider[] = [
   "gemini_live",
+  "grok_voice",
   "hybrid",
   "offline",
 ] as const;
@@ -2380,7 +2795,12 @@ export const DEFAULT_SPEECH_SETTINGS: SpeechSettings = {
 };
 
 export function normalizeSpeechProvider(value: unknown): SpeechProvider {
-  if (value === "hybrid" || value === "offline" || value === "gemini_live") {
+  if (
+    value === "hybrid" ||
+    value === "offline" ||
+    value === "gemini_live" ||
+    value === "grok_voice"
+  ) {
     return value;
   }
   return DEFAULT_SPEECH_SETTINGS.provider;
@@ -2390,8 +2810,25 @@ export function isGeminiSpeechProvider(provider: SpeechProvider): boolean {
   return provider === "gemini_live";
 }
 
+export function isGrokSpeechProvider(provider: SpeechProvider): boolean {
+  return provider === "grok_voice";
+}
+
+/** Cloud realtime duplex providers (Gemini Live, Grok Voice) that support agent tool calling. */
+export function speechProviderIsCloudRealtime(provider: SpeechProvider): boolean {
+  return provider === "gemini_live" || provider === "grok_voice";
+}
+
 export function speechProviderRequiresGeminiApiKey(provider: SpeechProvider): boolean {
   return provider === "gemini_live";
+}
+
+export function speechProviderRequiresXaiApiKey(provider: SpeechProvider): boolean {
+  return provider === "grok_voice";
+}
+
+export function speechProviderRequiresCloudApiKey(provider: SpeechProvider): boolean {
+  return speechProviderRequiresGeminiApiKey(provider) || speechProviderRequiresXaiApiKey(provider);
 }
 
 export const DEFAULT_UI_SOUND_SETTINGS: UiSoundSettings = {
@@ -2493,6 +2930,8 @@ export interface AppSettings {
   minimizeToTray: boolean;
   /** Globaler Hotkey zum Anzeigen/Fokussieren (leer = deaktiviert). */
   showWindowHotkey: string;
+  /** Globaler Hotkey zum Starten/Stoppen von Speech-to-Text (leer = deaktiviert). */
+  speechHotkey: string;
   /** Screenshots und Remote-Eingaben über desktop.command erlauben. */
   desktopControlEnabled: boolean;
   /** Browser-Automatisierung (CDP) separat freigeben. */
@@ -2524,6 +2963,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   uiSounds: { ...DEFAULT_UI_SOUND_SETTINGS },
   minimizeToTray: false,
   showWindowHotkey: "Alt+Shift+G",
+  speechHotkey: "Alt+Shift+M",
   desktopControlEnabled: true,
   browserControlEnabled: true,
   fileAccess: { ...DEFAULT_FILE_ACCESS_SETTINGS },
@@ -2542,6 +2982,7 @@ export const AGODESK_CLIENT_VERSION = "0.1.14";
 
 export const AGODESK_AGENT_METADATA_CAPABILITY = "chat.agent_metadata";
 export const AGODESK_PLAN_UPDATES_CAPABILITY = "chat.plan_updates";
+export const AGODESK_AGENT_ACTIVITY_CAPABILITY = "chat.agent_activity";
 export const AGODESK_CHAT_SESSIONS_CAPABILITY = "chat.sessions";
 export const AGODESK_CHAT_CANCEL_CAPABILITY = "chat.cancel";
 export const AGODESK_CHAT_AUDIO_EVENTS_CAPABILITY = "chat.audio_events";
@@ -2562,6 +3003,7 @@ export const AGODESK_BASE_CAPABILITIES = [
   "chat.full_response",
   "chat.agent_metadata",
   "chat.plan_updates",
+  AGODESK_AGENT_ACTIVITY_CAPABILITY,
   AGODESK_CHAT_SESSIONS_CAPABILITY,
   AGODESK_CHAT_CANCEL_CAPABILITY,
   AGODESK_CHAT_AUDIO_EVENTS_CAPABILITY,
@@ -2594,6 +3036,7 @@ export const AGODESK_CLIENT_CAPABILITIES = [
   "chat.full_response",
   AGODESK_AGENT_METADATA_CAPABILITY,
   AGODESK_PLAN_UPDATES_CAPABILITY,
+  AGODESK_AGENT_ACTIVITY_CAPABILITY,
   AGODESK_CHAT_SESSIONS_CAPABILITY,
   AGODESK_CHAT_CANCEL_CAPABILITY,
   AGODESK_CHAT_AUDIO_EVENTS_CAPABILITY,
@@ -2614,6 +3057,7 @@ export const AGODESK_CLIENT_CAPABILITIES = [
 export const AGODESK_FILE_READ_CAPABILITY = "remote.files.read";
 export const AGODESK_FILE_WRITE_CAPABILITY = "remote.files.write";
 export const AGODESK_SHELL_EXEC_CAPABILITY = "remote.shell.exec";
+export const AGODESK_SHELL_SESSION_CAPABILITY = "remote.shell.session";
 
 export function isLoopbackHost(host: string): boolean {
   return host === "localhost" || host === "127.0.0.1" || host === "::1" || host === "[::1]";
@@ -2821,6 +3265,14 @@ export function hasAdvertisedPlanUpdates(capabilities: readonly string[]): boole
   return hasAdvertisedCapability(capabilities, AGODESK_PLAN_UPDATES_CAPABILITY);
 }
 
+export function hasAdvertisedAgentActivity(capabilities: readonly string[]): boolean {
+  return hasAdvertisedCapability(capabilities, AGODESK_AGENT_ACTIVITY_CAPABILITY);
+}
+
+export function hasAdvertisedShellSession(capabilities: readonly string[]): boolean {
+  return hasAdvertisedCapability(capabilities, AGODESK_SHELL_SESSION_CAPABILITY);
+}
+
 export function hasAdvertisedChatSessions(capabilities: readonly string[]): boolean {
   return hasAdvertisedCapability(capabilities, AGODESK_CHAT_SESSIONS_CAPABILITY);
 }
@@ -2970,6 +3422,7 @@ export function agodeskClientCapabilities(
     "chat.full_response",
     AGODESK_AGENT_METADATA_CAPABILITY,
     AGODESK_PLAN_UPDATES_CAPABILITY,
+    AGODESK_AGENT_ACTIVITY_CAPABILITY,
     AGODESK_CHAT_SESSIONS_CAPABILITY,
     AGODESK_CHAT_CANCEL_CAPABILITY,
     AGODESK_CHAT_AUDIO_EVENTS_CAPABILITY,
@@ -3007,6 +3460,7 @@ export function agodeskClientCapabilities(
 
   if (buildShellAccessSessionPayload(shellAccess)) {
     caps.push(AGODESK_SHELL_EXEC_CAPABILITY);
+    caps.push(AGODESK_SHELL_SESSION_CAPABILITY);
   }
 
   caps.push("persona.assets");

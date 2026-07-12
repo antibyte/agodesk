@@ -41,6 +41,7 @@ AuraGo accepts AgoDesk WebSocket messages up to 16 MiB. Desktop screenshot resul
 - `chat.error`: machine-readable error.
 - `chat.response.chunk`: reserved for streaming support; may carry optional metadata when streaming is enabled.
 - `chat.plan_update`: active chat plan snapshot for clients that advertise `chat.plan_updates`.
+- `agent.activity`: live agent/tool execution transparency for clients that advertise `chat.agent_activity`. See [`AURAGO_DESKTOP_COMMANDER_HANDOFF.md`](./AURAGO_DESKTOP_COMMANDER_HANDOFF.md).
 - `chat.sessions.list` / `chat.sessions`: list AuraGo chat conversations available to AgoDesk.
 - `chat.session.create` / `chat.session`: create or load a shared AuraGo chat conversation.
 - `chat.session.load`: load a shared AuraGo chat conversation with visible messages.
@@ -91,6 +92,7 @@ Desktop commands are dispatched only when the matching client capability is pres
 - `chat.full_response`: required for server-initiated AgoChat messages.
 - `chat.agent_metadata`: enables `metadata.agent_mood` on chat responses for voice-model tone selection.
 - `chat.plan_updates`: enables live `chat.plan_update` frames and final `metadata.plan` snapshots.
+- `chat.agent_activity`: enables live `agent.activity` frames for tool/shell/file execution transparency.
 - `chat.sessions`: enables shared AuraGo chat history, New Chat, and loading old conversations.
 - `chat.cancel`: enables Stop for active AgoDesk agent turns.
 - `chat.audio_events`: enables `chat.audio` frames for server-generated TTS playback.
@@ -109,8 +111,9 @@ Desktop commands are dispatched only when the matching client capability is pres
 - `remote.desktop.ui_automation`: required for `desktop_ui_tree` and `desktop_ui_action`
 - `remote.desktop.browser`: required for `desktop_browser_connect`, `desktop_browser_snapshot`, `desktop_browser_action`, and `desktop_browser_disconnect`
 - `remote.files.read`: required for `file_list`, `file_read`, and `file_search`
-- `remote.files.write`: required for `file_write`
+- `remote.files.write`: required for `file_write` and `file_patch`
 - `remote.shell.exec`: required for `shell_exec`; AgoDesk must advertise it only when remote shell is enabled in the local AgoDesk config, and AuraGo must offer/dispatch it only when its own `agent.allow_remote_shell` policy permits remote shell usage.
+- `remote.shell.session`: required for `shell_session_start`, `shell_session_read`, `shell_session_input`, `shell_session_stop`, and `shell_session_list` (persistent process sessions). Advertised together with `remote.shell.exec` when shell access is configured.
 
 If a client omits these capabilities, pairing, heartbeat, persona assets, and chat can still work, but remote commands return `UNSUPPORTED_CAPABILITY` immediately instead of waiting for a `desktop.result` timeout. A client that sends keepalives but does not advertise the desktop, file, or shell capabilities is connected, but only capable of the features it advertised.
 
@@ -1412,6 +1415,14 @@ Stable shell error codes:
 
 `shell_exec_stream` remains reserved for a later protocol version and is not available in v1.
 
+### Persistent shell sessions (`shell_session_*`)
+
+Requires `remote.shell.session`. See [`AURAGO_DESKTOP_COMMANDER_HANDOFF.md`](./AURAGO_DESKTOP_COMMANDER_HANDOFF.md) for start/read/input/stop/list shapes, pagination (`offset`/`limit`, negative = tail), and reconnect rules. `shell_exec` remains the one-shot path.
+
+### Surgical file patches (`file_patch`)
+
+Requires `remote.files.write`. Exact search-and-replace with `expected_occurrences`, optional `expected_sha256`, and `dry_run`. See handoff doc.
+
 ## RemoteHub Operations
 
 The existing RemoteHub command protocol supports these agodesk-capable operations in this backend version:
@@ -1432,6 +1443,14 @@ The existing RemoteHub command protocol supports these agodesk-capable operation
 - `file_list`
 - `file_read`
 - `file_search`
+- `file_write`
+- `file_patch`
+- `shell_exec`
+- `shell_session_start`
+- `shell_session_read`
+- `shell_session_input`
+- `shell_session_stop`
+- `shell_session_list`
 - `file_write`
 - `shell_exec`
 

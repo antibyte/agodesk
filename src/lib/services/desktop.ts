@@ -26,11 +26,18 @@ import type { DesktopStreamStartParams, DesktopStreamStopParams } from "../types
 import { isBrowserTabAction, resolveFileCommandPath } from "../types/protocol";
 import { settings } from "../stores/settings";
 import { resetDesktopStreamState, startDesktopStream, stopDesktopStream } from "./desktop-stream";
-import { listRemoteFiles, readRemoteFile, writeRemoteFile } from "./file-commands";
+import { listRemoteFiles, readRemoteFile, writeRemoteFile, patchRemoteFile } from "./file-commands";
 import { searchRemoteFiles, parseFileSearchContent, fileSearchErrorCode } from "./file-search-sync";
 import { fileAccessIsConfigured } from "./file-access";
 import { auditShellAccess, type ShellValidationSuccess } from "./shell-access";
-import { invokeShellExec } from "./shell-commands";
+import {
+  invokeShellExec,
+  invokeShellSessionInput,
+  invokeShellSessionList,
+  invokeShellSessionRead,
+  invokeShellSessionStart,
+  invokeShellSessionStop,
+} from "./shell-commands";
 
 export type {
   ActiveWindowInfo,
@@ -440,12 +447,126 @@ export async function executeShellCommand(
 }
 
 function parseShellInvokeError(message: string): DesktopErrorCode {
-  for (const code of ["SHELL_TIMEOUT", "SHELL_OUTPUT_TOO_LARGE", "SHELL_SPAWN_FAILED"] as const) {
+  for (const code of [
+    "SHELL_TIMEOUT",
+    "SHELL_OUTPUT_TOO_LARGE",
+    "SHELL_SPAWN_FAILED",
+    "SHELL_ACCESS_DENIED",
+    "SHELL_ACCESS_DISABLED",
+    "SHELL_COMMAND_REJECTED",
+  ] as const) {
     if (message.startsWith(code)) {
       return code;
     }
   }
   return "SHELL_SPAWN_FAILED";
+}
+
+export interface ExecuteShellSessionCommandOptions {
+  context?: DesktopCommandContext;
+  forcedError?: { code: DesktopErrorCode; message: string };
+  prevalidated?: ShellValidationSuccess;
+}
+
+export async function executeShellSessionCommand(
+  wsSend: DesktopResultSender,
+  command: DesktopCommandPayload,
+  options: ExecuteShellSessionCommandOptions = {},
+): Promise<void> {
+  const result: DesktopResultPayload = {
+    command_id: command.command_id,
+    success: false,
+  };
+  const context = options.context;
+
+  if (options.forcedError) {
+    desktopFailure(result, options.forcedError.code, options.forcedError.message);
+    await sendDesktopResult(wsSend, result, context);
+    return;
+  }
+
+  const shellSettings = get(settings).shellAccess;
+  const params = (command.params ?? {}) as Record<string, unknown>;
+
+  try {
+    switch (command.operation) {
+      case "shell_session_start": {
+        const validation = options.prevalidated;
+        if (!validation) {
+          desktopFailure(result, "SHELL_ACCESS_DISABLED", "Shell session was not validated.");
+          break;
+        }
+        const initialWait =
+          typeof params.initial_wait_ms === "number" ? params.initial_wait_ms : 1000;
+        const started = await invokeShellSessionStart({
+          command: validation.command,
+          cwd: validation.cwd.canonicalPath,
+          cwdId: validation.cwd.cwdId,
+          shell: validation.shell,
+          maxOutputBytes: shellSettings.maxOutputBytes,
+          initialWaitMs: initialWait,
+        });
+        auditShellAccess({
+          commandId: command.command_id,
+          cwdId: validation.cwd.cwdId,
+          shell: validation.shell,
+          timeoutMs: validation.timeoutMs,
+          ok: true,
+        });
+        result.success = true;
+        result.data = started as unknown as Record<string, unknown>;
+        break;
+      }
+      case "shell_session_read": {
+        const read = await invokeShellSessionRead({
+          shellSessionId: String(params.shell_session_id ?? ""),
+          offset: typeof params.offset === "number" ? params.offset : undefined,
+          limit: typeof params.limit === "number" ? params.limit : undefined,
+          waitMs: typeof params.wait_ms === "number" ? params.wait_ms : undefined,
+          stream: params.stream === "stderr" ? "stderr" : "stdout",
+        });
+        result.success = true;
+        result.data = read as unknown as Record<string, unknown>;
+        break;
+      }
+      case "shell_session_input": {
+        const summary = await invokeShellSessionInput({
+          shellSessionId: String(params.shell_session_id ?? ""),
+          input: String(params.input ?? ""),
+          appendNewline: params.append_newline !== false,
+        });
+        result.success = true;
+        result.data = summary as unknown as Record<string, unknown>;
+        break;
+      }
+      case "shell_session_stop": {
+        const stopped = await invokeShellSessionStop({
+          shellSessionId: String(params.shell_session_id ?? ""),
+        });
+        result.success = true;
+        result.data = stopped as unknown as Record<string, unknown>;
+        break;
+      }
+      case "shell_session_list": {
+        const list = await invokeShellSessionList();
+        result.success = true;
+        result.data = { sessions: list };
+        break;
+      }
+      default:
+        desktopFailure(
+          result,
+          "DESKTOP_COMMAND_INVALID",
+          `Unknown shell session op: ${command.operation}`,
+        );
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    const code = parseShellInvokeError(message);
+    desktopFailure(result, code, message.replace(/^SHELL_[A-Z_]+:\s*/, ""));
+  }
+
+  await sendDesktopResult(wsSend, finalizeDesktopResult(result), context);
 }
 
 export async function executeDesktopCommand(
@@ -771,6 +892,7 @@ export async function executeDesktopCommand(
       case "file_list":
       case "file_read":
       case "file_write":
+      case "file_patch":
       case "file_search": {
         const fileSettings = get(settings).fileAccess;
         const fileParams = params as unknown as FileCommandParams;
@@ -843,7 +965,7 @@ export async function executeDesktopCommand(
             );
             result.success = true;
             result.data = read as unknown as Record<string, unknown>;
-          } else {
+          } else if (command.operation === "file_write") {
             const writePath = resolveFileCommandPath(fileParams, { required: true });
             if (!writePath) {
               desktopFailure(result, "FILE_PATH_DENIED", "'path' is required for file_write.");
@@ -862,10 +984,32 @@ export async function executeDesktopCommand(
             );
             result.success = true;
             result.data = written as unknown as Record<string, unknown>;
+          } else if (command.operation === "file_patch") {
+            const patchPath = resolveFileCommandPath(fileParams, { required: true });
+            if (!patchPath) {
+              desktopFailure(result, "FILE_PATH_DENIED", "'path' is required for file_patch.");
+              break;
+            }
+            if (!fileParams.patches || fileParams.patches.length === 0) {
+              desktopFailure(result, "FILE_COMMAND_INVALID", "patches must not be empty");
+              break;
+            }
+            const patched = await patchRemoteFile(
+              fileSettings,
+              command.command_id,
+              fileParams.root_id,
+              patchPath,
+              fileParams.patches,
+              fileSettings.maxWriteBytes,
+              fileParams.expected_sha256 ?? fileParams.expected_hash,
+              fileParams.dry_run === true,
+            );
+            result.success = true;
+            result.data = patched as unknown as Record<string, unknown>;
           }
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
-          const code = message as DesktopErrorCode;
+          const code = message.split(":")[0] as DesktopErrorCode;
           desktopFailure(
             result,
             [
@@ -879,6 +1023,9 @@ export async function executeDesktopCommand(
               "FILE_TOO_LARGE",
               "FILE_WRITE_DENIED",
               "FILE_HASH_MISMATCH",
+              "FILE_CONFLICT",
+              "FILE_PATCH_MISMATCH",
+              "FILE_COMMAND_INVALID",
             ].includes(code)
               ? code
               : "DESKTOP_OPERATION_UNSUPPORTED",

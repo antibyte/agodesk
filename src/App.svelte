@@ -32,11 +32,177 @@
     <span class="blossom-petal blossom-petal-8"></span>
   </div>
   <div class="chaos-extras" aria-hidden="true">
-    <span class="chaos-blob chaos-blob-1">🌈</span>
-    <span class="chaos-blob chaos-blob-2">✨</span>
-    <span class="chaos-blob chaos-blob-3">💫</span>
-    <span class="chaos-blob chaos-blob-4">🎉</span>
-    <span class="chaos-blob chaos-blob-5">⚡</span>
+    <!-- Neon orbs — pure colored accent motion -->
+    <span class="chaos-orb chaos-orb-1"></span>
+    <span class="chaos-orb chaos-orb-2"></span>
+    <span class="chaos-orb chaos-orb-3"></span>
+    <span class="chaos-orb chaos-orb-4"></span>
+    <span class="chaos-orb chaos-orb-5"></span>
+    <span class="chaos-shard chaos-shard-1"></span>
+    <span class="chaos-shard chaos-shard-2"></span>
+    <span class="chaos-shard chaos-shard-3"></span>
+
+    <!-- Detailed multi-color glitch glyphs -->
+    <span class="chaos-glyph chaos-glyph-1">
+      <svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="cg1-a" x1="8" y1="8" x2="56" y2="56" gradientUnits="userSpaceOnUse">
+            <stop stop-color="#c026ff" />
+            <stop offset="0.5" stop-color="#22f0ff" />
+            <stop offset="1" stop-color="#ff2bd6" />
+          </linearGradient>
+          <radialGradient id="cg1-b" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(32 32) rotate(90) scale(18)">
+            <stop stop-color="#b8ff3c" stop-opacity="0.9" />
+            <stop offset="1" stop-color="#b8ff3c" stop-opacity="0" />
+          </radialGradient>
+        </defs>
+        <circle cx="32" cy="32" r="22" stroke="url(#cg1-a)" stroke-width="1.8" stroke-dasharray="7 4 2 4" opacity="0.95" />
+        <circle cx="32" cy="32" r="15" stroke="#ff2bd6" stroke-width="1.2" stroke-dasharray="3 5" opacity="0.7" />
+        <path d="M10 30h12M42 34h12M30 10v10M34 44v10" stroke="#22f0ff" stroke-width="1.6" stroke-linecap="round" />
+        <path d="M18 18l6 4M46 46l-6-4M46 18l-5 5M18 46l5-5" stroke="#c026ff" stroke-width="1.3" stroke-linecap="round" opacity="0.85" />
+        <circle cx="32" cy="32" r="5" fill="url(#cg1-b)" />
+        <circle cx="32" cy="32" r="2.2" fill="#fff" opacity="0.95" />
+        <circle cx="20" cy="22" r="1.4" fill="#ffb020" />
+        <circle cx="44" cy="40" r="1.2" fill="#22f0ff" />
+      </svg>
+    </span>
+    <span class="chaos-glyph chaos-glyph-2">
+      <svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="cg2-a" x1="18" y1="4" x2="46" y2="60" gradientUnits="userSpaceOnUse">
+            <stop stop-color="#ffb020" />
+            <stop offset="0.45" stop-color="#ff2bd6" />
+            <stop offset="1" stop-color="#7c1aff" />
+          </linearGradient>
+          <linearGradient id="cg2-b" x1="14" y1="26" x2="50" y2="26" gradientUnits="userSpaceOnUse">
+            <stop stop-color="#22f0ff" stop-opacity="0.15" />
+            <stop offset="1" stop-color="#b8ff3c" stop-opacity="0.35" />
+          </linearGradient>
+        </defs>
+        <path d="M36 6 18 32h12l-5 24 24-30H33l3-20Z" fill="url(#cg2-b)" stroke="url(#cg2-a)" stroke-width="1.8" stroke-linejoin="round" />
+        <path d="M34 10 22 30h8l-3 16 14-18h-8l3-18Z" stroke="#22f0ff" stroke-width="1.1" stroke-linejoin="round" opacity="0.75" />
+        <path d="M40 14h6M16 40h7M48 42l4 4" stroke="#b8ff3c" stroke-width="1.4" stroke-linecap="round" />
+        <circle cx="28" cy="28" r="1.6" fill="#fff" />
+        <circle cx="38" cy="36" r="1.2" fill="#ffb020" />
+      </svg>
+    </span>
+    <span class="chaos-glyph chaos-glyph-3">
+      <svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="cg3-a" x1="12" y1="8" x2="52" y2="56" gradientUnits="userSpaceOnUse">
+            <stop stop-color="#22f0ff" />
+            <stop offset="0.55" stop-color="#c026ff" />
+            <stop offset="1" stop-color="#ff4d6d" />
+          </linearGradient>
+        </defs>
+        <path d="M32 8c10 7 18 12 18 22a18 18 0 1 1-36 0c0-6 4-11 10-15" stroke="url(#cg3-a)" stroke-width="2" stroke-linecap="round" />
+        <path d="M32 8c7 5 12 9 12 16a12 12 0 1 1-24 0c0-4 2-7 6-10" stroke="#ff2bd6" stroke-width="1.2" stroke-linecap="round" opacity="0.7" />
+        <path d="M32 8v16l10-5" stroke="#b8ff3c" stroke-width="1.6" stroke-linejoin="round" />
+        <path d="M32 24l-7 4" stroke="#22f0ff" stroke-width="1.3" stroke-linecap="round" />
+        <circle cx="32" cy="30" r="3" fill="#c026ff" opacity="0.85" />
+        <circle cx="32" cy="30" r="1.3" fill="#fff" />
+        <path d="M14 20h5M48 44h6M50 16l-4 4" stroke="#ffb020" stroke-width="1.3" stroke-linecap="round" opacity="0.85" />
+      </svg>
+    </span>
+    <span class="chaos-glyph chaos-glyph-4">
+      <svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="cg4-a" x1="12" y1="8" x2="52" y2="56" gradientUnits="userSpaceOnUse">
+            <stop stop-color="#ffb020" />
+            <stop offset="0.4" stop-color="#ff2bd6" />
+            <stop offset="1" stop-color="#22f0ff" />
+          </linearGradient>
+          <radialGradient id="cg4-b" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(32 30) rotate(90) scale(16)">
+            <stop stop-color="#c026ff" stop-opacity="0.45" />
+            <stop offset="1" stop-color="#c026ff" stop-opacity="0" />
+          </radialGradient>
+        </defs>
+        <circle cx="32" cy="30" r="16" fill="url(#cg4-b)" />
+        <path
+          d="M32 6 37 24l18 2.5-14 12 4.5 18L32 46l-13.5 10.5 4.5-18-14-12L28 24Z"
+          fill="#ff2bd6"
+          fill-opacity="0.12"
+          stroke="url(#cg4-a)"
+          stroke-width="1.7"
+          stroke-linejoin="round"
+        />
+        <path d="M32 16 34.5 26l10 1.4-8 6.8 2.4 10L32 38.5l-6.9 5.7 2.4-10-8-6.8 10-1.4Z" stroke="#b8ff3c" stroke-width="1.1" stroke-linejoin="round" opacity="0.8" />
+        <circle cx="32" cy="30" r="2" fill="#fff" />
+        <circle cx="22" cy="18" r="1.3" fill="#22f0ff" />
+        <circle cx="44" cy="42" r="1.3" fill="#ffb020" />
+      </svg>
+    </span>
+    <span class="chaos-glyph chaos-glyph-5">
+      <svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="cg5-a" x1="10" y1="48" x2="50" y2="10" gradientUnits="userSpaceOnUse">
+            <stop stop-color="#7c1aff" />
+            <stop offset="0.5" stop-color="#22f0ff" />
+            <stop offset="1" stop-color="#b8ff3c" />
+          </linearGradient>
+        </defs>
+        <path d="M12 50 28 10l8 18 14-8-10 32H12Z" fill="#22f0ff" fill-opacity="0.1" stroke="url(#cg5-a)" stroke-width="1.8" stroke-linejoin="round" />
+        <path d="M18 46 30 18l5 12 9-5-7 23H18Z" stroke="#ff2bd6" stroke-width="1.1" stroke-linejoin="round" opacity="0.75" />
+        <path d="M8 16h10M46 48h10M52 12l-8 8M10 40l6 2" stroke="#ffb020" stroke-width="1.4" stroke-linecap="round" />
+        <circle cx="30" cy="28" r="2" fill="#b8ff3c" />
+        <circle cx="40" cy="34" r="1.4" fill="#fff" />
+        <path d="M24 36h12" stroke="#c026ff" stroke-width="1.2" stroke-linecap="round" opacity="0.8" />
+      </svg>
+    </span>
+    <span class="chaos-glyph chaos-glyph-6">
+      <svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="cg6-a" x1="12" y1="12" x2="52" y2="52" gradientUnits="userSpaceOnUse">
+            <stop stop-color="#c026ff" />
+            <stop offset="0.5" stop-color="#ff2bd6" />
+            <stop offset="1" stop-color="#22f0ff" />
+          </linearGradient>
+        </defs>
+        <rect x="12" y="12" width="36" height="36" rx="3" stroke="#22f0ff" stroke-width="1.3" transform="rotate(14 32 32)" opacity="0.55" />
+        <rect x="14" y="14" width="32" height="32" rx="2" stroke="url(#cg6-a)" stroke-width="1.8" transform="rotate(-10 32 32)" />
+        <rect x="20" y="20" width="20" height="20" stroke="#b8ff3c" stroke-width="1.1" transform="rotate(6 32 32)" opacity="0.8" />
+        <path d="M20 32h24M32 20v24" stroke="#ff2bd6" stroke-width="1.4" opacity="0.9" />
+        <path d="M24 24l16 16M40 24 24 40" stroke="#ffb020" stroke-width="1.1" opacity="0.65" />
+        <circle cx="32" cy="32" r="2.4" fill="#fff" />
+        <circle cx="18" cy="22" r="1.3" fill="#22f0ff" />
+        <circle cx="46" cy="42" r="1.3" fill="#c026ff" />
+      </svg>
+    </span>
+    <span class="chaos-glyph chaos-glyph-7">
+      <svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="cg7-a" x1="8" y1="32" x2="56" y2="32" gradientUnits="userSpaceOnUse">
+            <stop stop-color="#ff4d6d" />
+            <stop offset="0.5" stop-color="#c026ff" />
+            <stop offset="1" stop-color="#22f0ff" />
+          </linearGradient>
+        </defs>
+        <path d="M8 32c8-14 16-20 24-20s16 6 24 20c-8 14-16 20-24 20S16 46 8 32Z" stroke="url(#cg7-a)" stroke-width="1.8" fill="#c026ff" fill-opacity="0.08" />
+        <ellipse cx="32" cy="32" rx="10" ry="16" stroke="#b8ff3c" stroke-width="1.2" opacity="0.75" />
+        <circle cx="32" cy="32" r="6" stroke="#22f0ff" stroke-width="1.3" />
+        <circle cx="32" cy="32" r="2.5" fill="#ff2bd6" />
+        <circle cx="32" cy="32" r="1.1" fill="#fff" />
+        <path d="M14 20 20 24M50 44 44 40M50 20 44 24M14 44l6-4" stroke="#ffb020" stroke-width="1.2" stroke-linecap="round" />
+      </svg>
+    </span>
+    <span class="chaos-glyph chaos-glyph-8">
+      <svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="cg8-a" x1="16" y1="10" x2="48" y2="54" gradientUnits="userSpaceOnUse">
+            <stop stop-color="#b8ff3c" />
+            <stop offset="0.5" stop-color="#22f0ff" />
+            <stop offset="1" stop-color="#ff2bd6" />
+          </linearGradient>
+        </defs>
+        <path d="M32 8 48 20v24L32 56 16 44V20Z" stroke="url(#cg8-a)" stroke-width="1.8" stroke-linejoin="round" fill="#22f0ff" fill-opacity="0.08" />
+        <path d="M32 16 42 23v18L32 48 22 41V23Z" stroke="#c026ff" stroke-width="1.2" stroke-linejoin="round" opacity="0.8" />
+        <path d="M32 8v48M16 20l32 24M48 20 16 44" stroke="#ffb020" stroke-width="1" opacity="0.45" />
+        <circle cx="32" cy="32" r="3" fill="#ff2bd6" />
+        <circle cx="32" cy="32" r="1.2" fill="#fff" />
+        <circle cx="24" cy="26" r="1.2" fill="#b8ff3c" />
+        <circle cx="40" cy="38" r="1.2" fill="#22f0ff" />
+      </svg>
+    </span>
   </div>
   <div class="cyber-extras" aria-hidden="true">
     <div class="cyber-carbon"></div>
@@ -47,6 +213,8 @@
     <div class="cyber-hex"></div>
     <div class="cyber-sheen"></div>
     <div class="cyber-beam"></div>
+  </div>
+  <div class="cyber-frame" aria-hidden="true">
     <div class="cyber-chrome-rim"></div>
     <span class="cyber-hud cyber-hud-tl">SYS::ONLINE</span>
     <span class="cyber-hud cyber-hud-tr">AURA::LINK</span>
@@ -213,44 +381,170 @@
     pointer-events: none;
     z-index: 0;
     display: none;
+    overflow: hidden;
   }
 
-  .chaos-blob {
+  .chaos-orb {
     position: absolute;
-    font-size: clamp(1.5rem, 4vw, 2.75rem);
-    opacity: 0.85;
-    filter: drop-shadow(0 0 12px color-mix(in srgb, var(--color-accent) 60%, transparent));
-    animation: chaos-float 9s ease-in-out infinite;
+    border-radius: 50%;
+    filter: blur(18px);
+    opacity: 0.55;
+    mix-blend-mode: screen;
+    animation: chaos-orb-drift 7s ease-in-out infinite;
   }
-
-  .chaos-blob-1 {
-    top: 12%;
-    left: 8%;
-    animation-duration: 8s;
+  .chaos-orb-1 {
+    width: 9rem;
+    height: 9rem;
+    top: 6%;
+    left: 4%;
+    background: radial-gradient(circle, rgba(192, 38, 255, 0.75) 0%, transparent 70%);
+    animation-duration: 6.2s;
   }
-  .chaos-blob-2 {
-    top: 68%;
-    left: 16%;
-    animation-duration: 11s;
+  .chaos-orb-2 {
+    width: 7rem;
+    height: 7rem;
+    top: 58%;
+    right: 6%;
+    background: radial-gradient(circle, rgba(34, 240, 255, 0.7) 0%, transparent 70%);
+    animation-duration: 8.4s;
     animation-delay: -2s;
   }
-  .chaos-blob-3 {
-    top: 24%;
-    right: 12%;
-    animation-duration: 10s;
-    animation-delay: -4s;
+  .chaos-orb-3 {
+    width: 6rem;
+    height: 6rem;
+    bottom: 10%;
+    left: 28%;
+    background: radial-gradient(circle, rgba(255, 43, 214, 0.65) 0%, transparent 70%);
+    animation-duration: 5.5s;
+    animation-delay: -1.2s;
   }
-  .chaos-blob-4 {
-    bottom: 14%;
+  .chaos-orb-4 {
+    width: 5rem;
+    height: 5rem;
+    top: 28%;
+    right: 30%;
+    background: radial-gradient(circle, rgba(184, 255, 60, 0.55) 0%, transparent 70%);
+    animation-duration: 9s;
+    animation-delay: -3.5s;
+  }
+  .chaos-orb-5 {
+    width: 8rem;
+    height: 8rem;
+    top: 40%;
+    left: 42%;
+    background: radial-gradient(circle, rgba(255, 176, 32, 0.4) 0%, transparent 72%);
+    animation-duration: 7.8s;
+    animation-delay: -4.2s;
+    opacity: 0.4;
+  }
+
+  .chaos-shard {
+    position: absolute;
+    width: 2px;
+    height: 3.5rem;
+    border-radius: 2px;
+    opacity: 0.55;
+    filter: drop-shadow(0 0 6px currentColor);
+    animation: chaos-shard-flicker 2.8s steps(2, end) infinite;
+  }
+  .chaos-shard-1 {
+    top: 18%;
+    left: 22%;
+    background: linear-gradient(180deg, #22f0ff, transparent);
+    color: #22f0ff;
+    --shard-rot: 28deg;
+    animation-delay: 0s;
+  }
+  .chaos-shard-2 {
+    top: 52%;
     right: 18%;
-    animation-duration: 12s;
-    animation-delay: -1s;
+    height: 2.6rem;
+    background: linear-gradient(180deg, #ff2bd6, transparent);
+    color: #ff2bd6;
+    --shard-rot: -40deg;
+    animation-duration: 2.1s;
+    animation-delay: -0.7s;
   }
-  .chaos-blob-5 {
-    top: 46%;
-    left: 48%;
-    animation-duration: 9.5s;
-    animation-delay: -6s;
+  .chaos-shard-3 {
+    bottom: 22%;
+    left: 55%;
+    height: 4rem;
+    background: linear-gradient(180deg, #b8ff3c, transparent);
+    color: #b8ff3c;
+    --shard-rot: 12deg;
+    animation-duration: 3.4s;
+    animation-delay: -1.4s;
+  }
+
+  .chaos-glyph {
+    position: absolute;
+    width: clamp(2.1rem, 5vw, 3.4rem);
+    height: clamp(2.1rem, 5vw, 3.4rem);
+    opacity: 0.72;
+    filter: drop-shadow(0 0 8px rgba(192, 38, 255, 0.45))
+      drop-shadow(0 0 16px rgba(34, 240, 255, 0.2));
+    animation:
+      chaos-float 7s cubic-bezier(0.4, 0, 0.2, 1) infinite,
+      chaos-glyph-glitch 4.5s steps(1, end) infinite;
+  }
+
+  .chaos-glyph svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+    overflow: visible;
+  }
+
+  .chaos-glyph-1 {
+    top: 10%;
+    left: 6%;
+    animation-duration: 6.2s, 3.8s;
+  }
+  .chaos-glyph-2 {
+    top: 64%;
+    left: 12%;
+    animation-duration: 8.5s, 5.2s;
+    animation-delay: -2.2s, -1s;
+  }
+  .chaos-glyph-3 {
+    top: 20%;
+    right: 9%;
+    animation-duration: 7.1s, 4.1s;
+    animation-delay: -4s, -0.5s;
+  }
+  .chaos-glyph-4 {
+    bottom: 12%;
+    right: 14%;
+    animation-duration: 9.2s, 5.6s;
+    animation-delay: -1.4s, -2s;
+  }
+  .chaos-glyph-5 {
+    top: 42%;
+    left: 44%;
+    animation-duration: 6.8s, 3.4s;
+    animation-delay: -6s, -1.6s;
+    opacity: 0.55;
+  }
+  .chaos-glyph-6 {
+    top: 7%;
+    right: 26%;
+    animation-duration: 10s, 4.8s;
+    animation-delay: -3s, -0.8s;
+    opacity: 0.62;
+  }
+  .chaos-glyph-7 {
+    bottom: 28%;
+    left: 32%;
+    animation-duration: 7.6s, 3.9s;
+    animation-delay: -2.8s, -1.2s;
+    opacity: 0.58;
+  }
+  .chaos-glyph-8 {
+    top: 34%;
+    right: 38%;
+    animation-duration: 8.8s, 5s;
+    animation-delay: -5s, -2.4s;
+    opacity: 0.5;
   }
 
   /* ── Minimal (dunkel): Layer aus, kein Rauschen, nur feiner Lichtsaum ── */
@@ -435,11 +729,12 @@
       radial-gradient(ellipse 60% 40% at 50% 100%, rgba(255, 69, 0, 0.1), transparent 70%);
     mix-blend-mode: normal;
   }
-  :global(:root[data-ui-theme="cyberpunk"]) .cyber-extras {
+  :global(:root[data-ui-theme="cyberpunk"]) .cyber-extras,
+  :global(:root[data-ui-theme="cyberpunk"]) .cyber-frame {
     display: block;
   }
 
-  /* ── Cyber-Extras: Grid-Horizont, Sweep-Beam, Flicker, Eck-Brackets ── */
+  /* Atmosphäre hinter dem Chat — darf Text nicht überdecken */
   .cyber-extras {
     position: absolute;
     inset: 0;
@@ -450,16 +745,27 @@
     border-radius: inherit;
   }
 
+  /* Nur Chrom-Rahmen / HUD / Ecken über dem Shell */
+  .cyber-frame {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 2;
+    display: none;
+    overflow: hidden;
+    border-radius: inherit;
+  }
+
   .cyber-carbon {
     position: absolute;
     inset: 0;
-    opacity: 0.14;
+    opacity: 0.12;
     background-image:
-      url("data:image/svg+xml,%3Csvg width='48' height='48' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M0 24h48M24 0v48' stroke='%2300f0ff' stroke-width='0.4' opacity='0.35'/%3E%3Cpath d='M0 0l48 48M48 0L0 48' stroke='%23ff4500' stroke-width='0.3' opacity='0.2'/%3E%3C/svg%3E"),
+      url("data:image/svg+xml,%3Csvg width='48' height='48' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M0 24h48M24 0v48' stroke='%2300f0ff' stroke-width='0.45' opacity='0.4'/%3E%3Cpath d='M0 0l48 48M48 0L0 48' stroke='%23ff4500' stroke-width='0.35' opacity='0.25'/%3E%3C/svg%3E"),
       repeating-linear-gradient(
         0deg,
-        rgba(0, 240, 255, 0.03) 0px,
-        rgba(0, 240, 255, 0.03) 1px,
+        rgba(0, 240, 255, 0.04) 0px,
+        rgba(0, 240, 255, 0.04) 1px,
         transparent 1px,
         transparent 3px
       );
@@ -470,9 +776,9 @@
   .cyber-bloom {
     position: absolute;
     border-radius: 50%;
-    filter: blur(48px);
+    filter: blur(64px);
     pointer-events: none;
-    opacity: 0.55;
+    opacity: 0.4;
   }
   .cyber-bloom-a {
     width: 42%;
@@ -486,7 +792,7 @@
     height: 30%;
     right: -8%;
     bottom: 8%;
-    background: radial-gradient(circle, rgba(255, 69, 0, 0.5) 0%, transparent 70%);
+    background: radial-gradient(circle, rgba(255, 69, 0, 0.45) 0%, transparent 70%);
   }
   .cyber-bloom-c {
     width: 28%;
@@ -494,7 +800,7 @@
     left: 38%;
     top: 42%;
     background: radial-gradient(circle, rgba(250, 255, 0, 0.22) 0%, transparent 70%);
-    opacity: 0.35;
+    opacity: 0.28;
   }
 
   .cyber-grid {
@@ -504,23 +810,23 @@
     bottom: -12%;
     height: 46%;
     background-image:
-      linear-gradient(rgba(0, 240, 255, 0.32) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(255, 69, 0, 0.22) 1px, transparent 1px);
+      linear-gradient(rgba(0, 240, 255, 0.28) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 69, 0, 0.18) 1px, transparent 1px);
     background-size: 44px 44px;
     transform: perspective(420px) rotateX(62deg) translateZ(0);
     transform-origin: 50% 0%;
     mask-image: linear-gradient(180deg, transparent 0%, #000 34%, #000 100%);
     -webkit-mask-image: linear-gradient(180deg, transparent 0%, #000 34%, #000 100%);
     animation: cyber-grid-scroll 14s linear infinite;
-    opacity: 0.48;
+    opacity: 0.35;
     will-change: transform;
   }
 
   .cyber-hex {
     position: absolute;
     inset: 0;
-    opacity: 0.12;
-    background-image: url("data:image/svg+xml,%3Csvg width='56' height='100' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M28 0 L56 16 L56 50 L28 66 L0 50 L0 16 Z' fill='none' stroke='%2300f0ff' stroke-width='0.6'/%3E%3C/svg%3E");
+    opacity: 0.1;
+    background-image: url("data:image/svg+xml,%3Csvg width='56' height='100' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M28 0 L56 16 L56 50 L28 66 L0 50 L0 16 Z' fill='none' stroke='%2300f0ff' stroke-width='0.65'/%3E%3C/svg%3E");
     background-size: 56px 100px;
   }
 
@@ -530,30 +836,30 @@
     background: linear-gradient(
       115deg,
       transparent 36%,
-      rgba(255, 255, 255, 0.04) 44%,
-      rgba(0, 240, 255, 0.14) 50%,
-      rgba(255, 255, 255, 0.06) 56%,
+      rgba(255, 255, 255, 0.06) 44%,
+      rgba(0, 240, 255, 0.18) 50%,
+      rgba(255, 255, 255, 0.08) 56%,
       transparent 64%
     );
     transform: translateX(-40%);
-    animation: cyber-sheen-sweep 14s ease-in-out infinite;
+    animation: cyber-sheen-sweep 12s ease-in-out infinite;
     mix-blend-mode: screen;
-    opacity: 0.85;
-    will-change: transform;
+    opacity: 0.7;
+    will-change: transform, opacity;
   }
 
   @keyframes cyber-sheen-sweep {
     0%,
-    18% {
-      transform: translateX(-45%) translateY(4%);
+    12% {
+      transform: translateX(-48%) translateY(4%);
       opacity: 0;
     }
-    28% {
-      opacity: 0.9;
-    }
-    55% {
-      transform: translateX(35%) translateY(-2%);
+    22% {
       opacity: 0.75;
+    }
+    52% {
+      transform: translateX(30%) translateY(-2%);
+      opacity: 0.55;
     }
     70%,
     100% {
@@ -577,9 +883,9 @@
     font-size: 0.625rem;
     letter-spacing: 0.12em;
     text-transform: uppercase;
-    color: rgba(0, 240, 255, 0.62);
-    text-shadow: 0 0 10px rgba(0, 240, 255, 0.55);
-    opacity: 0.8;
+    color: rgba(0, 240, 255, 0.7);
+    text-shadow: 0 0 8px rgba(0, 240, 255, 0.45);
+    opacity: 0.85;
   }
 
   .cyber-hud-tl {
@@ -643,62 +949,53 @@
 
   .cyber-chrome-rim {
     position: absolute;
-    inset: 5px;
+    inset: 0;
     border-radius: inherit;
     pointer-events: none;
-    border: 1px solid transparent;
-    background:
-      linear-gradient(transparent, transparent) padding-box,
-      linear-gradient(
-          135deg,
-          rgba(0, 240, 255, 0.85) 0%,
-          rgba(255, 255, 255, 0.35) 28%,
-          rgba(255, 69, 0, 0.75) 62%,
-          rgba(250, 255, 0, 0.45) 100%
-        )
-        border-box;
+    /* Kein dual-background: ohne reliable background-clip füllt der Gradient die ganze Seite. */
     box-shadow:
-      inset 0 0 0 1px rgba(0, 240, 255, 0.18),
+      inset 0 0 0 1px rgba(0, 240, 255, 0.55),
+      inset 0 0 0 2px rgba(255, 69, 0, 0.28),
       inset 0 1px 0 rgba(255, 255, 255, 0.22),
-      0 0 28px rgba(0, 240, 255, 0.22),
-      0 0 48px rgba(255, 69, 0, 0.12);
-    opacity: 0.9;
+      inset 0 -1px 0 rgba(255, 69, 0, 0.18),
+      inset 0 0 28px rgba(0, 240, 255, 0.08);
+    opacity: 0.95;
   }
 
   .cyber-corner {
     position: absolute;
-    width: 26px;
-    height: 26px;
-    opacity: 0.9;
+    width: 28px;
+    height: 28px;
+    opacity: 0.92;
   }
 
   .cyber-corner-tl {
-    top: 6px;
-    left: 6px;
-    border-top: 2.5px solid rgba(0, 240, 255, 0.75);
-    border-left: 2.5px solid rgba(0, 240, 255, 0.75);
-    box-shadow: 0 0 10px rgba(0, 240, 255, 0.45);
+    top: 5px;
+    left: 5px;
+    border-top: 2.5px solid rgba(0, 240, 255, 0.9);
+    border-left: 2.5px solid rgba(0, 240, 255, 0.9);
+    box-shadow: 0 0 10px rgba(0, 240, 255, 0.5);
   }
   .cyber-corner-tr {
-    top: 6px;
-    right: 6px;
-    border-top: 2.5px solid rgba(255, 69, 0, 0.75);
-    border-right: 2.5px solid rgba(255, 69, 0, 0.75);
-    box-shadow: 0 0 10px rgba(255, 69, 0, 0.45);
+    top: 5px;
+    right: 5px;
+    border-top: 2.5px solid rgba(255, 69, 0, 0.9);
+    border-right: 2.5px solid rgba(255, 69, 0, 0.9);
+    box-shadow: 0 0 10px rgba(255, 69, 0, 0.5);
   }
   .cyber-corner-bl {
-    bottom: 6px;
-    left: 6px;
-    border-bottom: 2.5px solid rgba(250, 255, 0, 0.65);
-    border-left: 2.5px solid rgba(250, 255, 0, 0.65);
-    box-shadow: 0 0 10px rgba(250, 255, 0, 0.45);
+    bottom: 5px;
+    left: 5px;
+    border-bottom: 2.5px solid rgba(250, 255, 0, 0.8);
+    border-left: 2.5px solid rgba(250, 255, 0, 0.8);
+    box-shadow: 0 0 10px rgba(250, 255, 0, 0.4);
   }
   .cyber-corner-br {
-    bottom: 6px;
-    right: 6px;
-    border-bottom: 2.5px solid rgba(0, 240, 255, 0.75);
-    border-right: 2.5px solid rgba(0, 240, 255, 0.75);
-    box-shadow: 0 0 10px rgba(0, 240, 255, 0.45);
+    bottom: 5px;
+    right: 5px;
+    border-bottom: 2.5px solid rgba(0, 240, 255, 0.9);
+    border-right: 2.5px solid rgba(0, 240, 255, 0.9);
+    box-shadow: 0 0 10px rgba(0, 240, 255, 0.5);
   }
 
   /* ── Papyrus: Pergament-Textur + Alters-Flecken, Layer statisch warm ── */
@@ -995,65 +1292,197 @@
     animation-duration: 22s;
   }
 
-  /* ── Chaos: rotierende Regenbogen-Layer + schwebende Emojis + Overlay ── */
+  /* ── Chaos: deep black + neon glitch layers + colorful glyphs ── */
+  :global(:root[data-ui-theme="chaos"]) .app-window {
+    background: #020106;
+  }
   :global(:root[data-ui-theme="chaos"]) .aurora-layer {
-    opacity: 0.7;
+    opacity: 0.55;
     mix-blend-mode: screen;
     animation:
-      aurora-breathe 10s ease-in-out infinite,
-      chaos-hue 6s linear infinite;
+      aurora-breathe 11s ease-in-out infinite,
+      chaos-hue 14s linear infinite;
+  }
+  :global(:root[data-ui-theme="chaos"]) .aurora-layer-a {
+    background: radial-gradient(ellipse 70% 55% at 20% 30%, rgba(192, 38, 255, 0.35), transparent 60%);
+  }
+  :global(:root[data-ui-theme="chaos"]) .aurora-layer-b {
+    background: radial-gradient(ellipse 65% 50% at 78% 60%, rgba(34, 240, 255, 0.28), transparent 58%);
+  }
+  :global(:root[data-ui-theme="chaos"]) .aurora-layer-c {
+    background: radial-gradient(ellipse 55% 45% at 50% 80%, rgba(255, 43, 214, 0.22), transparent 55%);
   }
   :global(:root[data-ui-theme="chaos"]) .chaos-extras {
     display: block;
   }
   :global(:root[data-ui-theme="chaos"]) .theme-overlay {
     opacity: 1;
-    background: repeating-conic-gradient(
-      from 0deg at 50% 50%,
-      rgba(255, 0, 128, 0.04) 0deg,
-      rgba(255, 238, 0, 0.04) 60deg,
-      rgba(0, 255, 136, 0.04) 120deg,
-      rgba(0, 208, 255, 0.04) 180deg,
-      rgba(255, 0, 128, 0.04) 240deg,
-      rgba(255, 238, 0, 0.04) 300deg,
-      rgba(255, 0, 128, 0.04) 360deg
-    );
-    animation: chaos-overlay-spin 20s linear infinite;
+    background:
+      repeating-linear-gradient(
+        0deg,
+        transparent 0,
+        transparent 2px,
+        rgba(192, 38, 255, 0.045) 2px,
+        rgba(192, 38, 255, 0.045) 3px
+      ),
+      repeating-linear-gradient(
+        90deg,
+        transparent 0,
+        transparent 5px,
+        rgba(34, 240, 255, 0.03) 5px,
+        rgba(34, 240, 255, 0.03) 6px
+      ),
+      radial-gradient(ellipse 90% 70% at 15% 25%, rgba(192, 38, 255, 0.18), transparent 55%),
+      radial-gradient(ellipse 70% 55% at 85% 75%, rgba(34, 240, 255, 0.14), transparent 50%),
+      radial-gradient(ellipse 50% 40% at 50% 50%, rgba(255, 43, 214, 0.08), transparent 60%);
+    animation: chaos-overlay-drift 12s ease-in-out infinite alternate;
   }
 
-  @keyframes chaos-overlay-spin {
-    from {
-      transform: rotate(0deg) scale(1.2);
+  @keyframes chaos-overlay-drift {
+    0% {
+      transform: translate3d(-2%, -1.5%, 0) scale(1.06) skewX(-0.4deg);
+      opacity: 0.85;
+      filter: hue-rotate(0deg);
     }
-    to {
-      transform: rotate(360deg) scale(1.2);
+    35% {
+      transform: translate3d(1.8%, 1%, 0) scale(1.1) skewX(0.6deg);
+      opacity: 1;
+      filter: hue-rotate(25deg);
+    }
+    70% {
+      transform: translate3d(-1%, 2%, 0) scale(1.05) skewX(-0.3deg);
+      opacity: 0.92;
+      filter: hue-rotate(-15deg);
+    }
+    100% {
+      transform: translate3d(2%, -1%, 0) scale(1.09) skewX(0.5deg);
+      opacity: 1;
+      filter: hue-rotate(40deg);
     }
   }
 
   @keyframes chaos-hue {
-    from {
-      filter: blur(72px) hue-rotate(0deg);
+    0% {
+      filter: blur(64px) hue-rotate(0deg) saturate(1.2) brightness(0.9);
     }
-    to {
-      filter: blur(72px) hue-rotate(360deg);
+    25% {
+      filter: blur(70px) hue-rotate(40deg) saturate(1.45) brightness(1.05);
+    }
+    50% {
+      filter: blur(60px) hue-rotate(-20deg) saturate(1.3) brightness(0.95);
+    }
+    75% {
+      filter: blur(74px) hue-rotate(55deg) saturate(1.5) brightness(1.1);
+    }
+    100% {
+      filter: blur(64px) hue-rotate(0deg) saturate(1.2) brightness(0.9);
     }
   }
 
   @keyframes chaos-float {
+    0% {
+      transform: translate3d(0, 0, 0) rotate(-14deg) scale(1) skewX(0deg);
+    }
+    12% {
+      transform: translate3d(14px, -22px, 0) rotate(12deg) scale(1.12) skewX(-2deg);
+    }
+    28% {
+      transform: translate3d(-18px, -8px, 0) rotate(-22deg) scale(0.9) skewX(3deg);
+    }
+    45% {
+      transform: translate3d(8px, 16px, 0) rotate(8deg) scale(1.08) skewX(-1deg);
+    }
+    62% {
+      transform: translate3d(-12px, 10px, 0) rotate(-10deg) scale(0.96) skewX(2deg);
+    }
+    80% {
+      transform: translate3d(16px, -6px, 0) rotate(18deg) scale(1.06) skewX(-2.5deg);
+    }
+    100% {
+      transform: translate3d(0, 0, 0) rotate(-14deg) scale(1) skewX(0deg);
+    }
+  }
+
+  @keyframes chaos-glyph-glitch {
     0%,
     100% {
-      transform: translate3d(0, 0, 0) rotate(-8deg) scale(1);
+      filter: drop-shadow(0 0 8px rgba(192, 38, 255, 0.45))
+        drop-shadow(0 0 16px rgba(34, 240, 255, 0.2));
+      opacity: 0.72;
     }
-    33% {
-      transform: translate3d(12px, -22px, 0) rotate(10deg) scale(1.15);
+    18% {
+      filter: drop-shadow(-3px 0 0 rgba(255, 43, 214, 0.7))
+        drop-shadow(3px 0 0 rgba(34, 240, 255, 0.7));
+      opacity: 0.95;
     }
-    66% {
-      transform: translate3d(-14px, 10px, 0) rotate(-4deg) scale(0.92);
+    19% {
+      filter: drop-shadow(0 0 10px rgba(184, 255, 60, 0.5));
+      opacity: 0.55;
+    }
+    42% {
+      filter: drop-shadow(0 0 14px rgba(34, 240, 255, 0.65))
+        drop-shadow(0 0 22px rgba(192, 38, 255, 0.35));
+      opacity: 0.85;
+    }
+    61% {
+      filter: drop-shadow(4px 1px 0 rgba(255, 176, 32, 0.55))
+        drop-shadow(-3px -1px 0 rgba(255, 43, 214, 0.55));
+      opacity: 0.9;
+    }
+    78% {
+      filter: drop-shadow(0 0 8px rgba(192, 38, 255, 0.4));
+      opacity: 0.48;
+    }
+  }
+
+  @keyframes chaos-orb-drift {
+    0%,
+    100% {
+      transform: translate3d(0, 0, 0) scale(1);
+      opacity: 0.45;
+    }
+    20% {
+      transform: translate3d(28px, -36px, 0) scale(1.25);
+      opacity: 0.7;
+    }
+    45% {
+      transform: translate3d(-40px, 18px, 0) scale(0.85);
+      opacity: 0.35;
+    }
+    70% {
+      transform: translate3d(18px, 32px, 0) scale(1.15);
+      opacity: 0.62;
+    }
+  }
+
+  @keyframes chaos-shard-flicker {
+    0%,
+    100% {
+      opacity: 0.15;
+      transform: scaleY(0.6) rotate(var(--shard-rot, 20deg));
+    }
+    20% {
+      opacity: 0.85;
+      transform: scaleY(1.2) rotate(calc(var(--shard-rot, 20deg) + 8deg));
+    }
+    40% {
+      opacity: 0.2;
+      transform: scaleY(0.4) rotate(calc(var(--shard-rot, 20deg) - 12deg));
+    }
+    65% {
+      opacity: 0.9;
+      transform: scaleY(1.35) rotate(calc(var(--shard-rot, 20deg) + 4deg));
+    }
+    80% {
+      opacity: 0.35;
+      transform: scaleY(0.8) rotate(var(--shard-rot, 20deg));
     }
   }
 
   /* ── Reduce-Motion-Kill-Switch respektieren ── */
-  :global(:root[data-reduce-motion="true"]) .chaos-blob,
+  :global(:root[data-reduce-motion="true"]) .chaos-glyph,
+  :global(:root[data-reduce-motion="true"]) .chaos-orb,
+  :global(:root[data-reduce-motion="true"]) .chaos-shard,
   :global(:root[data-reduce-motion="true"]) .aurora-layer,
   :global(:root[data-reduce-motion="true"]) .cyber-grid,
   :global(:root[data-reduce-motion="true"]) .cyber-sheen,
@@ -1074,7 +1503,9 @@
 
   @media (prefers-reduced-motion: reduce) {
     .aurora-layer,
-    .chaos-blob,
+    .chaos-glyph,
+    .chaos-orb,
+    .chaos-shard,
     .cyber-grid,
     .cyber-sheen,
     .cyber-beam,

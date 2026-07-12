@@ -178,7 +178,10 @@ test("normalizeFileCommandParams akzeptiert search_type Alias", () => {
       encoding: undefined,
       content: undefined,
       expected_hash: undefined,
+      expected_sha256: undefined,
       create_only: false,
+      dry_run: false,
+      patches: undefined,
       operation: "grep_recursive",
       pattern: "Johannes",
       glob: undefined,
@@ -195,7 +198,10 @@ test("normalizeFileCommandParams akzeptiert file_path Alias", () => {
     encoding: undefined,
     content: undefined,
     expected_hash: undefined,
+    expected_sha256: undefined,
     create_only: false,
+    dry_run: false,
+    patches: undefined,
     operation: undefined,
     pattern: undefined,
     glob: undefined,
@@ -227,7 +233,10 @@ test("normalizeDesktopCommandPayload normalisiert file_list", () => {
         encoding: undefined,
         content: undefined,
         expected_hash: undefined,
+        expected_sha256: undefined,
         create_only: false,
+        dry_run: false,
+        patches: undefined,
         operation: undefined,
         pattern: undefined,
         glob: undefined,
@@ -315,7 +324,10 @@ test("normalizeDesktopCommandPayload normalisiert file_search", () => {
         encoding: undefined,
         content: undefined,
         expected_hash: undefined,
+        expected_sha256: undefined,
         create_only: false,
+        dry_run: false,
+        patches: undefined,
         operation: "grep_recursive",
         pattern: "TODO",
         glob: "*.ts",
@@ -1055,6 +1067,7 @@ test("agodeskClientCapabilities advertises remote.shell.exec only when shell ena
     ],
   });
   assert.equal(enabled.includes("remote.shell.exec"), true);
+  assert.equal(enabled.includes("remote.shell.session"), true);
 });
 
 test("buildShellAccessSessionPayload omits canonical paths", () => {

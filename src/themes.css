@@ -285,10 +285,11 @@
   --color-accent: #00f0ff;
   --color-accent-soft: rgba(0, 240, 255, 0.14);
   --color-companion: #ff4500;
-  --color-user-bg: linear-gradient(135deg, #00f0ff 0%, #ff4500 100%);
-  --color-user-text: #ffffff;
-  --color-assistant-bg: rgba(0, 240, 255, 0.06);
-  --color-assistant-text: #d8feff;
+  /* Dark fills + bright text: neon cyan/orange as accents only (readable bubbles). */
+  --color-user-bg: linear-gradient(145deg, #042a32 0%, #0a1218 48%, #2a1208 100%);
+  --color-user-text: #e8feff;
+  --color-assistant-bg: rgba(0, 240, 255, 0.09);
+  --color-assistant-text: #e6fcff;
   --color-system-bg: rgba(2, 14, 20, 0.9);
   --color-system-text: #8fd6e0;
   --color-danger: #ff0040;
@@ -348,25 +349,25 @@
 :root[data-ui-theme="cyberpunk"] .status-bar,
 :root[data-ui-theme="cyberpunk"] .input-box {
   position: relative;
-  border-color: rgba(0, 240, 255, 0.5);
-  background-color: rgba(2, 12, 18, 0.92);
+  border-color: rgba(0, 240, 255, 0.55);
+  background-color: rgba(2, 12, 18, 0.94);
   background-image:
     linear-gradient(
       180deg,
-      rgba(255, 255, 255, 0.14) 0%,
-      rgba(0, 240, 255, 0.08) 12%,
-      transparent 42%,
-      rgba(255, 69, 0, 0.06) 100%
+      rgba(255, 255, 255, 0.18) 0%,
+      rgba(0, 240, 255, 0.1) 12%,
+      transparent 40%,
+      rgba(255, 69, 0, 0.08) 100%
     ),
-    linear-gradient(90deg, rgba(0, 240, 255, 0.07) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 240, 255, 0.08) 1px, transparent 1px),
     linear-gradient(rgba(255, 69, 0, 0.05) 1px, transparent 1px);
   background-size: 100% 100%, 22px 22px, 22px 22px;
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.22),
-    inset 0 -1px 0 rgba(255, 69, 0, 0.18),
-    0 0 0 1px rgba(0, 240, 255, 0.2),
-    0 0 28px rgba(0, 240, 255, 0.2),
-    0 0 48px rgba(255, 69, 0, 0.1);
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
+    inset 0 -1px 0 rgba(255, 69, 0, 0.2),
+    0 0 0 1px rgba(0, 240, 255, 0.28),
+    0 0 28px rgba(0, 240, 255, 0.22),
+    0 0 48px rgba(255, 69, 0, 0.12);
 }
 
 /* HUD-Optik auf Karten — ohne position, damit fixed/absolute Modals/Panels intakt bleiben. */
@@ -381,25 +382,25 @@
     .onboarding-dialog
   ),
 :root[data-ui-theme="cyberpunk"] .glass-panel-fixed {
-  border-color: rgba(0, 240, 255, 0.5);
-  background-color: rgba(2, 12, 18, 0.92);
+  border-color: rgba(0, 240, 255, 0.55);
+  background-color: rgba(2, 12, 18, 0.94);
   background-image:
     linear-gradient(
       180deg,
-      rgba(255, 255, 255, 0.14) 0%,
-      rgba(0, 240, 255, 0.08) 12%,
-      transparent 42%,
-      rgba(255, 69, 0, 0.06) 100%
+      rgba(255, 255, 255, 0.18) 0%,
+      rgba(0, 240, 255, 0.1) 12%,
+      transparent 40%,
+      rgba(255, 69, 0, 0.08) 100%
     ),
-    linear-gradient(90deg, rgba(0, 240, 255, 0.07) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 240, 255, 0.08) 1px, transparent 1px),
     linear-gradient(rgba(255, 69, 0, 0.05) 1px, transparent 1px);
   background-size: 100% 100%, 22px 22px, 22px 22px;
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.22),
-    inset 0 -1px 0 rgba(255, 69, 0, 0.18),
-    0 0 0 1px rgba(0, 240, 255, 0.2),
-    0 0 28px rgba(0, 240, 255, 0.2),
-    0 0 48px rgba(255, 69, 0, 0.1);
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
+    inset 0 -1px 0 rgba(255, 69, 0, 0.2),
+    0 0 0 1px rgba(0, 240, 255, 0.28),
+    0 0 28px rgba(0, 240, 255, 0.22),
+    0 0 48px rgba(255, 69, 0, 0.12);
 }
 
 /* Modals/Overlays: solide Fläche, keine HUD-Deko die Layout bricht. */
@@ -434,23 +435,17 @@
 }
 
 :root[data-ui-theme="cyberpunk"] dialog[open] {
-  border: 1px solid transparent;
-  background:
-    linear-gradient(var(--color-surface-solid), var(--color-surface-solid)) padding-box,
-    linear-gradient(
-        135deg,
-        rgba(0, 240, 255, 0.85),
-        rgba(255, 255, 255, 0.35),
-        rgba(255, 69, 0, 0.75)
-      )
-      border-box;
+  border: 1px solid rgba(0, 240, 255, 0.55);
+  background: var(--color-surface-solid);
+  background-image: none;
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.18),
-    inset 0 -1px 0 rgba(255, 69, 0, 0.12),
+    inset 0 0 0 1px rgba(255, 69, 0, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    inset 0 -1px 0 rgba(255, 69, 0, 0.14),
     0 0 0 1px rgba(0, 240, 255, 0.2),
-    0 0 48px rgba(0, 240, 255, 0.28);
+    0 0 40px rgba(0, 240, 255, 0.28);
 }
 
 :root[data-ui-theme="cyberpunk"] dialog[open] .ui-btn.ghost {
@@ -512,6 +507,29 @@
   );
   opacity: 0.55;
   pointer-events: none;
+}
+
+/* User bubbles: solid readable surface + neon rim (not washed-out bright fill). */
+:root[data-ui-theme="cyberpunk"] .user .bubble {
+  background: var(--color-user-bg);
+  color: var(--color-user-text);
+  border: 1px solid rgba(0, 240, 255, 0.45);
+  box-shadow:
+    0 0 0 1px rgba(255, 69, 0, 0.18),
+    0 0 18px rgba(0, 240, 255, 0.12),
+    inset 0 1px 0 rgba(0, 240, 255, 0.1);
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.45);
+}
+
+:root[data-ui-theme="cyberpunk"] .user .bubble time {
+  color: color-mix(in srgb, var(--color-user-text) 72%, #00f0ff);
+}
+
+:root[data-ui-theme="cyberpunk"] .assistant .bubble {
+  background: rgba(2, 18, 26, 0.88);
+  color: var(--color-assistant-text);
+  border: 1px solid rgba(0, 240, 255, 0.16);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.25);
 }
 
 :root[data-ui-theme="cyberpunk"] .status-bar .connection-label {
@@ -899,89 +917,99 @@
 }
 
 /* ════════════════════════════════════════════════════════════════════════
-   Chaos ── rotierende Verläufe, Regenbogen, wobble/pulse, Effekte überall.
+   Chaos ── fast-schwarz, knallige Neon-Akzente, unruhig animiert
    ════════════════════════════════════════════════════════════════════════ */
 :root[data-ui-theme="chaos"] {
   color-scheme: dark;
 
-  --aurora-1: #ff0080;
-  --aurora-2: #00ff88;
-  --aurora-3: #ffee00;
+  --chaos-neon-violet: #c026ff;
+  --chaos-neon-magenta: #ff2bd6;
+  --chaos-neon-cyan: #22f0ff;
+  --chaos-neon-lime: #b8ff3c;
+  --chaos-neon-amber: #ffb020;
+  --chaos-neon-rose: #ff4d6d;
+
+  --aurora-1: #2a0a4a;
+  --aurora-2: #4a0a38;
+  --aurora-3: #042a32;
   --aurora-gradient: linear-gradient(
     135deg,
-    #ff0080 0%,
-    #ff8c00 25%,
-    #ffee00 50%,
-    #00ff88 75%,
-    #00d0ff 100%
+    #12001f 0%,
+    #2a0066 28%,
+    #5a0038 52%,
+    #003a42 78%,
+    #0a1800 100%
   );
 
-  --color-bg: #0a0118;
-  --color-bg-elevated: #16062e;
-  --color-surface: rgba(30, 8, 60, 0.68);
-  --color-surface-solid: #16062e;
-  --color-input-bg: rgba(20, 4, 40, 0.9);
-  --color-text: #fdf4ff;
+  --color-bg: #030208;
+  --color-bg-elevated: #0a0712;
+  --color-surface: rgba(12, 8, 20, 0.78);
+  --color-surface-solid: #0a0712;
+  --color-input-bg: rgba(6, 4, 12, 0.94);
+  --color-text: #f0e8ff;
   --color-text-strong: #ffffff;
-  --color-muted: #d0a0ff;
-  --color-text-muted: #c090f0;
-  --color-footnote: #e0b0ff;
-  --color-border: rgba(255, 0, 200, 0.3);
-  --color-border-subtle: rgba(0, 255, 136, 0.18);
-  --color-accent: #ff00c8;
-  --color-accent-soft: rgba(255, 0, 200, 0.18);
-  --color-companion: #00ff88;
-  --color-user-bg: var(--aurora-gradient);
+  --color-muted: #8b7aa8;
+  --color-text-muted: #7a6a96;
+  --color-footnote: #9a88b8;
+  --color-border: rgba(192, 38, 255, 0.38);
+  --color-border-subtle: rgba(34, 240, 255, 0.12);
+  --color-accent: #e879ff;
+  --color-accent-soft: rgba(232, 121, 255, 0.16);
+  --color-companion: #22f0ff;
+  --color-user-bg: linear-gradient(135deg, #7c1aff 0%, #ff2bd6 48%, #22f0ff 100%);
   --color-user-text: #ffffff;
-  --color-assistant-bg: rgba(255, 0, 200, 0.08);
-  --color-assistant-text: #fdf4ff;
-  --color-system-bg: rgba(30, 8, 60, 0.86);
-  --color-system-text: #ffccf5;
-  --color-danger: #ff2d55;
-  --color-danger-soft: rgba(255, 45, 85, 0.16);
-  --color-warning: #ffee00;
-  --color-warning-soft: rgba(255, 238, 0, 0.14);
-  --color-success: #00ff88;
-  --color-success-soft: rgba(0, 255, 136, 0.14);
-  --color-backdrop: rgba(10, 1, 24, 0.8);
+  --color-assistant-bg: rgba(18, 8, 36, 0.88);
+  --color-assistant-text: #efe6ff;
+  --color-system-bg: rgba(10, 6, 18, 0.94);
+  --color-system-text: #d2c2f0;
+  --color-danger: #ff5c7a;
+  --color-danger-soft: rgba(255, 92, 122, 0.16);
+  --color-warning: #ffb020;
+  --color-warning-soft: rgba(255, 176, 32, 0.14);
+  --color-success: #b8ff3c;
+  --color-success-soft: rgba(184, 255, 60, 0.12);
+  --color-backdrop: rgba(2, 1, 6, 0.9);
 
   --surface-0: var(--color-bg);
   --surface-1: var(--color-surface);
-  --surface-2: rgba(30, 8, 60, 0.92);
-  --edge-light: rgba(255, 255, 255, 0.14);
+  --surface-2: rgba(16, 10, 28, 0.96);
+  --edge-light: rgba(255, 255, 255, 0.05);
 
-  --glass-surface: rgba(30, 8, 60, 0.62);
-  --glass-border: rgba(255, 0, 200, 0.32);
-  --glass-highlight: rgba(0, 255, 136, 0.14);
+  --glass-surface: rgba(8, 5, 16, 0.78);
+  --glass-border: rgba(192, 38, 255, 0.32);
+  --glass-highlight: rgba(34, 240, 255, 0.06);
   --blur: 22px;
   --blur-strong: 36px;
 
-  --color-panel-shadow: 0 0 0 1px rgba(255, 0, 200, 0.24), 0 0 32px rgba(0, 255, 136, 0.2);
-  --color-bubble-shadow: 0 0 20px rgba(255, 0, 200, 0.2);
-  --shadow-1: 0 0 10px rgba(255, 0, 200, 0.2);
-  --shadow-2: 0 0 28px rgba(0, 255, 136, 0.24);
-  --shadow-3: 0 0 56px rgba(255, 238, 0, 0.24);
+  --color-panel-shadow:
+    0 0 0 1px rgba(192, 38, 255, 0.22),
+    0 0 24px rgba(192, 38, 255, 0.08),
+    0 16px 40px rgba(0, 0, 0, 0.65);
+  --color-bubble-shadow: 0 4px 22px rgba(0, 0, 0, 0.45);
+  --shadow-1: 0 2px 10px rgba(0, 0, 0, 0.5);
+  --shadow-2: 0 10px 32px rgba(0, 0, 0, 0.55);
+  --shadow-3: 0 20px 56px rgba(0, 0, 0, 0.7);
   --accent-glow:
     0 0 0 1px color-mix(in srgb, var(--color-accent) 55%, transparent),
-    0 0 24px color-mix(in srgb, var(--color-accent) 45%, transparent);
+    0 0 22px color-mix(in srgb, var(--color-accent) 35%, transparent),
+    0 0 40px color-mix(in srgb, var(--chaos-neon-cyan) 18%, transparent);
   --shadow-companion:
-    0 0 56px color-mix(in srgb, var(--color-companion) 40%, transparent),
+    0 0 36px color-mix(in srgb, var(--color-companion) 28%, transparent),
     0 0 0 1px color-mix(in srgb, var(--color-companion) 40%, transparent);
 
-  --font-display: "Fredoka", "Space Grotesk", system-ui, sans-serif;
-  --font-sans: "Fredoka", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font-display: "Space Grotesk", "Inter", system-ui, sans-serif;
+  --font-sans: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
 
-  --radius-sm: 0.5rem;
-  --radius-md: 0.875rem;
-  --radius-lg: 1.25rem;
-  --radius-xl: 1.75rem;
-  --radius-window: 22px;
-  --radius-composer: 1.75rem;
-  --radius-2xl: 2rem;
+  --radius-sm: 0.3rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1.05rem;
+  --radius-window: 14px;
+  --radius-composer: 1.1rem;
+  --radius-2xl: 1.3rem;
   --focus-ring:
-    0 0 0 2px color-mix(in srgb, var(--color-bg) 60%, transparent),
-    0 0 0 3px var(--color-accent),
-    0 0 16px var(--color-companion);
+    0 0 0 2px color-mix(in srgb, var(--color-bg) 70%, transparent),
+    0 0 0 3px color-mix(in srgb, var(--chaos-neon-cyan) 80%, transparent);
 }
 
 :root[data-ui-theme="chaos"] .status-bar,
@@ -989,51 +1017,106 @@
 :root[data-ui-theme="chaos"] .ui-card:not(dialog),
 :root[data-ui-theme="chaos"] .glass-panel:not(dialog, .embed-modal, .onboarding-dialog),
 :root[data-ui-theme="chaos"] .glass-panel-fixed {
-  animation: chaos-border-cycle 5s linear infinite;
+  animation: chaos-border-cycle 5.5s steps(1, end) infinite;
 }
 
 :root[data-ui-theme="chaos"] .ui-btn-primary {
-  animation: chaos-btn-wobble 2.4s ease-in-out infinite;
+  animation:
+    chaos-btn-wobble 2.4s ease-in-out infinite,
+    chaos-btn-glow 3.2s linear infinite;
+  background: linear-gradient(120deg, #7c1aff, #ff2bd6 45%, #22f0ff);
+  background-size: 200% 200%;
+  border: none;
+  color: #fff;
+  text-shadow: 0 0 12px rgba(255, 255, 255, 0.35);
 }
 
 :root[data-ui-theme="chaos"] ::selection {
-  background: rgba(255, 0, 200, 0.45);
+  background: rgba(255, 43, 214, 0.45);
   color: #ffffff;
 }
 
 @keyframes chaos-border-cycle {
-  0% {
-    border-color: rgba(255, 0, 128, 0.45);
-    box-shadow: 0 0 16px rgba(255, 0, 128, 0.2);
-  }
-  25% {
-    border-color: rgba(255, 238, 0, 0.45);
-    box-shadow: 0 0 16px rgba(255, 238, 0, 0.2);
-  }
-  50% {
-    border-color: rgba(0, 255, 136, 0.45);
-    box-shadow: 0 0 16px rgba(0, 255, 136, 0.2);
-  }
-  75% {
-    border-color: rgba(0, 208, 255, 0.45);
-    box-shadow: 0 0 16px rgba(0, 208, 255, 0.2);
-  }
+  0%,
   100% {
-    border-color: rgba(255, 0, 128, 0.45);
-    box-shadow: 0 0 16px rgba(255, 0, 128, 0.2);
+    border-color: rgba(192, 38, 255, 0.55);
+    box-shadow:
+      0 0 0 1px rgba(192, 38, 255, 0.15),
+      0 0 18px rgba(192, 38, 255, 0.22);
+  }
+  14% {
+    border-color: rgba(255, 43, 214, 0.55);
+    box-shadow:
+      0 0 0 1px rgba(255, 43, 214, 0.18),
+      0 0 20px rgba(255, 43, 214, 0.25);
+  }
+  28% {
+    border-color: rgba(34, 240, 255, 0.5);
+    box-shadow:
+      0 0 0 1px rgba(34, 240, 255, 0.16),
+      0 0 18px rgba(34, 240, 255, 0.22);
+  }
+  42% {
+    border-color: rgba(184, 255, 60, 0.48);
+    box-shadow:
+      0 0 0 1px rgba(184, 255, 60, 0.14),
+      0 0 16px rgba(184, 255, 60, 0.18);
+  }
+  56% {
+    border-color: rgba(255, 176, 32, 0.5);
+    box-shadow:
+      0 0 0 1px rgba(255, 176, 32, 0.14),
+      0 0 18px rgba(255, 176, 32, 0.2);
+  }
+  70% {
+    border-color: rgba(255, 77, 109, 0.52);
+    box-shadow:
+      0 0 0 1px rgba(255, 77, 109, 0.16),
+      0 0 18px rgba(255, 77, 109, 0.22);
+  }
+  84% {
+    border-color: rgba(124, 26, 255, 0.55);
+    box-shadow:
+      0 0 0 1px rgba(124, 26, 255, 0.18),
+      0 0 22px rgba(124, 26, 255, 0.28);
   }
 }
 
 @keyframes chaos-btn-wobble {
   0%,
   100% {
-    transform: rotate(0deg) scale(1);
+    transform: rotate(0deg) scale(1) skewX(0deg);
   }
-  25% {
-    transform: rotate(-1.2deg) scale(1.02);
+  18% {
+    transform: rotate(-1.4deg) scale(1.03) skewX(-1deg);
   }
-  75% {
-    transform: rotate(1.2deg) scale(0.98);
+  36% {
+    transform: rotate(1.1deg) scale(0.98) skewX(1.2deg);
+  }
+  55% {
+    transform: rotate(-0.6deg) scale(1.02) skewX(-0.5deg);
+  }
+  78% {
+    transform: rotate(0.9deg) scale(1.01) skewX(0.8deg);
+  }
+}
+
+@keyframes chaos-btn-glow {
+  0% {
+    background-position: 0% 50%;
+    filter: saturate(1.1) brightness(1);
+  }
+  40% {
+    background-position: 100% 40%;
+    filter: saturate(1.35) brightness(1.08);
+  }
+  70% {
+    background-position: 40% 100%;
+    filter: saturate(1.2) brightness(0.98);
+  }
+  100% {
+    background-position: 0% 50%;
+    filter: saturate(1.1) brightness(1);
   }
 }
 
@@ -1097,6 +1180,9 @@
 }
 
 :root[data-ui-theme="chaos"] dialog[open] {
-  border-color: rgba(255, 0, 200, 0.45);
-  box-shadow: 0 0 24px rgba(0, 255, 136, 0.22);
+  border-color: rgba(192, 38, 255, 0.55);
+  box-shadow:
+    0 0 0 1px rgba(34, 240, 255, 0.12),
+    0 0 36px rgba(192, 38, 255, 0.28),
+    0 0 60px rgba(255, 43, 214, 0.12);
 }

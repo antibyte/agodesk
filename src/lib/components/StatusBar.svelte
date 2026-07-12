@@ -183,52 +183,53 @@
   });
 </script>
 
-<header class="status-bar aurora-surface">
-  <button
-    class="status-pill"
-    type="button"
-    title={$i18n("statusBar.openSettings.title")}
-    onclick={() => onOpenSettings?.()}
-  >
-    <span
-      class="companion-orb"
-      data-state={companionState}
-      data-tone={companionTone}
-      data-status={connectionStatus}
-      class:companion-live={speechActive || requestInFlight}
-      aria-label={$i18n("statusBar.connectionStatus.ariaLabel")}
+<header class="status-bar aurora-surface" data-tauri-drag-region>
+  <div class="status-cluster">
+    <button
+      class="status-pill"
+      type="button"
+      title={$i18n("statusBar.openSettings.title")}
+      aria-label={$i18n("statusBar.openSettings.title")}
+      onclick={() => onOpenSettings?.()}
     >
-      <span class="companion-orb-core" aria-hidden="true"></span>
-      <span class="companion-orb-ring" aria-hidden="true"></span>
-    </span>
-    <span class="status-copy">
-      <span class="status-line">
-        <span class="connection-label">{$i18n(`connection.status.${connectionStatus}`)}</span>
-        {#if sessionHint}
-          <span class="session-sep">·</span>
-          <span class="session">{sessionHint}</span>
+      <span
+        class="companion-orb"
+        data-state={companionState}
+        data-tone={companionTone}
+        data-status={connectionStatus}
+        class:companion-live={speechActive || requestInFlight}
+        aria-hidden="true"
+      >
+        <span class="companion-orb-core"></span>
+        <span class="companion-orb-ring"></span>
+      </span>
+      <span class="status-copy">
+        <span class="status-line">
+          <span class="connection-label">{$i18n(`connection.status.${connectionStatus}`)}</span>
+          {#if sessionHint}
+            <span class="session-sep" aria-hidden="true">·</span>
+            <span class="session">{sessionHint}</span>
+          {/if}
+        </span>
+        {#if serverUrl}
+          <span class="url" title={serverUrl}>{serverUrl}</span>
         {/if}
       </span>
-      {#if serverUrl}
-        <span class="url" title={serverUrl}>{serverUrl}</span>
-      {/if}
-    </span>
+    </button>
+
     {#if !desktopControlEnabled}
-      <span class="ui-chip" data-tone="idle" title={$i18n("statusBar.desktop.disabled.title")}>
+      <span class="ui-chip status-chip" data-tone="idle">
         {$i18n("statusBar.desktop.disabled")}
       </span>
     {:else if sessionStatus === "accepted" || sessionStatus === "loopback"}
       <span
-        class="ui-chip"
+        class="ui-chip status-chip"
         data-tone={remoteDesktopReady ? "connected" : "awaiting_pairing"}
-        title={remoteDesktopReady
-          ? $i18n("statusBar.remote.ready.title")
-          : $i18n("statusBar.remote.missing.title")}
       >
         {remoteDesktopReady ? $i18n("statusBar.remote.ready") : $i18n("statusBar.remote.missing")}
       </span>
     {/if}
-  </button>
+  </div>
 
   <div class="titlebar-drag" data-tauri-drag-region aria-hidden="true"></div>
 
@@ -437,13 +438,24 @@
     -webkit-backdrop-filter: blur(var(--blur));
     flex-shrink: 0;
     z-index: var(--z-status);
+    /* Whole bar is a drag surface; interactive children use no-drag via app.css */
+    cursor: default;
+  }
+
+  .status-cluster {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    min-width: 0;
+    max-width: min(52%, 28rem);
+    flex-shrink: 1;
   }
 
   .titlebar-drag {
-    flex: 1;
+    flex: 1 1 auto;
     align-self: stretch;
-    min-width: 1.5rem;
-    min-height: 2rem;
+    min-width: 3rem;
+    min-height: 2.25rem;
   }
 
   .status-pill {
@@ -457,6 +469,7 @@
     cursor: pointer;
     padding: var(--space-2) var(--space-3);
     min-width: 0;
+    max-width: 100%;
     text-align: left;
     transition:
       border-color var(--transition-fast),
@@ -541,47 +554,54 @@
 
   .status-copy {
     display: grid;
-    gap: 0.1rem;
+    gap: 0.05rem;
     min-width: 0;
   }
 
   .status-line {
     display: inline-flex;
-    align-items: center;
-    gap: var(--space-2);
-    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.35rem;
+    flex-wrap: nowrap;
+    min-width: 0;
     font-size: var(--font-size-md);
     font-weight: 500;
+    line-height: 1.25;
   }
 
   .connection-label {
     color: var(--color-text);
+    white-space: nowrap;
   }
 
   .session-sep {
     color: var(--color-muted);
-    opacity: 0.7;
+    opacity: 0.55;
+    flex-shrink: 0;
   }
 
   .session {
     font-size: var(--font-size-sm);
     color: var(--color-accent);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .url {
     color: var(--color-muted);
     font-size: var(--font-size-xs);
-    max-width: 14rem;
+    max-width: 12rem;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
-  .status-pill .ui-chip {
+  .status-chip {
     flex-shrink: 0;
-    justify-content: center;
-    text-align: center;
     white-space: nowrap;
+    pointer-events: none;
+    user-select: none;
   }
 
   .actions {

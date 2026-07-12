@@ -68,9 +68,34 @@ export async function sendChatMessage(
     options.conversationId ?? get(chatConversationState).activeConversationId ?? undefined;
 
   const appSettings = get(settings);
+  // Prefer Grok voice for AuraGo replies (live force_message or offline Grok TTS).
+  // Skip AuraGo server TTS so we do not get a second, different voice.
+  let preferGrokVoice = false;
+  try {
+    const { canActiveSpeechSessionSpeakText } = await import("./speech-flow");
+    if (canActiveSpeechSessionSpeakText()) {
+      preferGrokVoice = true;
+    }
+  } catch {
+    // ignore
+  }
+  if (!preferGrokVoice) {
+    try {
+      const { shouldUseGrokTtsForChat } = await import("./grok-tts");
+      const { resolveChatSpeakerMode } = await import("./chat-voice-output-status");
+      preferGrokVoice = shouldUseGrokTtsForChat(appSettings.speech, {
+        chatTtsOff: appSettings.chatTtsMode === "off",
+        speakerMuted: !resolveChatSpeakerMode(appSettings),
+      });
+    } catch {
+      preferGrokVoice = false;
+    }
+  }
   const voiceOutput =
     options.voiceOutput ??
-    shouldSendVoiceOutputForSettings(appSettings, get(sessionState).advertisedCapabilities);
+    (preferGrokVoice
+      ? false
+      : shouldSendVoiceOutputForSettings(appSettings, get(sessionState).advertisedCapabilities));
 
   const message = buildChatMessage(sessionId, trimmed, {
     ...options,
