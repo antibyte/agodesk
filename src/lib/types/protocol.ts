@@ -47,6 +47,9 @@ export type MessageType =
   | "chat.attachment.prepare"
   | "chat.attachment.prepared"
   | "chat.attachment.accepted"
+  | "knowledge.archive.prepare"
+  | "knowledge.archive.prepared"
+  | "knowledge.archive.status"
   | "chat.voice_output.status"
   | "integrations.webhosts.list"
   | "integrations.webhosts"
@@ -79,7 +82,14 @@ export type MessageType =
   | "persona.assets"
   | "desktop.command"
   | "desktop.result"
-  | "desktop.stream.frame";
+  | "desktop.stream.frame"
+  | "local.agent.remote_tool"
+  | "local.agent.remote_tool.result"
+  | "local.agent.handoff"
+  | "local.agent.turn"
+  | "local.agent.activity"
+  | "local.agent.llm"
+  | "local.agent.llm.result";
 
 export interface WsMessage<T = unknown> {
   id: string;
@@ -151,6 +161,7 @@ export interface SessionAcceptedPayload {
   advertised_capabilities?: string[];
   capabilities?: string[];
   attachment_limits?: ChatAttachmentLimits;
+  knowledge_archive_limits?: KnowledgeArchiveLimits;
 }
 
 export interface SessionClearPayload {
@@ -208,12 +219,17 @@ export function normalizeSessionAcceptedPayload(payload: unknown): SessionAccept
     record.attachment_limits ?? record.attachmentLimits,
   );
 
+  const knowledgeArchiveLimits = normalizeKnowledgeArchiveLimits(
+    record.knowledge_archive_limits ?? record.knowledgeArchiveLimits,
+  );
+
   return {
     session_id: sessionId,
     device_id: deviceId,
     shared_key: sharedKey,
     ...(advertisedCapabilities?.length ? { advertised_capabilities: advertisedCapabilities } : {}),
     ...(attachmentLimits ? { attachment_limits: attachmentLimits } : {}),
+    ...(knowledgeArchiveLimits ? { knowledge_archive_limits: knowledgeArchiveLimits } : {}),
   };
 }
 
@@ -262,6 +278,65 @@ export interface ChatAttachmentAcceptedPayload {
       storage_filename?: string;
     };
   }>;
+}
+
+export interface KnowledgeArchiveLimits {
+  max_file_bytes: number;
+  max_files_per_batch: number;
+  allowed_mime_prefixes: string[];
+}
+
+export const DEFAULT_KNOWLEDGE_ARCHIVE_LIMITS: KnowledgeArchiveLimits = {
+  max_file_bytes: 20 * 1024 * 1024,
+  max_files_per_batch: 10,
+  allowed_mime_prefixes: [
+    "application/pdf",
+    "text/",
+    "application/vnd.openxmlformats-officedocument",
+    "application/msword",
+    "application/json",
+    "application/rtf",
+  ],
+};
+
+export interface KnowledgeArchivePrepareFile {
+  filename: string;
+  mime_type: string;
+  size_bytes: number;
+  title?: string;
+  tags?: string[];
+}
+
+export interface KnowledgeArchivePreparePayload {
+  session_id: string;
+  files: KnowledgeArchivePrepareFile[];
+}
+
+export interface KnowledgeArchivePreparedDocument {
+  document_id: string;
+  filename: string;
+  upload_url: string;
+  upload_method: "POST";
+  upload_field: string;
+  expires_at: string;
+  max_bytes: number;
+}
+
+export interface KnowledgeArchivePreparedPayload {
+  session_id: string;
+  prepare_id: string;
+  documents: KnowledgeArchivePreparedDocument[];
+}
+
+export type KnowledgeArchiveState = "uploading" | "processing" | "ready" | "failed";
+
+export interface KnowledgeArchiveStatusPayload {
+  session_id: string;
+  document_id: string;
+  state: KnowledgeArchiveState;
+  error?: string;
+  chunk_count?: number;
+  title?: string;
 }
 
 export interface ChatMessagePayload {
@@ -1473,6 +1548,113 @@ export function normalizeChatAttachmentLimits(raw: unknown): ChatAttachmentLimit
     max_files_per_message: maxFiles,
     max_total_bytes_per_message: maxTotalBytes,
     allowed_mime_prefixes: allowedMimePrefixes,
+  };
+}
+
+export function normalizeKnowledgeArchiveLimits(raw: unknown): KnowledgeArchiveLimits | null {
+  if (!raw || typeof raw !== "object") {
+    return null;
+  }
+  const record = raw as Record<string, unknown>;
+  const maxFileBytes = readOptionalFiniteNumber(record.max_file_bytes ?? record.maxFileBytes);
+  const maxFiles = readOptionalFiniteNumber(
+    record.max_files_per_batch ?? record.maxFilesPerBatch,
+  );
+  const prefixesRaw = record.allowed_mime_prefixes ?? record.allowedMimePrefixes;
+  const allowedMimePrefixes = Array.isArray(prefixesRaw)
+    ? prefixesRaw.filter((entry): entry is string => typeof entry === "string" && entry.length > 0)
+    : [];
+  if (maxFileBytes === undefined || maxFiles === undefined || allowedMimePrefixes.length === 0) {
+    return null;
+  }
+  return {
+    max_file_bytes: maxFileBytes,
+    max_files_per_batch: maxFiles,
+    allowed_mime_prefixes: allowedMimePrefixes,
+  };
+}
+
+export function normalizeKnowledgeArchivePreparedPayload(
+  payload: unknown,
+): KnowledgeArchivePreparedPayload | null {
+  if (!payload || typeof payload !== "object") {
+    return null;
+  }
+  const record = payload as Record<string, unknown>;
+  const sessionId = readString(record, "session_id", "sessionId");
+  const prepareId = readString(record, "prepare_id", "prepareId");
+  const documentsRaw = record.documents;
+  if (!sessionId || !prepareId || !Array.isArray(documentsRaw)) {
+    return null;
+  }
+  const documents = documentsRaw
+    .map((entry): KnowledgeArchivePreparedDocument | null => {
+      if (!entry || typeof entry !== "object") {
+        return null;
+      }
+      const item = entry as Record<string, unknown>;
+      const documentId = readString(item, "document_id", "documentId");
+      const filename = readString(item, "filename") ?? "";
+      const uploadUrl = readString(item, "upload_url", "uploadUrl");
+      const uploadMethod = readString(item, "upload_method", "uploadMethod") ?? "POST";
+      const uploadField = readString(item, "upload_field", "uploadField") ?? "file";
+      const expiresAt = readString(item, "expires_at", "expiresAt") ?? "";
+      const maxBytes = readOptionalFiniteNumber(item.max_bytes ?? item.maxBytes);
+      if (
+        !documentId ||
+        !uploadUrl ||
+        uploadMethod !== "POST" ||
+        !uploadField ||
+        maxBytes === undefined
+      ) {
+        return null;
+      }
+      return {
+        document_id: documentId,
+        filename,
+        upload_url: uploadUrl,
+        upload_method: "POST",
+        upload_field: uploadField,
+        expires_at: expiresAt,
+        max_bytes: maxBytes,
+      };
+    })
+    .filter((entry): entry is KnowledgeArchivePreparedDocument => entry !== null);
+  if (!documents.length) {
+    return null;
+  }
+  return {
+    session_id: sessionId,
+    prepare_id: prepareId,
+    documents,
+  };
+}
+
+export function normalizeKnowledgeArchiveStatusPayload(
+  payload: unknown,
+): KnowledgeArchiveStatusPayload | null {
+  if (!payload || typeof payload !== "object") {
+    return null;
+  }
+  const record = payload as Record<string, unknown>;
+  const sessionId = readString(record, "session_id", "sessionId");
+  const documentId = readString(record, "document_id", "documentId");
+  const stateRaw = readString(record, "state");
+  const validStates: KnowledgeArchiveState[] = ["uploading", "processing", "ready", "failed"];
+  const state = validStates.find((candidate) => candidate === stateRaw);
+  if (!sessionId || !documentId || !state) {
+    return null;
+  }
+  const error = readString(record, "error", "error_message", "errorMessage");
+  const title = readString(record, "title");
+  const chunkCount = readOptionalFiniteNumber(record.chunk_count ?? record.chunkCount);
+  return {
+    session_id: sessionId,
+    document_id: documentId,
+    state,
+    ...(error ? { error } : {}),
+    ...(chunkCount !== undefined ? { chunk_count: chunkCount } : {}),
+    ...(title ? { title } : {}),
   };
 }
 
@@ -2916,6 +3098,34 @@ export const DEFAULT_FILE_ACCESS_SETTINGS: FileAccessSettings = {
   roots: [],
 };
 
+export type LocalAgentProviderSource = "aurago" | "local";
+
+export interface LocalAgentLocalProvider {
+  name: string;
+  baseUrl: string;
+  apiKey: string;
+  model: string;
+}
+
+export interface LocalAgentSettings {
+  /** Lokalen Agenten aktivieren (übernimmt Chat-Turns lokal). */
+  enabled: boolean;
+  /** LLM-Quelle: AuraGo-Providerkatalog oder lokal angelegter Provider. */
+  providerSource: LocalAgentProviderSource;
+  /** Ausgewählter AuraGo-Provider (nur bei providerSource="aurago"). */
+  auragoProviderId?: string;
+  /** Lokal angelegter Provider (nur bei providerSource="local"). */
+  localProvider?: LocalAgentLocalProvider;
+  /** Maximale Anzahl Tool-Iterationen pro Turn. */
+  maxSteps: number;
+}
+
+export const DEFAULT_LOCAL_AGENT_SETTINGS: LocalAgentSettings = {
+  enabled: false,
+  providerSource: "aurago",
+  maxSteps: 8,
+};
+
 export interface AppSettings {
   serverUrl: string;
   theme: ThemeMode;
@@ -2936,6 +3146,11 @@ export interface AppSettings {
   desktopControlEnabled: boolean;
   /** Browser-Automatisierung (CDP) separat freigeben. */
   browserControlEnabled: boolean;
+  /**
+   * page-agent im gesteuerten Tab injizieren; der Nutzer steuert die Seite in
+   * natürlicher Sprache, LLM-Aufrufe laufen über den AuraGo-Proxy.
+   */
+  pageAgentEnabled: boolean;
   /** Lokale Ordnerfreigaben für Remote-Dateizugriff. */
   fileAccess: FileAccessSettings;
   /** Remote-Shell-Zugriff für AuraGo-Agents. */
@@ -2950,6 +3165,8 @@ export interface AppSettings {
   reduceMotion: boolean;
   /** Hintergrund-Visualizer während Sprachsitzungen. */
   speechVisualizerEnabled: boolean;
+  /** Optionaler lokaler Agent (führt Chat-Turns lokal aus). */
+  localAgent: LocalAgentSettings;
   /** Ersteinrichtung abgeschlossen (überlebt App-Updates via plugin-store). */
   onboardingCompleted: boolean;
 }
@@ -2966,6 +3183,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   speechHotkey: "Alt+Shift+M",
   desktopControlEnabled: true,
   browserControlEnabled: true,
+  pageAgentEnabled: false,
   fileAccess: { ...DEFAULT_FILE_ACCESS_SETTINGS },
   shellAccess: { ...DEFAULT_SHELL_ACCESS_SETTINGS },
   chatTtsMode: "auto",
@@ -2973,6 +3191,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   openPets: { ...DEFAULT_OPENPETS_SETTINGS },
   reduceMotion: false,
   speechVisualizerEnabled: true,
+  localAgent: { ...DEFAULT_LOCAL_AGENT_SETTINGS },
   onboardingCompleted: false,
 };
 
@@ -2991,6 +3210,7 @@ export const AGODESK_CHAT_VOICE_OUTPUT_STATUS_CAPABILITY = "chat.voice_output_st
 export const AGODESK_CHAT_MEDIA_EVENTS_CAPABILITY = "chat.media_events";
 export const AGODESK_CHAT_MEDIA_UPLOAD_CAPABILITY = "chat.media_upload";
 export const AGODESK_CHAT_ATTACHMENTS_CAPABILITY = "chat.attachments";
+export const AGODESK_KNOWLEDGE_ARCHIVE_UPLOAD_CAPABILITY = "knowledge.archive.upload";
 export const AGODESK_INTEGRATIONS_WEBHOSTS_CAPABILITY = "integrations.webhosts";
 export const AGODESK_SYSTEM_WARNINGS_CAPABILITY = "system.warnings";
 export {
@@ -3012,6 +3232,7 @@ export const AGODESK_BASE_CAPABILITIES = [
   AGODESK_CHAT_MEDIA_EVENTS_CAPABILITY,
   AGODESK_CHAT_MEDIA_UPLOAD_CAPABILITY,
   AGODESK_CHAT_ATTACHMENTS_CAPABILITY,
+  AGODESK_KNOWLEDGE_ARCHIVE_UPLOAD_CAPABILITY,
   AGODESK_INTEGRATIONS_WEBHOSTS_CAPABILITY,
   AGODESK_SYSTEM_WARNINGS_CAPABILITY,
   AGODESK_CONFIG_PROVIDERS_READ_CAPABILITY,
@@ -3045,6 +3266,7 @@ export const AGODESK_CLIENT_CAPABILITIES = [
   AGODESK_CHAT_MEDIA_EVENTS_CAPABILITY,
   AGODESK_CHAT_MEDIA_UPLOAD_CAPABILITY,
   AGODESK_CHAT_ATTACHMENTS_CAPABILITY,
+  AGODESK_KNOWLEDGE_ARCHIVE_UPLOAD_CAPABILITY,
   AGODESK_INTEGRATIONS_WEBHOSTS_CAPABILITY,
   AGODESK_SYSTEM_WARNINGS_CAPABILITY,
   AGODESK_CONFIG_PROVIDERS_READ_CAPABILITY,
@@ -3054,6 +3276,7 @@ export const AGODESK_CLIENT_CAPABILITIES = [
   "persona.assets",
 ] as const;
 
+export const AGODESK_LOCAL_AGENT_CAPABILITY = "local.agent";
 export const AGODESK_FILE_READ_CAPABILITY = "remote.files.read";
 export const AGODESK_FILE_WRITE_CAPABILITY = "remote.files.write";
 export const AGODESK_SHELL_EXEC_CAPABILITY = "remote.shell.exec";
@@ -3305,6 +3528,11 @@ export function hasAdvertisedChatAttachments(capabilities: readonly string[]): b
   return hasAdvertisedCapability(capabilities, AGODESK_CHAT_ATTACHMENTS_CAPABILITY);
 }
 
+/** Server must advertise knowledge.archive.upload before the archive button appears. */
+export function hasAdvertisedKnowledgeArchiveUpload(capabilities: readonly string[]): boolean {
+  return hasAdvertisedCapability(capabilities, AGODESK_KNOWLEDGE_ARCHIVE_UPLOAD_CAPABILITY);
+}
+
 /** Server must advertise upload + attachments before chat.message with files works. */
 export function canUseChatAttachments(capabilities: readonly string[]): boolean {
   return hasAdvertisedChatMediaUpload(capabilities) && hasAdvertisedChatAttachments(capabilities);
@@ -3412,11 +3640,16 @@ export function buildShellAccessSessionPayload(
   };
 }
 
+export function hasAdvertisedLocalAgent(capabilities: readonly string[]): boolean {
+  return hasAdvertisedCapability(capabilities, AGODESK_LOCAL_AGENT_CAPABILITY);
+}
+
 export function agodeskClientCapabilities(
   desktopControlEnabled = true,
   fileAccess: FileAccessSettings = DEFAULT_FILE_ACCESS_SETTINGS,
   browserControlEnabled = false,
   shellAccess: ShellAccessSettings = DEFAULT_SHELL_ACCESS_SETTINGS,
+  localAgentEnabled = false,
 ): string[] {
   const caps: string[] = [
     "chat.full_response",
@@ -3431,6 +3664,7 @@ export function agodeskClientCapabilities(
     AGODESK_CHAT_MEDIA_EVENTS_CAPABILITY,
     AGODESK_CHAT_MEDIA_UPLOAD_CAPABILITY,
     AGODESK_CHAT_ATTACHMENTS_CAPABILITY,
+    AGODESK_KNOWLEDGE_ARCHIVE_UPLOAD_CAPABILITY,
     AGODESK_INTEGRATIONS_WEBHOSTS_CAPABILITY,
     AGODESK_SYSTEM_WARNINGS_CAPABILITY,
     AGODESK_CONFIG_PROVIDERS_READ_CAPABILITY,
@@ -3461,6 +3695,10 @@ export function agodeskClientCapabilities(
   if (buildShellAccessSessionPayload(shellAccess)) {
     caps.push(AGODESK_SHELL_EXEC_CAPABILITY);
     caps.push(AGODESK_SHELL_SESSION_CAPABILITY);
+  }
+
+  if (localAgentEnabled) {
+    caps.push(AGODESK_LOCAL_AGENT_CAPABILITY);
   }
 
   caps.push("persona.assets");

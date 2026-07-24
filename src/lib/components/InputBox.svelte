@@ -6,9 +6,12 @@
 
   import type { SpeechStatus } from "../types/speech";
 
-  import type { ChatAttachmentLimits } from "../types/protocol";
+  import type { ChatAttachmentLimits, KnowledgeArchiveLimits } from "../types/protocol";
 
-  import { DEFAULT_CHAT_ATTACHMENT_LIMITS } from "../types/protocol";
+  import {
+    DEFAULT_CHAT_ATTACHMENT_LIMITS,
+    DEFAULT_KNOWLEDGE_ARCHIVE_LIMITS,
+  } from "../types/protocol";
 
   interface Props {
     disabled?: boolean;
@@ -29,9 +32,21 @@
 
     attachmentLimits?: ChatAttachmentLimits;
 
+    knowledgeArchiveEnabled?: boolean;
+
+    knowledgeArchiveLimits?: KnowledgeArchiveLimits;
+
+    pageAgentEnabled?: boolean;
+
+    pageAgentBusy?: boolean;
+
     onSubmit?: (text: string, files?: File[]) => void;
 
+    onAddToKnowledge?: (files: File[]) => void;
+
     onSpeechToggle?: () => void;
+
+    onOpenPageAgent?: () => void;
 
     onStop?: () => void;
   }
@@ -55,9 +70,21 @@
 
     attachmentLimits = DEFAULT_CHAT_ATTACHMENT_LIMITS,
 
+    knowledgeArchiveEnabled = false,
+
+    knowledgeArchiveLimits = DEFAULT_KNOWLEDGE_ARCHIVE_LIMITS,
+
+    pageAgentEnabled = false,
+
+    pageAgentBusy = false,
+
     onSubmit,
 
+    onAddToKnowledge,
+
     onSpeechToggle,
+
+    onOpenPageAgent,
 
     onStop,
   }: Props = $props();
@@ -65,6 +92,8 @@
   let textareaEl = $state<HTMLTextAreaElement>();
 
   let fileInputEl = $state<HTMLInputElement>();
+
+  let knowledgeInputEl = $state<HTMLInputElement>();
 
   let pendingFiles = $state<File[]>([]);
 
@@ -247,6 +276,49 @@
     fileInputEl?.click();
   }
 
+  function knowledgeMimeAllowed(mime: string): boolean {
+    if (knowledgeArchiveLimits.allowed_mime_prefixes.length === 0) {
+      return true;
+    }
+    return knowledgeArchiveLimits.allowed_mime_prefixes.some((prefix) => mime.startsWith(prefix));
+  }
+
+  function openKnowledgePicker(): void {
+    if (!knowledgeArchiveEnabled || disabled) {
+      return;
+    }
+    knowledgeInputEl?.click();
+  }
+
+  function handleKnowledgeFiles(fileList: FileList | File[] | null | undefined): void {
+    if (!knowledgeArchiveEnabled || disabled || !fileList) {
+      return;
+    }
+    const incoming = [...fileList];
+    if (incoming.length === 0) {
+      return;
+    }
+    if (incoming.length > knowledgeArchiveLimits.max_files_per_batch) {
+      attachmentError = $i18n("inputBox.knowledgeArchive.error.tooMany", {
+        count: String(knowledgeArchiveLimits.max_files_per_batch),
+      });
+      return;
+    }
+    for (const file of incoming) {
+      if (file.size > knowledgeArchiveLimits.max_file_bytes) {
+        attachmentError = $i18n("inputBox.knowledgeArchive.error.fileTooLarge");
+        return;
+      }
+      const mime = file.type || "application/octet-stream";
+      if (!knowledgeMimeAllowed(mime)) {
+        attachmentError = $i18n("inputBox.knowledgeArchive.error.mimeNotAllowed", { mime });
+        return;
+      }
+    }
+    attachmentError = "";
+    onAddToKnowledge?.(incoming);
+  }
+
   function handleDragOver(event: DragEvent): void {
     if (!attachmentsEnabled || disabled) {
       return;
@@ -361,6 +433,49 @@
           onclick={openFilePicker}
         >
           <Icon name="attach" size={16} />
+        </button>
+      {/if}
+
+      {#if knowledgeArchiveEnabled}
+        <input
+          bind:this={knowledgeInputEl}
+          type="file"
+          multiple
+          hidden
+          aria-hidden="true"
+          tabindex="-1"
+          onchange={(event) => {
+            const target = event.currentTarget as HTMLInputElement;
+
+            handleKnowledgeFiles(target.files);
+
+            target.value = "";
+          }}
+        />
+
+        <button
+          type="button"
+          class="knowledge-btn ui-btn ui-btn-icon"
+          {disabled}
+          aria-label={$i18n("inputBox.knowledgeArchive.add.ariaLabel")}
+          title={$i18n("inputBox.knowledgeArchive.add.title")}
+          onclick={openKnowledgePicker}
+        >
+          <Icon name="knowledge" size={16} />
+        </button>
+      {/if}
+
+      {#if pageAgentEnabled}
+        <button
+          type="button"
+          class="page-agent-btn ui-btn ui-btn-icon"
+          disabled={pageAgentBusy}
+          aria-busy={pageAgentBusy}
+          aria-label={$i18n("inputBox.pageAgent.label")}
+          title={$i18n("inputBox.pageAgent.label")}
+          onclick={() => onOpenPageAgent?.()}
+        >
+          <Icon name="browser" size={16} />
         </button>
       {/if}
 
@@ -574,7 +689,9 @@
     align-items: center;
   }
 
-  .attach-btn {
+  .attach-btn,
+  .knowledge-btn,
+  .page-agent-btn {
     width: 2.625rem;
 
     height: 2.625rem;

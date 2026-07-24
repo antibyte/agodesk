@@ -35,6 +35,11 @@ import {
   rejectAttachmentPrepareByRequestId,
   rejectAnyPendingAttachmentPrepare,
 } from "./chat-attachment-flow";
+import {
+  handleKnowledgeArchivePreparedMessage,
+  handleKnowledgeArchiveStatusMessage,
+  rejectAnyPendingKnowledgeArchive,
+} from "./knowledge-archive-flow";
 import { clearAttachmentPathCache } from "./chat-attachment-paths";
 import { bootstrapAgodeskFeatures } from "./agodesk-features-bootstrap";
 import { handleIntegrationsWebhostsMessage } from "./integrations-flow";
@@ -49,6 +54,10 @@ import {
   rejectProviderWaiterByRequestId,
 } from "./providers-flow";
 import { handleSystemWarningsMessage } from "./system-warnings-flow";
+import {
+  handleLocalAgentLlmResult,
+  handleLocalAgentRemoteToolResult,
+} from "./local-agent";
 import { shouldUseFrontendTtsForSettings } from "./chat-tts-policy";
 import { syncAuraGoVoiceOutputStatus } from "./chat-voice-output-status";
 import { saveSettings } from "./settings";
@@ -59,6 +68,8 @@ import {
   isChatError,
   isChatAttachmentPrepared,
   isChatAttachmentAccepted,
+  isKnowledgeArchivePrepared,
+  isKnowledgeArchiveStatus,
   isChatMedia,
   isChatPlanUpdate,
   isAgentActivity,
@@ -349,6 +360,16 @@ export async function handleChatWsMessage(
     return;
   }
 
+  if (isKnowledgeArchivePrepared(message)) {
+    handleKnowledgeArchivePreparedMessage(message);
+    return;
+  }
+
+  if (isKnowledgeArchiveStatus(message)) {
+    handleKnowledgeArchiveStatusMessage(message.payload);
+    return;
+  }
+
   if (isIntegrationsWebhosts(message)) {
     handleIntegrationsWebhostsMessage(message.payload);
     return;
@@ -386,6 +407,16 @@ export async function handleChatWsMessage(
 
   if (isSystemWarnings(message)) {
     handleSystemWarningsMessage(message.payload);
+    return;
+  }
+
+  if (message.type === "local.agent.remote_tool.result") {
+    handleLocalAgentRemoteToolResult(message.payload, message.id);
+    return;
+  }
+
+  if (message.type === "local.agent.llm.result") {
+    handleLocalAgentLlmResult(message.payload, message.id);
     return;
   }
 
@@ -481,6 +512,13 @@ export async function handleChatWsMessage(
     if (
       isChatAttachmentNegotiationError(message.payload) &&
       rejectAnyPendingAttachmentPrepare(new Error(attachmentErrorText))
+    ) {
+      return;
+    }
+
+    if (
+      message.payload.code.trim().toUpperCase().startsWith("KNOWLEDGE_") &&
+      rejectAnyPendingKnowledgeArchive(new Error(attachmentErrorText))
     ) {
       return;
     }

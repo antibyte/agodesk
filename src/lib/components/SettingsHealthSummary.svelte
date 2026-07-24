@@ -14,6 +14,8 @@
     shellAccessEnabled: boolean;
     shellCwdCount: number;
     openPetsEnabled: boolean;
+    localAgentEnabled: boolean;
+    localAgentNegotiated: boolean;
     dirty: boolean;
   }
 
@@ -27,6 +29,8 @@
     shellAccessEnabled,
     shellCwdCount,
     openPetsEnabled,
+    localAgentEnabled,
+    localAgentNegotiated,
     dirty,
   }: Props = $props();
 
@@ -81,6 +85,22 @@
       : $i18n("settings.health.companion.disabled"),
   );
 
+  const localAgentTone = $derived.by((): HealthTone => {
+    if (!localAgentEnabled) {
+      return "blocked";
+    }
+    return localAgentNegotiated ? "ready" : "thinking";
+  });
+
+  const localAgentDetail = $derived.by(() => {
+    if (!localAgentEnabled) {
+      return $i18n("settings.health.localAgent.disabled");
+    }
+    return localAgentNegotiated
+      ? $i18n("settings.health.localAgent.active")
+      : $i18n("settings.health.localAgent.pending");
+  });
+
   function statusLabel(tone: HealthTone): string {
     const key =
       tone === "ready"
@@ -113,6 +133,13 @@
     {#if dirty}
       <span class="ui-chip" data-tone="warning">{$i18n("settings.health.unsaved")}</span>
     {/if}
+    <span
+      class="local-agent-pill ui-chip"
+      data-tone={chipTone(localAgentTone)}
+      title={localAgentDetail}
+    >
+      {$i18n("settings.health.localAgent.title")}: {statusLabel(localAgentTone)}
+    </span>
   </div>
 
   <div class="settings-health-grid">
@@ -170,6 +197,7 @@
   .settings-health-head {
     display: flex;
     align-items: center;
+    flex-wrap: wrap;
     gap: var(--space-3);
     margin-bottom: var(--space-3);
   }
@@ -178,6 +206,11 @@
     margin: 0;
     font-size: var(--font-size-lg);
     font-weight: 650;
+  }
+
+  .local-agent-pill {
+    margin-left: auto;
+    max-width: 100%;
   }
 
   .settings-health-grid {
@@ -191,6 +224,7 @@
     flex-direction: column;
     gap: var(--space-2);
     padding: var(--space-4);
+    min-width: 0;
     min-height: 0;
   }
 
@@ -230,6 +264,10 @@
   @media (max-width: 820px) {
     .settings-health-grid {
       grid-template-columns: 1fr;
+    }
+
+    .local-agent-pill {
+      margin-left: 0;
     }
   }
 

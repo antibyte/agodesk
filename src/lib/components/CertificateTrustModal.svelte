@@ -1,7 +1,11 @@
 <script lang="ts">
   import { i18n } from "../i18n";
   import type { CertificateProbeResult, ClientErrorCode } from "../types/protocol";
-  import { browserOrigin, probeServerCertificate } from "../services/tls";
+  import {
+    browserOrigin,
+    detectAntivirusTlsInterception,
+    probeServerCertificate,
+  } from "../services/tls";
   import { focusTrap } from "../actions/focusTrap";
   import { dialogModal } from "../actions/dialogModal";
 
@@ -40,6 +44,10 @@
         return $i18n("certModal.title.untrusted");
     }
   });
+
+  const mitmProduct = $derived(
+    probe ? detectAntivirusTlsInterception(probe.issuer) : null,
+  );
 
   $effect(() => {
     if (!open || !serverUrl.startsWith("wss://")) {
@@ -100,6 +108,12 @@
   >
     <h2 id="cert-title">{title}</h2>
     <p class="intro">{$i18n("certModal.intro")}</p>
+
+    {#if mitmProduct}
+      <p class="mitm-warning" role="status">
+        {$i18n("certModal.mitmWarning", { product: mitmProduct })}
+      </p>
+    {/if}
 
     <dl class="details">
       <div>
@@ -171,6 +185,17 @@
     margin: 0 0 var(--space-4);
     font-size: 0.875rem;
     color: var(--color-muted);
+    line-height: 1.5;
+  }
+
+  .mitm-warning {
+    margin: 0 0 var(--space-4);
+    padding: var(--space-3);
+    border-radius: var(--radius-md, 0.5rem);
+    border: 1px solid color-mix(in srgb, var(--color-warning) 40%, var(--color-border));
+    background: var(--color-warning-soft);
+    color: color-mix(in srgb, var(--color-warning) 75%, var(--color-text));
+    font-size: 0.875rem;
     line-height: 1.5;
   }
 

@@ -37,6 +37,7 @@ export async function buildSessionStartCommon(): Promise<SessionStartCommon> {
     fileAccess,
     get(settings).browserControlEnabled,
     shellAccess,
+    get(settings).localAgent.enabled,
   );
 
   const common: SessionStartCommon = {

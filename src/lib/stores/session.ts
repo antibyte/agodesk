@@ -10,6 +10,7 @@ export interface SessionState {
   remoteControlActive: boolean;
   advertisedCapabilities: string[];
   attachmentLimits: import("../types/protocol").ChatAttachmentLimits | null;
+  knowledgeArchiveLimits: import("../types/protocol").KnowledgeArchiveLimits | null;
 }
 
 const initialState: SessionState = {
@@ -21,6 +22,7 @@ const initialState: SessionState = {
   remoteControlActive: false,
   advertisedCapabilities: [],
   attachmentLimits: null,
+  knowledgeArchiveLimits: null,
 };
 
 function createSessionStore() {
@@ -62,6 +64,11 @@ function createSessionStore() {
     },
     setAttachmentLimits(limits: import("../types/protocol").ChatAttachmentLimits | null): void {
       update((state) => ({ ...state, attachmentLimits: limits }));
+    },
+    setKnowledgeArchiveLimits(
+      limits: import("../types/protocol").KnowledgeArchiveLimits | null,
+    ): void {
+      update((state) => ({ ...state, knowledgeArchiveLimits: limits }));
     },
   };
 }

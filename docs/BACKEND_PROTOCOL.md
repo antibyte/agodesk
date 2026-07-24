@@ -43,6 +43,32 @@ Every frame uses this envelope:
 - `session.clear`: server-initiated session reset; optional new `session_id`, clears chat by default.
 - `desktop.command`: server-initiated desktop operation (screenshot, permission check, input).
 - `desktop.result`: client response to a `desktop.command` correlated by `command_id`.
+- `local.agent.remote_tool` / `local.agent.remote_tool.result`: local agent memory/query requests and their answers (see Local Agent Mode).
+- `local.agent.handoff`: local agent hands a full task to AuraGo (normal agent turn).
+- `local.agent.turn`: local agent journal sync after each local turn.
+- `local.agent.activity`: optional live progress from the local agent.
+- `local.agent.llm` / `local.agent.llm.result`: optional LLM proxy for `providerSource=aurago`. Also used by the Page Agent (see below); page-agent forces function calling, so its requests include a `tool_choice` field (usually `"required"`) that the backend must forward to the provider unchanged, and the result must carry `message.tool_calls`.
+
+## Page Agent (in-page browser control)
+
+Optional client feature layered on browser control: when the user enables it,
+agodesk injects Alibaba `page-agent` into the connected CDP tab. The in-page
+agent runs its own observe-think-act loop and shows its own panel; the user
+drives it in natural language directly on the page. Its LLM calls are proxied
+back to AuraGo over the existing `local.agent.llm` channel — no chat transcript
+is mirrored into the AuraGo conversation. Requires desktop + browser control to
+be enabled. Design:
+[`superpowers/specs/2026-07-23-page-agent-proxy-design.md`](superpowers/specs/2026-07-23-page-agent-proxy-design.md).
+
+## Local Agent Mode
+
+Optional client feature: when enabled and negotiated, agodesk runs chat turns
+locally with a slim prompt and progressive tool discovery, using AuraGo only for
+memory, short queries and full handoff. The client advertises the `local.agent`
+capability in `session.start`; the backend must mirror it in
+`session.accepted.advertised_capabilities`. Full backend contract, payloads and
+definition of done: [`AURAGO_LOCAL_AGENT_HANDOFF.md`](AURAGO_LOCAL_AGENT_HANDOFF.md).
+Design: [`superpowers/specs/2026-07-17-local-agent-design.md`](superpowers/specs/2026-07-17-local-agent-design.md).
 
 ## Pairing
 

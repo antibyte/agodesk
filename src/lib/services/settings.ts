@@ -4,6 +4,8 @@ import type {
   ChatTtsMode,
   FileAccessRoot,
   FileAccessSettings,
+  LocalAgentSettings,
+  LocalAgentProviderSource,
   LocalAsrModel,
   OpenPetsSettings,
   ShellAccessCwd,
@@ -15,6 +17,7 @@ import type {
 } from "../types/protocol";
 import {
   DEFAULT_FILE_ACCESS_SETTINGS,
+  DEFAULT_LOCAL_AGENT_SETTINGS,
   DEFAULT_OPENPETS_SETTINGS,
   DEFAULT_SETTINGS,
   DEFAULT_SHELL_ACCESS_SETTINGS,
@@ -323,6 +326,47 @@ export function normalizeShellAccessSettings(
   };
 }
 
+function normalizeLocalAgentSettings(
+  saved: Partial<LocalAgentSettings> | null | undefined,
+): LocalAgentSettings {
+  if (!saved || typeof saved !== "object") {
+    return { ...DEFAULT_LOCAL_AGENT_SETTINGS };
+  }
+
+  const providerSource: LocalAgentProviderSource =
+    saved.providerSource === "local" ? "local" : "aurago";
+
+  const auragoProviderId =
+    typeof saved.auragoProviderId === "string" && saved.auragoProviderId.trim().length > 0
+      ? saved.auragoProviderId.trim()
+      : undefined;
+
+  const rawLocalProvider = saved.localProvider;
+  const localProvider =
+    rawLocalProvider && typeof rawLocalProvider === "object"
+      ? {
+          name: typeof rawLocalProvider.name === "string" ? rawLocalProvider.name.trim() : "",
+          baseUrl:
+            typeof rawLocalProvider.baseUrl === "string" ? rawLocalProvider.baseUrl.trim() : "",
+          apiKey: typeof rawLocalProvider.apiKey === "string" ? rawLocalProvider.apiKey : "",
+          model: typeof rawLocalProvider.model === "string" ? rawLocalProvider.model.trim() : "",
+        }
+      : undefined;
+
+  const maxSteps =
+    typeof saved.maxSteps === "number" && Number.isFinite(saved.maxSteps) && saved.maxSteps > 0
+      ? Math.min(20, Math.floor(saved.maxSteps))
+      : DEFAULT_LOCAL_AGENT_SETTINGS.maxSteps;
+
+  return {
+    enabled: typeof saved.enabled === "boolean" ? saved.enabled : DEFAULT_LOCAL_AGENT_SETTINGS.enabled,
+    providerSource,
+    ...(auragoProviderId ? { auragoProviderId } : {}),
+    ...(localProvider ? { localProvider } : {}),
+    maxSteps,
+  };
+}
+
 function normalizeOpenPetsSettings(saved: Partial<OpenPetsSettings> | undefined): OpenPetsSettings {
   const petId =
     typeof saved?.petId === "string" && saved.petId.trim().length > 0 ? saved.petId.trim() : null;
@@ -373,6 +417,10 @@ export function normalizeAppSettings(saved: Partial<AppSettings> | null | undefi
       typeof saved?.browserControlEnabled === "boolean"
         ? saved.browserControlEnabled
         : DEFAULT_SETTINGS.browserControlEnabled,
+    pageAgentEnabled:
+      typeof saved?.pageAgentEnabled === "boolean"
+        ? saved.pageAgentEnabled
+        : DEFAULT_SETTINGS.pageAgentEnabled,
     fileAccess: normalizeFileAccessSettings(saved?.fileAccess),
     shellAccess: normalizeShellAccessSettings(saved?.shellAccess),
     chatTtsMode: normalizeChatTtsMode(saved?.chatTtsMode),
@@ -387,6 +435,7 @@ export function normalizeAppSettings(saved: Partial<AppSettings> | null | undefi
       typeof saved?.speechVisualizerEnabled === "boolean"
         ? saved.speechVisualizerEnabled
         : DEFAULT_SETTINGS.speechVisualizerEnabled,
+    localAgent: normalizeLocalAgentSettings(saved?.localAgent),
     onboardingCompleted:
       typeof saved?.onboardingCompleted === "boolean"
         ? saved.onboardingCompleted

@@ -1,4 +1,3 @@
-import { DEFAULT_SETTINGS } from "../types/protocol";
 
 export interface ServerPreset {
   id: string;
@@ -18,7 +17,7 @@ export const SERVER_PRESETS: ServerPreset[] = [
     id: "loopback-default",
     labelKey: "settingsPreset.loopbackDefault.label",
     descriptionKey: "settingsPreset.loopbackDefault.description",
-    url: DEFAULT_SETTINGS.serverUrl,
+    url: "ws://127.0.0.1:8080/api/agodesk/ws",
   },
   {
     id: "aurago-lan",

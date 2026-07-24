@@ -96,3 +96,59 @@ pub async fn disconnect(_state: &BrowserState) -> Result<(), String> {
         "{BROWSER_UNAVAILABLE}: Browser automation is not compiled into this build."
     ))
 }
+
+#[cfg(feature = "browser-automation")]
+pub async fn page_agent_enable(
+    state: &BrowserState,
+    app: tauri::AppHandle,
+    bundle: String,
+    bootstrap: String,
+) -> Result<(), String> {
+    cdp::page_agent_enable(state, app, bundle, bootstrap).await
+}
+
+#[cfg(not(feature = "browser-automation"))]
+pub async fn page_agent_enable(
+    _state: &BrowserState,
+    _app: tauri::AppHandle,
+    _bundle: String,
+    _bootstrap: String,
+) -> Result<(), String> {
+    Err(format!(
+        "{BROWSER_UNAVAILABLE}: Browser automation is not compiled into this build."
+    ))
+}
+
+#[cfg(feature = "browser-automation")]
+pub async fn page_agent_resolve(
+    state: &BrowserState,
+    request_id: String,
+    ok: bool,
+    payload: String,
+) -> Result<(), String> {
+    cdp::page_agent_resolve(state, request_id, ok, payload).await
+}
+
+#[cfg(not(feature = "browser-automation"))]
+pub async fn page_agent_resolve(
+    _state: &BrowserState,
+    _request_id: String,
+    _ok: bool,
+    _payload: String,
+) -> Result<(), String> {
+    Err(format!(
+        "{BROWSER_UNAVAILABLE}: Browser automation is not compiled into this build."
+    ))
+}
+
+#[cfg(feature = "browser-automation")]
+pub async fn page_agent_disable(state: &BrowserState) -> Result<(), String> {
+    cdp::page_agent_disable(state).await
+}
+
+#[cfg(not(feature = "browser-automation"))]
+pub async fn page_agent_disable(_state: &BrowserState) -> Result<(), String> {
+    Err(format!(
+        "{BROWSER_UNAVAILABLE}: Browser automation is not compiled into this build."
+    ))
+}

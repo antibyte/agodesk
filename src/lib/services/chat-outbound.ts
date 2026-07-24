@@ -19,6 +19,12 @@ import type { NativeWebSocketService } from "./websocket";
 import { prepareChatAttachment, toChatAttachmentItem } from "./chat-attachment-flow";
 import { setLocalAttachmentPreview, registerSignedAttachmentPaths } from "./chat-attachment-paths";
 import { uploadChatAttachmentFile } from "./chat-attachment-upload";
+import {
+  cancelLocalAgentTurn,
+  localAgentReady,
+  localAgentTurnActive,
+  runLocalAgentTurn,
+} from "./local-agent";
 
 export interface BuildChatMessageOptions {
   source?: ChatMessagePayload["source"];
@@ -117,6 +123,69 @@ export async function sendChatMessage(
   return message;
 }
 
+async function runLocalAgentChatTurn(
+  ws: NativeWebSocketService,
+  sessionId: string,
+  text: string,
+  conversationId: string | undefined,
+): Promise<WsMessage<ChatMessagePayload>> {
+  const trimmed = text.trim();
+  if (!trimmed) {
+    throw new Error(getTranslateFn()("chatOutbound.error.emptyMessage"));
+  }
+
+  const userMessage = buildChatMessage(sessionId, trimmed, {
+    conversationId: conversationId ?? null,
+  });
+  chatMessages.addMessage({
+    id: userMessage.id,
+    role: "user",
+    text: trimmed,
+    timestamp: userMessage.timestamp,
+  });
+
+  // Makes Stop visible (requestInFlight) and keeps pending alive across handoff
+  // until chat.response finishes the same request_id.
+  chatConversationState.beginRequest(userMessage.id);
+
+  try {
+    const result = await runLocalAgentTurn({
+      send: (message) => ws.send(message),
+      sessionId,
+      conversationId,
+      requestId: userMessage.id,
+      userText: trimmed,
+      onAssistantMessage: (assistantText) => {
+        chatMessages.addMessage({
+          id: crypto.randomUUID(),
+          role: "assistant",
+          text: assistantText,
+          timestamp: new Date().toISOString(),
+        });
+      },
+      onSystemNotice: (notice) => {
+        chatMessages.addMessage({
+          id: crypto.randomUUID(),
+          role: "system",
+          text: notice,
+          timestamp: new Date().toISOString(),
+          tone: "error",
+        });
+      },
+    });
+
+    // Handoff: leave requestInFlight so chat.response / cancel clears pending.
+    if (!result.handedOff) {
+      chatConversationState.finishRequest(userMessage.id);
+    }
+  } catch (error) {
+    chatConversationState.finishRequest(userMessage.id);
+    throw error;
+  }
+
+  return userMessage;
+}
+
 export async function sendChatMessageWithConversation(
   ws: NativeWebSocketService,
   sessionId: string,
@@ -139,6 +208,12 @@ export async function sendChatMessageWithConversation(
 
   const { files = [], ...messageOptions } = options;
   let attachments = messageOptions.attachments;
+
+  // Local agent takes over text turns when enabled and negotiated. Attachments still
+  // go through the normal remote flow (the local loop is text-only for now).
+  if (files.length === 0 && localAgentReady()) {
+    return runLocalAgentChatTurn(ws, sessionId, text, conversationId ?? undefined);
+  }
 
   if (files.length > 0) {
     if (!conversationId) {
@@ -193,6 +268,12 @@ export async function sendChatMessageWithConversation(
 }
 
 export async function stopActiveChatRequest(ws: NativeWebSocketService): Promise<boolean> {
+  if (localAgentTurnActive()) {
+    cancelLocalAgentTurn();
+    // Loop settles as cancelled and chat-outbound finishes the request.
+    return true;
+  }
+
   const session = get(sessionState);
   const convo = get(chatConversationState);
   const requestId = convo.activeRequestId;

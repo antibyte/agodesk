@@ -13,6 +13,7 @@ import type { NativeWebSocketService } from "./websocket";
 import type { SystemConnectedPayload, WsMessage, DesktopCommandPayload } from "../types/protocol";
 import {
   DEFAULT_CHAT_ATTACHMENT_LIMITS,
+  DEFAULT_KNOWLEDGE_ARCHIVE_LIMITS,
   getWsOrigin,
   isInsecureLoopbackUrl,
   isPairingRequired,
@@ -149,6 +150,10 @@ export async function handleSessionAccepted(payload: unknown, serverUrl: string)
       (advertised.includes("chat.media_upload") && advertised.includes("chat.attachments")
         ? DEFAULT_CHAT_ATTACHMENT_LIMITS
         : null),
+  );
+  sessionState.setKnowledgeArchiveLimits(
+    normalized.knowledge_archive_limits ??
+      (advertised.includes("knowledge.archive.upload") ? DEFAULT_KNOWLEDGE_ARCHIVE_LIMITS : null),
   );
   sessionState.setStatus("accepted");
 }

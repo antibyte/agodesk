@@ -18,7 +18,11 @@ export type IconName =
   | "voice-off"
   | "brand"
   | "close"
-  | "copy";
+  | "copy"
+  | "knowledge"
+  | "browser"
+  | "chevron-down"
+  | "chevron-up";
 
 export interface IconDefinition {
   paths: string;
@@ -123,6 +127,24 @@ export const ICONS: Record<IconName, IconDefinition> = {
   copy: {
     paths:
       '<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>',
+    strokeWidth: 2,
+  },
+  knowledge: {
+    paths:
+      '<path d="M2 4h6a4 4 0 0 1 4 4v12a3 3 0 0 0-3-3H2z"/><path d="M22 4h-6a4 4 0 0 0-4 4v12a3 3 0 0 1 3-3h7z"/>',
+    strokeWidth: 2,
+  },
+  browser: {
+    paths:
+      '<circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>',
+    strokeWidth: 2,
+  },
+  "chevron-down": {
+    paths: '<polyline points="6 9 12 15 18 9"/>',
+    strokeWidth: 2,
+  },
+  "chevron-up": {
+    paths: '<polyline points="18 15 12 9 6 15"/>',
     strokeWidth: 2,
   },
 };

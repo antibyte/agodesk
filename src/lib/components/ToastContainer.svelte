@@ -52,6 +52,37 @@
     justify-content: space-between;
     gap: var(--space-2);
     pointer-events: auto;
+    border-left: 4px solid transparent;
+    padding-left: var(--space-3) !important;
+    transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+  }
+
+  .toast-item[data-tone="success"] {
+    border-left-color: var(--color-success);
+    box-shadow:
+      0 4px 16px color-mix(in srgb, var(--color-success) 10%, rgba(0, 0, 0, 0.15)),
+      0 1px 2px rgba(0, 0, 0, 0.05);
+  }
+
+  .toast-item[data-tone="danger"] {
+    border-left-color: var(--color-danger);
+    box-shadow:
+      0 4px 16px color-mix(in srgb, var(--color-danger) 10%, rgba(0, 0, 0, 0.15)),
+      0 1px 2px rgba(0, 0, 0, 0.05);
+  }
+
+  .toast-item[data-tone="warning"] {
+    border-left-color: var(--color-warning);
+    box-shadow:
+      0 4px 16px color-mix(in srgb, var(--color-warning) 10%, rgba(0, 0, 0, 0.15)),
+      0 1px 2px rgba(0, 0, 0, 0.05);
+  }
+
+  .toast-item[data-tone="info"] {
+    border-left-color: var(--color-accent);
+    box-shadow:
+      0 4px 16px color-mix(in srgb, var(--color-accent) 10%, rgba(0, 0, 0, 0.15)),
+      0 1px 2px rgba(0, 0, 0, 0.05);
   }
 
   .toast-item p {

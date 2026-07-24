@@ -793,6 +793,13 @@ export async function executeDesktopCommand(
           });
           result.success = true;
           result.data = session;
+          // Opt-in page-agent lives in the tab and proxies its LLM to AuraGo.
+          try {
+            const { syncPageAgentAfterBrowserConnect } = await import("./page-agent");
+            await syncPageAgentAfterBrowserConnect();
+          } catch (pageAgentError) {
+            console.warn("[agodesk:page-agent] enable after connect failed", pageAgentError);
+          }
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
           const mapped = mapBrowserInvokeError(message);
@@ -880,6 +887,12 @@ export async function executeDesktopCommand(
       }
       case "desktop_browser_disconnect": {
         try {
+          try {
+            const { syncPageAgentBeforeBrowserDisconnect } = await import("./page-agent");
+            await syncPageAgentBeforeBrowserDisconnect();
+          } catch (pageAgentError) {
+            console.warn("[agodesk:page-agent] disable before disconnect failed", pageAgentError);
+          }
           await browserDisconnect();
           result.success = true;
         } catch (error) {

@@ -43,7 +43,8 @@
         "integration-embed-closed",
         "xai-realtime:message",
         "xai-realtime:state",
-        "xai-realtime:error"
+        "xai-realtime:error",
+        "agodesk:page-agent-llm"
       ]
     }
   ]

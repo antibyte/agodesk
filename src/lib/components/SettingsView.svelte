@@ -5,6 +5,8 @@
     ConnectionStatus,
     FileAccessRoot,
     FileAccessSettings,
+    LocalAgentSettings,
+    LocalAgentProviderSource,
     OpenPetsSettings,
     SessionStatus,
     ShellAccessSettings,
@@ -17,6 +19,7 @@
   import {
     AGODESK_CLIENT_VERSION,
     DEFAULT_FILE_ACCESS_SETTINGS,
+    DEFAULT_LOCAL_AGENT_SETTINGS,
     DEFAULT_OPENPETS_SETTINGS,
     DEFAULT_SHELL_ACCESS_SETTINGS,
     DEFAULT_SPEECH_SETTINGS,
@@ -62,6 +65,8 @@
   import { testGeminiConnection, testGrokConnection, testLocalSpeechTts } from "../services/speech-flow";
   import { applyTheme, applyUiTheme } from "../services/theme";
   import LlmProvidersSection from "./LlmProvidersSection.svelte";
+  import { providersState } from "../stores/providers";
+  import { fetchConfigProvidersList } from "../services/providers-flow";
   import type { WsMessage } from "../types/protocol";
   import {
     speechAsrStatus,
@@ -137,12 +142,14 @@
     | "speechHotkey"
     | "desktopControlEnabled"
     | "browserControlEnabled"
+    | "pageAgentEnabled"
     | "fileAccess"
     | "shellAccess"
     | "chatTtsMode"
     | "openPets"
     | "reduceMotion"
     | "speechVisualizerEnabled"
+    | "localAgent"
   >;
 
   const GEMINI_VOICE_OPTIONS = ["Zephyr", "Puck", "Charon", "Kore", "Fenrir", "Aoede"] as const;
@@ -164,6 +171,7 @@
     | "shell"
     | "speech"
     | "llmProviders"
+    | "localAgent"
     | "about";
 
   type SpeechSubSection = "provider" | "asr" | "tts" | "tests";
@@ -180,12 +188,14 @@
     speechHotkey?: string;
     desktopControlEnabled?: boolean;
     browserControlEnabled?: boolean;
+    pageAgentEnabled?: boolean;
     fileAccess?: FileAccessSettings;
     shellAccess?: ShellAccessSettings;
     chatTtsMode?: ChatTtsMode;
     openPets?: OpenPetsSettings;
     reduceMotion?: boolean;
     speechVisualizerEnabled?: boolean;
+    localAgent?: LocalAgentSettings;
     connectionStatus?: ConnectionStatus;
     sessionStatus?: SessionStatus;
     sessionId?: string;
@@ -215,12 +225,14 @@
     speechHotkey = DEFAULT_SPEECH_HOTKEY,
     desktopControlEnabled = true,
     browserControlEnabled = false,
+    pageAgentEnabled = false,
     fileAccess = DEFAULT_FILE_ACCESS_SETTINGS,
     shellAccess = DEFAULT_SHELL_ACCESS_SETTINGS,
     chatTtsMode = "auto",
     openPets = DEFAULT_OPENPETS_SETTINGS,
     reduceMotion = false,
     speechVisualizerEnabled = true,
+    localAgent = DEFAULT_LOCAL_AGENT_SETTINGS,
     connectionStatus = "disconnected",
     sessionStatus = "idle",
     sessionId = "",
@@ -249,6 +261,7 @@
   let draftSpeechHotkey = $state(DEFAULT_SPEECH_HOTKEY);
   let draftDesktopControlEnabled = $state(true);
   let draftBrowserControlEnabled = $state(false);
+  let draftPageAgentEnabled = $state(false);
   let draftFileAccess = $state<FileAccessSettings>(
     cloneFileAccessSettings(DEFAULT_FILE_ACCESS_SETTINGS),
   );
@@ -270,6 +283,14 @@
   let draftUiSoundVolume = $state(0.2);
   let draftReduceMotion = $state(false);
   let draftSpeechVisualizerEnabled = $state(true);
+  let draftLocalAgentEnabled = $state(false);
+  let draftLocalAgentProviderSource = $state<LocalAgentProviderSource>("aurago");
+  let draftLocalAgentAuragoProviderId = $state("");
+  let draftLocalAgentLocalName = $state("");
+  let draftLocalAgentLocalBaseUrl = $state("");
+  let draftLocalAgentLocalApiKey = $state("");
+  let draftLocalAgentLocalModel = $state("");
+  let draftLocalAgentMaxSteps = $state(DEFAULT_LOCAL_AGENT_SETTINGS.maxSteps);
   let deviceId = $state<string | null>(null);
   let hostInfo = $state<HostInfo | null>(null);
   let dirty = $state(false);
@@ -316,6 +337,11 @@
           "llmProviders",
           "settings.section.llmProviders.label",
           "settings.section.llmProviders.hint",
+        ],
+        [
+          "localAgent",
+          "settings.section.localAgent.label",
+          "settings.section.localAgent.hint",
         ],
         ["about", "settings.section.about.label", "settings.section.about.hint"],
       ] as const
@@ -500,6 +526,7 @@
       draftSpeechHotkey = speechHotkey;
       draftDesktopControlEnabled = desktopControlEnabled;
       draftBrowserControlEnabled = browserControlEnabled;
+      draftPageAgentEnabled = pageAgentEnabled;
       draftFileAccess = cloneFileAccessSettings(fileAccess);
       draftShellAccess = cloneShellAccessSettings(shellAccess);
       draftChatTtsMode = chatTtsMode;
@@ -513,6 +540,14 @@
       draftUiSoundVolume = uiSounds.volume;
       draftReduceMotion = reduceMotion;
       draftSpeechVisualizerEnabled = speechVisualizerEnabled;
+      draftLocalAgentEnabled = localAgent.enabled;
+      draftLocalAgentProviderSource = localAgent.providerSource;
+      draftLocalAgentAuragoProviderId = localAgent.auragoProviderId ?? "";
+      draftLocalAgentLocalName = localAgent.localProvider?.name ?? "";
+      draftLocalAgentLocalBaseUrl = localAgent.localProvider?.baseUrl ?? "";
+      draftLocalAgentLocalApiKey = localAgent.localProvider?.apiKey ?? "";
+      draftLocalAgentLocalModel = localAgent.localProvider?.model ?? "";
+      draftLocalAgentMaxSteps = localAgent.maxSteps;
       // Prefer prop over draftLocale so this effect does not re-run on radio clicks.
       ttsTestSampleText = localTtsTestPhraseForAppLocale(locale);
     }
@@ -536,6 +571,18 @@
       return;
     }
     void refreshOpenPetsPanel();
+  });
+
+  $effect(() => {
+    if (activeSection !== "localAgent") {
+      return;
+    }
+    if (!wsSend || !sessionId || $providersState.providers.length > 0) {
+      return;
+    }
+    void fetchConfigProvidersList(wsSend, sessionId).catch(() => {
+      // Provider list is optional here; the manual provider-id field still works.
+    });
   });
 
   async function refreshOpenPetsPanel(): Promise<void> {
@@ -996,6 +1043,7 @@
       speechHotkey: draftSpeechHotkey.trim(),
       desktopControlEnabled: draftDesktopControlEnabled,
       browserControlEnabled: draftBrowserControlEnabled,
+      pageAgentEnabled: draftPageAgentEnabled,
       fileAccess: cloneFileAccessSettings(draftFileAccess),
       shellAccess: cloneShellAccessSettings(draftShellAccess),
       chatTtsMode: draftChatTtsMode,
@@ -1007,6 +1055,26 @@
       },
       reduceMotion: draftReduceMotion,
       speechVisualizerEnabled: draftSpeechVisualizerEnabled,
+      localAgent: buildLocalAgentDraft(),
+    };
+  }
+
+  function buildLocalAgentDraft(): LocalAgentSettings {
+    const trimmedProviderId = draftLocalAgentAuragoProviderId.trim();
+    const localProvider = {
+      name: draftLocalAgentLocalName.trim(),
+      baseUrl: draftLocalAgentLocalBaseUrl.trim(),
+      apiKey: draftLocalAgentLocalApiKey,
+      model: draftLocalAgentLocalModel.trim(),
+    };
+    const hasLocalProvider =
+      localProvider.name || localProvider.baseUrl || localProvider.model || localProvider.apiKey;
+    return {
+      enabled: draftLocalAgentEnabled,
+      providerSource: draftLocalAgentProviderSource,
+      ...(trimmedProviderId ? { auragoProviderId: trimmedProviderId } : {}),
+      ...(hasLocalProvider ? { localProvider } : {}),
+      maxSteps: draftLocalAgentMaxSteps,
     };
   }
 
@@ -1419,6 +1487,8 @@
       shellAccessEnabled={draftShellAccess.enabled}
       shellCwdCount={draftShellAccess.allowedCwds.length}
       openPetsEnabled={draftOpenPetsEnabled}
+      localAgentEnabled={draftLocalAgentEnabled}
+      localAgentNegotiated={advertisedCapabilities.includes("local.agent")}
       {dirty}
     />
   </div>
@@ -1920,6 +1990,18 @@
                   </button>
                 </div>
               {/if}
+
+              <label class="field checkbox-field">
+                <input
+                  type="checkbox"
+                  bind:checked={draftPageAgentEnabled}
+                  onchange={markDirty}
+                  disabled={!draftBrowserControlEnabled || !draftDesktopControlEnabled}
+                />
+                <span>{$i18n("settings.desktop.pageAgent.enable")}</span>
+              </label>
+
+              <p class="help">{$i18n("settings.desktop.pageAgent.help")}</p>
 
               <dl class="info-grid">
                 <div>
@@ -3082,6 +3164,120 @@
 
           {#if activeSection === "llmProviders"}
             <LlmProvidersSection {sessionId} {advertisedCapabilities} {wsSend} />
+          {/if}
+
+          {#if activeSection === "localAgent"}
+            <section class="ui-card">
+              <div class="card-header">
+                <h2>{$i18n("settings.localAgent.title")}</h2>
+                <p>{$i18n("settings.localAgent.description")}</p>
+              </div>
+
+              <label class="field toggle-field">
+                <input
+                  type="checkbox"
+                  bind:checked={draftLocalAgentEnabled}
+                  onchange={() => (dirty = true)}
+                />
+                <span>{$i18n("settings.localAgent.enable")}</span>
+              </label>
+              <p class="help">{$i18n("settings.localAgent.enable.help")}</p>
+
+              {#if draftLocalAgentEnabled}
+                <fieldset class="field">
+                  <legend>{$i18n("settings.localAgent.providerSource.label")}</legend>
+                  <label class="radio-field">
+                    <input
+                      type="radio"
+                      name="localAgentProviderSource"
+                      value="aurago"
+                      checked={draftLocalAgentProviderSource === "aurago"}
+                      onchange={() => {
+                        draftLocalAgentProviderSource = "aurago";
+                        dirty = true;
+                      }}
+                    />
+                    <span>{$i18n("settings.localAgent.providerSource.aurago")}</span>
+                  </label>
+                  <label class="radio-field">
+                    <input
+                      type="radio"
+                      name="localAgentProviderSource"
+                      value="local"
+                      checked={draftLocalAgentProviderSource === "local"}
+                      onchange={() => {
+                        draftLocalAgentProviderSource = "local";
+                        dirty = true;
+                      }}
+                    />
+                    <span>{$i18n("settings.localAgent.providerSource.local")}</span>
+                  </label>
+                </fieldset>
+
+                {#if draftLocalAgentProviderSource === "aurago"}
+                  <label class="field">
+                    <span>{$i18n("settings.localAgent.auragoProvider.label")}</span>
+                    <select
+                      bind:value={draftLocalAgentAuragoProviderId}
+                      onchange={() => (dirty = true)}
+                    >
+                      <option value="">{$i18n("settings.localAgent.auragoProvider.placeholder")}</option>
+                      {#each $providersState.providers as provider (provider.id)}
+                        <option value={provider.id}>{provider.name} ({provider.model})</option>
+                      {/each}
+                    </select>
+                  </label>
+                  <p class="help">{$i18n("settings.localAgent.auragoProvider.help")}</p>
+                {:else}
+                  <label class="field">
+                    <span>{$i18n("settings.localAgent.local.name")}</span>
+                    <input
+                      type="text"
+                      bind:value={draftLocalAgentLocalName}
+                      oninput={() => (dirty = true)}
+                    />
+                  </label>
+                  <label class="field">
+                    <span>{$i18n("settings.localAgent.local.baseUrl")}</span>
+                    <input
+                      type="text"
+                      placeholder="https://api.example.com/v1"
+                      bind:value={draftLocalAgentLocalBaseUrl}
+                      oninput={() => (dirty = true)}
+                    />
+                  </label>
+                  <label class="field">
+                    <span>{$i18n("settings.localAgent.local.apiKey")}</span>
+                    <input
+                      type="password"
+                      bind:value={draftLocalAgentLocalApiKey}
+                      oninput={() => (dirty = true)}
+                    />
+                  </label>
+                  <label class="field">
+                    <span>{$i18n("settings.localAgent.local.model")}</span>
+                    <input
+                      type="text"
+                      bind:value={draftLocalAgentLocalModel}
+                      oninput={() => (dirty = true)}
+                    />
+                  </label>
+                  <p class="help">{$i18n("settings.localAgent.local.help")}</p>
+                {/if}
+
+                <label class="field">
+                  <span>{$i18n("settings.localAgent.maxSteps.label")}</span>
+                  <input
+                    type="number"
+                    min="1"
+                    max="20"
+                    bind:value={draftLocalAgentMaxSteps}
+                    oninput={() => (dirty = true)}
+                  />
+                </label>
+                <p class="help">{$i18n("settings.localAgent.maxSteps.help")}</p>
+              {/if}
+            </section>
           {/if}
 
           {#if activeSection === "about"}

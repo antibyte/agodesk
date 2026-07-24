@@ -840,6 +840,31 @@ pub async fn browser_disconnect(state: State<'_, BrowserState>) -> Result<(), St
 }
 
 #[tauri::command]
+pub async fn browser_page_agent_enable(
+    app: AppHandle,
+    state: State<'_, BrowserState>,
+    bundle: String,
+    bootstrap: String,
+) -> Result<(), String> {
+    browser::page_agent_enable(&state, app, bundle, bootstrap).await
+}
+
+#[tauri::command]
+pub async fn browser_page_agent_resolve(
+    state: State<'_, BrowserState>,
+    request_id: String,
+    ok: bool,
+    payload: String,
+) -> Result<(), String> {
+    browser::page_agent_resolve(&state, request_id, ok, payload).await
+}
+
+#[tauri::command]
+pub async fn browser_page_agent_disable(state: State<'_, BrowserState>) -> Result<(), String> {
+    browser::page_agent_disable(&state).await
+}
+
+#[tauri::command]
 pub fn speech_asr_status(model: Option<String>) -> Result<serde_json::Value, String> {
     let status = crate::speech::asr::asr_status(model.as_deref());
     serde_json::to_value(status).map_err(|error| error.to_string())

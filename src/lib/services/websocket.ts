@@ -8,6 +8,7 @@ import {
   setDisconnected,
 } from "../stores/connection";
 import { rejectAnyPendingProviderWaiters } from "./providers-flow";
+import { rejectAllLocalAgentWaiters } from "./local-agent";
 import { prepareServerUrl } from "./server-url";
 import { getTranslateFn } from "../i18n/store";
 import { formatInvokeError } from "./errors";
@@ -93,11 +94,13 @@ export class NativeWebSocketService {
             case "disconnected":
               this.clearPingTimer();
               rejectAnyPendingProviderWaiters(new Error("WebSocket disconnected."));
+              rejectAllLocalAgentWaiters(new Error("WebSocket disconnected."));
               setDisconnected();
               break;
             case "error":
               this.clearPingTimer();
               rejectAnyPendingProviderWaiters(new Error("WebSocket connection error."));
+              rejectAllLocalAgentWaiters(new Error("WebSocket connection error."));
               setConnectionError();
               break;
           }
@@ -290,6 +293,18 @@ export function isChatAttachmentAccepted(
   message: WsMessage,
 ): message is WsMessage<import("../types/protocol").ChatAttachmentAcceptedPayload> {
   return message.type === "chat.attachment.accepted";
+}
+
+export function isKnowledgeArchivePrepared(
+  message: WsMessage,
+): message is WsMessage<import("../types/protocol").KnowledgeArchivePreparedPayload> {
+  return message.type === "knowledge.archive.prepared";
+}
+
+export function isKnowledgeArchiveStatus(
+  message: WsMessage,
+): message is WsMessage<import("../types/protocol").KnowledgeArchiveStatusPayload> {
+  return message.type === "knowledge.archive.status";
 }
 
 export function isDesktopCommand(

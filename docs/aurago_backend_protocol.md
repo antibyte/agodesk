@@ -48,6 +48,7 @@ AuraGo accepts AgoDesk WebSocket messages up to 16 MiB. Desktop screenshot resul
 - `chat.cancel` / `chat.cancelled`: stop the active agent turn for a conversation.
 - `chat.audio`: server-generated TTS audio event for clients that negotiate `chat.audio_events`.
 - `chat.media`: non-TTS chat artifacts for clients that negotiate `chat.media_events`.
+- `knowledge.archive.prepare` / `knowledge.archive.prepared` / `knowledge.archive.status`: upload documents into the existing AuraGo knowledge archive (embeddings/RAG) for clients that advertise `knowledge.archive.upload`. Separate from `chat.attachment.*` (session context) and `remote.files.*` (local paths). See [`AURAGO_KNOWLEDGE_ARCHIVE_HANDOFF.md`](./AURAGO_KNOWLEDGE_ARCHIVE_HANDOFF.md).
 - `chat.voice_output.status`: client status update and server acknowledgement for the same `speaker_mode` preference used by AuraGo Web Chat.
 - `integrations.webhosts.list` / `integrations.webhosts`: list integrations with their own web UI, matching the Web Chat integrations drawer.
 - `system.warnings.list` / `system.warnings`: list current system warnings shown in Web Chat.
@@ -97,6 +98,7 @@ Desktop commands are dispatched only when the matching client capability is pres
 - `chat.cancel`: enables Stop for active AgoDesk agent turns.
 - `chat.audio_events`: enables `chat.audio` frames for server-generated TTS playback.
 - `chat.media_events`: enables `chat.media` frames for non-TTS images, audio/music, documents, videos, STL, links, and YouTube embeds.
+- `knowledge.archive.upload`: enables uploading documents into the existing AuraGo knowledge archive (embeddings/RAG) via `knowledge.archive.prepare` → HTTP upload → `knowledge.archive.status`. AuraGo advertises it in `session.accepted` only when the knowledge-archive ingest pipeline is active; optional `knowledge_archive_limits` may accompany it. See [`AURAGO_KNOWLEDGE_ARCHIVE_HANDOFF.md`](./AURAGO_KNOWLEDGE_ARCHIVE_HANDOFF.md).
 - `chat.voice_output`: server-offered only when AuraGo TTS is configured; lets AgoDesk request server-side voice output with `chat.message.payload.voice_output=true`.
 - `chat.voice_output_status`: enables AgoDesk to report the current chat speech-output state with `chat.voice_output.status`.
 - `integrations.webhosts`: enables the Web Chat integrations drawer list over WebSocket.

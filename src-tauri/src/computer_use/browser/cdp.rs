@@ -4,12 +4,19 @@ use std::time::{Duration, Instant};
 
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use chromiumoxide::browser::Browser;
-use chromiumoxide::cdp::browser_protocol::page::CaptureScreenshotFormat;
+use chromiumoxide::cdp::browser_protocol::page::{
+    AddScriptToEvaluateOnNewDocumentParams, CaptureScreenshotFormat,
+    RemoveScriptToEvaluateOnNewDocumentParams, ScriptIdentifier,
+};
 use chromiumoxide::cdp::browser_protocol::target::TargetId;
+use chromiumoxide::cdp::js_protocol::runtime::{
+    AddBindingParams, EvaluateParams, EventBindingCalled, RemoveBindingParams,
+};
 use chromiumoxide::page::{Page, ScreenshotParams};
 use chromiumoxide::Handler;
 use futures_util::StreamExt;
 use image::ImageReader;
+use tauri::{AppHandle, Emitter};
 use tokio::task::JoinHandle;
 
 use crate::computer_use::types::{
@@ -20,6 +27,13 @@ use crate::computer_use::types::{
 use super::endpoint::{ConnectPlan, ELEMENT_NOT_FOUND, INPUT_NOT_APPROVED};
 use super::launch;
 use super::state::BrowserState;
+
+/// Global function agodesk exposes inside the target page. page-agent's LLM
+/// transport calls it with a JSON string; each call raises `Runtime.bindingCalled`.
+pub const PAGE_AGENT_BINDING: &str = "agodeskPageAgentLlm";
+/// Tauri event the CDP layer emits for every page-agent LLM request so the
+/// frontend bridge can proxy it to AuraGo.
+pub const PAGE_AGENT_EVENT: &str = "agodesk:page-agent-llm";
 
 const MAX_CONTENT_BYTES: usize = 512 * 1024;
 const ATTACH_POLL_MS: u64 = 200;
@@ -39,6 +53,17 @@ pub struct CdpSession {
     active_target_id: String,
     launched_child: Option<Child>,
     handler_task: JoinHandle<()>,
+    page_agent: Option<PageAgentRuntime>,
+}
+
+/// Live page-agent injection bound to the currently active tab. The injected
+/// source (self-contained bundle + bootstrap) is retained so the runtime can be
+/// re-installed after tab switches without another round-trip to the frontend.
+struct PageAgentRuntime {
+    app: AppHandle,
+    source: String,
+    script_id: Option<ScriptIdentifier>,
+    listener_task: JoinHandle<()>,
 }
 
 pub async fn connect(
@@ -95,6 +120,7 @@ pub async fn connect(
         active_target_id,
         launched_child,
         handler_task,
+        page_agent: None,
     });
 
     Ok(info)
@@ -318,6 +344,156 @@ pub async fn disconnect(state: &BrowserState) -> Result<(), String> {
     disconnect_inner(state).await
 }
 
+/// Installs page-agent into the active tab: exposes the LLM binding, injects the
+/// bundle+bootstrap on the current and every future document, and forwards
+/// `bindingCalled` notifications to the frontend as `PAGE_AGENT_EVENT`.
+pub async fn page_agent_enable(
+    state: &BrowserState,
+    app: AppHandle,
+    bundle: String,
+    bootstrap: String,
+) -> Result<(), String> {
+    ensure_session_alive(state).await?;
+    let source = format!("{bundle}\n;\n{bootstrap}");
+
+    let mut guard = state.session.lock().await;
+    let session = guard
+        .as_mut()
+        .ok_or_else(|| "DESKTOP_BROWSER_UNAVAILABLE: Browser is not connected.".to_string())?;
+
+    if let Some(existing) = session.page_agent.take() {
+        teardown_page_agent(&session.page, existing).await;
+    }
+
+    let page = session.page.clone();
+    let runtime = install_page_agent(&page, app, source).await?;
+    session.page_agent = Some(runtime);
+    Ok(())
+}
+
+/// Fulfills or rejects a pending page-agent LLM request inside the page by
+/// calling the bootstrap-provided resolver.
+pub async fn page_agent_resolve(
+    state: &BrowserState,
+    request_id: String,
+    ok: bool,
+    payload: String,
+) -> Result<(), String> {
+    let page = {
+        let guard = state.session.lock().await;
+        let session = session_ref(&guard)?;
+        session.page.clone()
+    };
+    let script = format!(
+        "window.__agodeskPageAgentResolve && window.__agodeskPageAgentResolve({id}, {ok}, {payload});",
+        id = serde_json::to_string(&request_id).unwrap_or_else(|_| "\"\"".to_string()),
+        ok = if ok { "true" } else { "false" },
+        payload = serde_json::to_string(&payload).unwrap_or_else(|_| "\"\"".to_string()),
+    );
+    run_page_script(&page, &script).await
+}
+
+/// Removes the page-agent binding, injected document scripts and in-page instance.
+pub async fn page_agent_disable(state: &BrowserState) -> Result<(), String> {
+    let mut guard = state.session.lock().await;
+    if let Some(session) = guard.as_mut() {
+        if let Some(runtime) = session.page_agent.take() {
+            let page = session.page.clone();
+            teardown_page_agent(&page, runtime).await;
+        }
+    }
+    Ok(())
+}
+
+async fn install_page_agent(
+    page: &Page,
+    app: AppHandle,
+    source: String,
+) -> Result<PageAgentRuntime, String> {
+    page.execute(AddBindingParams::new(PAGE_AGENT_BINDING))
+        .await
+        .map_err(map_page_error)?;
+
+    let script_id = page
+        .execute(AddScriptToEvaluateOnNewDocumentParams::new(source.clone()))
+        .await
+        .map_err(map_page_error)?
+        .result
+        .identifier
+        .clone();
+
+    // Cover the already-loaded document; future documents get it via the hook above.
+    run_page_script(page, &source).await?;
+
+    let mut listener = page
+        .event_listener::<EventBindingCalled>()
+        .await
+        .map_err(map_page_error)?;
+    let listener_app = app.clone();
+    let listener_task = tokio::spawn(async move {
+        while let Some(event) = listener.next().await {
+            if event.name == PAGE_AGENT_BINDING {
+                let _ = listener_app.emit(PAGE_AGENT_EVENT, event.payload.clone());
+            }
+        }
+    });
+
+    Ok(PageAgentRuntime {
+        app,
+        source,
+        script_id: Some(script_id),
+        listener_task,
+    })
+}
+
+async fn teardown_page_agent(page: &Page, runtime: PageAgentRuntime) {
+    runtime.listener_task.abort();
+    if let Some(identifier) = runtime.script_id {
+        let _ = page
+            .execute(RemoveScriptToEvaluateOnNewDocumentParams::new(identifier))
+            .await;
+    }
+    let _ = page
+        .execute(RemoveBindingParams::new(PAGE_AGENT_BINDING))
+        .await;
+    let _ = run_page_script(
+        page,
+        "window.__agodeskPageAgentTeardown && window.__agodeskPageAgentTeardown();",
+    )
+    .await;
+}
+
+/// Re-installs page-agent on the newly active page after a tab switch so the
+/// binding and injected scripts follow the tab the user is working in.
+async fn reinstall_page_agent_for_active_page(session: &mut CdpSession) {
+    let Some(previous) = session.page_agent.take() else {
+        return;
+    };
+    let app = previous.app.clone();
+    let source = previous.source.clone();
+    let page = session.page.clone();
+    teardown_page_agent(&session.page, previous).await;
+    match install_page_agent(&page, app, source).await {
+        Ok(runtime) => session.page_agent = Some(runtime),
+        Err(error) => {
+            eprintln!("[agodesk] page-agent reinstall after tab switch failed: {error}");
+        }
+    }
+}
+
+async fn run_page_script(page: &Page, script: &str) -> Result<(), String> {
+    let params = EvaluateParams::builder()
+        .expression(format!("(function(){{ {script} \n}})(); void 0;"))
+        .return_by_value(false)
+        .await_promise(false)
+        .build()
+        .map_err(map_page_error)?;
+    with_cdp_timeout(page.execute(params))
+        .await?
+        .map_err(map_page_error)?;
+    Ok(())
+}
+
 async fn wait_action(
     state: &BrowserState,
     params: BrowserActionParams,
@@ -382,6 +558,7 @@ async fn tab_action(
                 .map_err(map_page_error)?;
             session.page = page.clone();
             session.active_target_id = tab_id.clone();
+            reinstall_page_agent_for_active_page(session).await;
             let info = tab_info_from_page(&page, true).await?;
             Ok(serde_json::json!({
                 "action": params.action,
@@ -406,6 +583,7 @@ async fn tab_action(
             let tab_id = page.target_id().as_ref().to_string();
             session.page = page.clone();
             session.active_target_id = tab_id.clone();
+            reinstall_page_agent_for_active_page(session).await;
             let info = tab_info_from_page(&page, true).await?;
             Ok(serde_json::json!({
                 "action": params.action,
@@ -455,6 +633,9 @@ async fn tab_action(
 async fn disconnect_inner(state: &BrowserState) -> Result<(), String> {
     let mut guard = state.session.lock().await;
     if let Some(mut session) = guard.take() {
+        if let Some(runtime) = session.page_agent.take() {
+            runtime.listener_task.abort();
+        }
         if session.launched {
             let _ = session.browser.close().await;
             if let Some(mut child) = session.launched_child.take() {

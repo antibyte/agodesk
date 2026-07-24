@@ -53,6 +53,8 @@
     sendChatMessageWithConversation,
     stopActiveChatRequest,
   } from "../services/chat-outbound";
+  import { addFilesToKnowledgeArchive } from "../services/knowledge-archive-flow";
+  import { localAgentReady, localAgentTurnActive } from "../services/local-agent";
   import {
     createNewChatConversation,
     loadChatConversation,
@@ -139,6 +141,7 @@
     hasAdvertisedChatMediaEvents,
     hasAdvertisedChatMediaUpload,
     canUseChatAttachments,
+    hasAdvertisedKnowledgeArchiveUpload,
     hasAdvertisedIntegrationsWebhosts,
     hasAdvertisedPlanUpdates,
     hasAdvertisedAgentActivity,
@@ -186,6 +189,7 @@
   const integrationPreviewNative = isIntegrationEmbedAvailable();
   let wsService = createWebSocketService();
   let prevConnection: typeof $connectionStatus | null = null;
+  let pageAgentBusy = $state(false);
 
   const chatConversationReady = $derived(
     !hasAdvertisedChatSessions($sessionState.advertisedCapabilities) ||
@@ -198,10 +202,13 @@
   const chatAllowed = $derived(
     canSendChat($sessionState.status, $connectionStatus, $sessionState.sessionId) &&
       !pending &&
+      !localAgentTurnActive() &&
       chatConversationReady,
   );
 
-  const stopVisible = $derived($chatConversationState.requestInFlight);
+  const stopVisible = $derived(
+    $chatConversationState.requestInFlight || localAgentTurnActive(),
+  );
 
   const historyEnabled = $derived(hasAdvertisedChatSessions($sessionState.advertisedCapabilities));
 
@@ -216,6 +223,12 @@
   );
 
   const attachmentLimits = $derived($sessionState.attachmentLimits);
+
+  const knowledgeArchiveEnabled = $derived(
+    hasAdvertisedKnowledgeArchiveUpload($sessionState.advertisedCapabilities),
+  );
+
+  const knowledgeArchiveLimits = $derived($sessionState.knowledgeArchiveLimits);
 
   const integrationsEnabled = $derived(
     hasAdvertisedIntegrationsWebhosts($sessionState.advertisedCapabilities),
@@ -812,10 +825,15 @@
     if (!chatAllowed) {
       return;
     }
+    setPendingState(true);
     try {
       await sendChatMessageWithConversation(wsService, $sessionState.sessionId, text, { files });
-      setPendingState(true);
       playUiSound("send");
+      // Local turns clear pending only when finished (not handed off — then chat.response
+      // keeps requestInFlight until AuraGo answers).
+      if (localAgentReady() && !$chatConversationState.requestInFlight) {
+        setPendingState(false);
+      }
     } catch (error) {
       setPendingState(false);
       openPetsContext.markRequestFailed();
@@ -828,6 +846,77 @@
             : getTranslateFn()("chatView.error.messageSendFailed"),
         timestamp: new Date().toISOString(),
         tone: "error",
+      });
+    }
+  }
+
+  async function handleOpenPageAgent(): Promise<void> {
+    if (pageAgentBusy) {
+      return;
+    }
+    pageAgentBusy = true;
+    try {
+      const { openPageAgentBrowserTab } = await import("../services/page-agent");
+      await openPageAgentBrowserTab();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      toastService.show({
+        type: "error",
+        message: getTranslateFn()("chatView.pageAgent.failed", { message }),
+      });
+    } finally {
+      pageAgentBusy = false;
+    }
+  }
+
+  async function handleAddToKnowledgeArchive(files: File[]): Promise<void> {
+    if (!knowledgeArchiveEnabled || !$sessionState.sessionId || files.length === 0) {
+      return;
+    }
+    toastService.show({
+      type: "info",
+      message: getTranslateFn()("chatView.knowledgeArchive.processing", {
+        count: String(files.length),
+      }),
+    });
+    try {
+      const result = await addFilesToKnowledgeArchive(
+        (message) => wsService.send(message),
+        $settings.serverUrl,
+        $sessionState.sessionId,
+        files,
+      );
+      if (result.failedCount > 0) {
+        toastService.show({
+          type: "error",
+          message: getTranslateFn()("chatView.knowledgeArchive.failed", {
+            count: String(result.failedCount),
+          }),
+        });
+      }
+      if (result.readyCount > 0) {
+        toastService.show({
+          type: "success",
+          message: getTranslateFn()("chatView.knowledgeArchive.ready", {
+            count: String(result.readyCount),
+          }),
+        });
+      }
+      if (result.processingCount > 0 && result.failedCount === 0 && result.readyCount === 0) {
+        toastService.show({
+          type: "info",
+          message: getTranslateFn()("chatView.knowledgeArchive.stillProcessing", {
+            count: String(result.processingCount),
+          }),
+        });
+      }
+    } catch (error) {
+      toastService.show({
+        type: "error",
+        message:
+          error instanceof Error
+            ? error.message
+            : getTranslateFn()("chatView.knowledgeArchive.error"),
       });
     }
   }
@@ -1083,12 +1172,14 @@
         speechHotkey={$settings.speechHotkey}
         desktopControlEnabled={$settings.desktopControlEnabled}
         browserControlEnabled={$settings.browserControlEnabled}
+        pageAgentEnabled={$settings.pageAgentEnabled}
         fileAccess={$settings.fileAccess}
         shellAccess={$settings.shellAccess}
         chatTtsMode={$settings.chatTtsMode}
         openPets={$settings.openPets}
         reduceMotion={$settings.reduceMotion}
         speechVisualizerEnabled={$settings.speechVisualizerEnabled}
+        localAgent={$settings.localAgent}
         connectionStatus={$connectionStatus}
         sessionStatus={$sessionState.status}
         sessionId={$sessionState.sessionId}
@@ -1297,9 +1388,15 @@
         showFootnote={$chatMessages.length === 0}
         {attachmentsEnabled}
         attachmentLimits={attachmentLimits ?? undefined}
+        {knowledgeArchiveEnabled}
+        knowledgeArchiveLimits={knowledgeArchiveLimits ?? undefined}
+        pageAgentEnabled={$settings.pageAgentEnabled}
+        {pageAgentBusy}
         onSpeechToggle={() => void handleSpeechToggle()}
+        onOpenPageAgent={() => void handleOpenPageAgent()}
         onStop={() => void handleStopRequest()}
         onSubmit={(text, files) => void handleSubmit(text, files)}
+        onAddToKnowledge={(files) => void handleAddToKnowledgeArchive(files)}
       />
     </div>
   {/if}

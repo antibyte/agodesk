@@ -387,8 +387,23 @@ Native API vorhanden (`collect_host_info`), **kein** `desktop.command`-Mapping y
 | `desktop.result` | C → S | Ergebnis nativer Operation |
 | `session.clear` | S → C | Session zurücksetzen (Chat leeren, neue session_id) |
 | `chat.response.chunk` | S → C | *Geplant* |
+| `local.agent.remote_tool` / `.result` | C ↔ S | Lokaler Agent: Memory/Query (Backend-Aufgabe) |
+| `local.agent.handoff` | C → S | Lokaler Agent: voller Task-Handoff |
+| `local.agent.turn` | C → S | Lokaler Agent: Journal-Sync pro Turn |
+| `local.agent.llm` / `.result` | C ↔ S | Lokaler Agent: optionaler LLM-Proxy |
 
 **Legende:** S = Server (AuraGo), C = Client (agodesk)
+
+---
+
+## 12. Lokaler Agent (Local Agent Mode)
+
+**Neue Client-Fähigkeit.** Bei Aktivierung führt agodesk Chat-Turns lokal aus
+(schlanker Prompt + Progressive Tool-Discovery) und nutzt AuraGo nur für Gedächtnis,
+kurze Rückfragen und vollen Handoff. Der Client advertisiert die Capability
+`local.agent` in `session.start`; das Backend muss sie in `session.accepted`
+spiegeln. Vollständige Arbeitsanweisung inkl. Payloads und Definition of Done:
+`docs/AURAGO_LOCAL_AGENT_HANDOFF.md`. Design: `docs/superpowers/specs/2026-07-17-local-agent-design.md`.
 
 ---
 

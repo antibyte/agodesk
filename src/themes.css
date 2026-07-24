@@ -217,6 +217,14 @@
   background: rgba(244, 114, 182, 0.35);
 }
 
+:root[data-ui-theme="blossom"] ::-webkit-scrollbar-thumb {
+  background: rgba(244, 114, 182, 0.3);
+}
+
+:root[data-ui-theme="blossom"] ::-webkit-scrollbar-thumb:hover {
+  background: rgba(244, 114, 182, 0.5);
+}
+
 :root[data-ui-theme="blossom"] .status-bar,
 :root[data-ui-theme="blossom"] .input-box,
 :root[data-ui-theme="blossom"] .ui-card:not(dialog),
@@ -631,6 +639,12 @@
 :root[data-ui-theme="cyberpunk"] ::-webkit-scrollbar-thumb {
   background: rgba(0, 240, 255, 0.35);
   box-shadow: 0 0 8px rgba(0, 240, 255, 0.4);
+  transition: background var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+:root[data-ui-theme="cyberpunk"] ::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 240, 255, 0.6);
+  box-shadow: 0 0 12px rgba(0, 240, 255, 0.75);
 }
 
 @keyframes cyber-bracket-pulse {
@@ -914,6 +928,11 @@
 
 :root[data-ui-theme="papyrus"] ::-webkit-scrollbar-thumb {
   background: linear-gradient(180deg, var(--papyrus-brass-hi), var(--papyrus-brass-lo));
+  transition: background var(--transition-fast);
+}
+
+:root[data-ui-theme="papyrus"] ::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, var(--papyrus-brass), var(--papyrus-brass-lo));
 }
 
 /* ════════════════════════════════════════════════════════════════════════
@@ -1034,6 +1053,19 @@
 :root[data-ui-theme="chaos"] ::selection {
   background: rgba(255, 43, 214, 0.45);
   color: #ffffff;
+}
+
+:root[data-ui-theme="chaos"] ::-webkit-scrollbar-thumb {
+  background: rgba(192, 38, 255, 0.3);
+  border: 1px solid rgba(255, 43, 214, 0.25);
+  box-shadow: 0 0 6px rgba(192, 38, 255, 0.25);
+  transition: background var(--transition-fast), border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+:root[data-ui-theme="chaos"] ::-webkit-scrollbar-thumb:hover {
+  background: rgba(192, 38, 255, 0.5);
+  border-color: rgba(255, 43, 214, 0.45);
+  box-shadow: 0 0 10px rgba(192, 38, 255, 0.45);
 }
 
 @keyframes chaos-border-cycle {
