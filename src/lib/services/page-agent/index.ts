@@ -31,7 +31,6 @@ export async function enablePageAgent(): Promise<void> {
   await startPageAgentBridge();
   try {
     await invokePageAgentEnable({
-      model: appSettings.localAgent.auragoProviderId || "aurago",
       locale: appSettings.locale,
     });
     active = true;
@@ -58,10 +57,13 @@ export async function disablePageAgent(): Promise<void> {
 /**
  * User-initiated entry point (chat button): launches/attaches a browser tab over
  * CDP and injects page-agent into it, independent of any AuraGo-driven connect.
+ * Start URL comes from settings (defaults to about:blank).
  */
 export async function openPageAgentBrowserTab(): Promise<void> {
   const { browserConnect } = await import("../desktop");
-  await browserConnect({ auto_launch: true });
+  const { normalizePageAgentStartUrl } = await import("../../types/protocol");
+  const startUrl = normalizePageAgentStartUrl(get(settings).pageAgentStartUrl);
+  await browserConnect({ auto_launch: true, url: startUrl });
   // A fresh CDP session drops any previous injection, so force (re)install.
   active = false;
   await enablePageAgent();

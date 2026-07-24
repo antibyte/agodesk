@@ -142,6 +142,48 @@ pub async fn page_agent_resolve(
 }
 
 #[cfg(feature = "browser-automation")]
+pub async fn page_agent_execute(state: &BrowserState, task: String) -> Result<(), String> {
+    cdp::page_agent_execute(state, task).await
+}
+
+#[cfg(not(feature = "browser-automation"))]
+pub async fn page_agent_execute(_state: &BrowserState, _task: String) -> Result<(), String> {
+    Err(format!(
+        "{BROWSER_UNAVAILABLE}: Browser automation is not compiled into this build."
+    ))
+}
+
+#[cfg(feature = "browser-automation")]
+pub async fn page_agent_navigate(state: &BrowserState, url: String) -> Result<(), String> {
+    cdp::page_agent_navigate(state, url).await
+}
+
+#[cfg(not(feature = "browser-automation"))]
+pub async fn page_agent_navigate(_state: &BrowserState, _url: String) -> Result<(), String> {
+    Err(format!(
+        "{BROWSER_UNAVAILABLE}: Browser automation is not compiled into this build."
+    ))
+}
+
+#[cfg(feature = "browser-automation")]
+pub async fn page_agent_ensure(
+    state: &BrowserState,
+    prefill: Option<String>,
+) -> Result<(), String> {
+    cdp::page_agent_ensure(state, prefill).await
+}
+
+#[cfg(not(feature = "browser-automation"))]
+pub async fn page_agent_ensure(
+    _state: &BrowserState,
+    _prefill: Option<String>,
+) -> Result<(), String> {
+    Err(format!(
+        "{BROWSER_UNAVAILABLE}: Browser automation is not compiled into this build."
+    ))
+}
+
+#[cfg(feature = "browser-automation")]
 pub async fn page_agent_disable(state: &BrowserState) -> Result<(), String> {
     cdp::page_agent_disable(state).await
 }

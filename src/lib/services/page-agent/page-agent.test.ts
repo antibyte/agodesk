@@ -81,7 +81,10 @@ test("toOpenAiChatCompletion throws on failed proxy result", () => {
     error_code: "PROVIDER_ERROR",
     error_message: "upstream rejected",
   };
-  assert.throws(() => toOpenAiChatCompletion(result, "aurago"), /upstream rejected/);
+  assert.throws(
+    () => toOpenAiChatCompletion(result, "aurago"),
+    /PROVIDER_ERROR: upstream rejected/,
+  );
 });
 
 test("resolvePageAgentLanguage maps zh locales to zh-CN and defaults to en-US", () => {
@@ -105,7 +108,29 @@ test("buildPageAgentBootstrap wires the binding and resolver without real secret
   assert.match(script, /__agodeskPageAgentResolve/);
   assert.match(script, /customFetch: agodeskFetch/);
   assert.match(script, /new window\.PageAgent/);
+  // Panel is constructed hidden; bootstrap must reveal it so the input appears.
+  assert.match(script, /function revealPanel/);
+  assert.match(script, /__agodeskPageAgentReveal/);
+  // After a finished task we expand history (done/summary) instead of reset().
+  assert.match(script, /panel\.expand/);
+  assert.match(script, /Never reset after a finished task|hides the done\/summary|no done card to wipe|Keep the done card/i);
+  assert.match(script, /go_to_url/);
+  assert.match(script, /experimentalScriptExecutionTool:\s*true/);
+  assert.match(script, /resumeTask/);
+  assert.match(script, /__agodeskPageAgent\.task/);
+  assert.match(script, /MUST call go_to_url/);
+  assert.doesNotMatch(script, /location\.assign\('https:/);
   // The proxy apiKey is a sentinel, never a real credential.
   assert.match(script, /"apiKey":"agodesk-proxy"/);
   assert.doesNotMatch(script, /sk-[A-Za-z0-9]{16,}/);
+});
+
+test("normalizePageAgentStartUrl accepts hosts and rejects chrome internals", async () => {
+  const { normalizePageAgentStartUrl } = await import("../../types/protocol.ts");
+  assert.equal(normalizePageAgentStartUrl(""), "about:blank");
+  assert.equal(normalizePageAgentStartUrl("about:blank"), "about:blank");
+  assert.equal(normalizePageAgentStartUrl("amazon.de"), "https://amazon.de");
+  assert.equal(normalizePageAgentStartUrl("https://www.amazon.de/"), "https://www.amazon.de/");
+  assert.equal(normalizePageAgentStartUrl("chrome://newtab"), "about:blank");
+  assert.equal(normalizePageAgentStartUrl("edge://settings"), "about:blank");
 });

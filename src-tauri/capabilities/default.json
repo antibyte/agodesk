@@ -44,7 +44,8 @@
         "xai-realtime:message",
         "xai-realtime:state",
         "xai-realtime:error",
-        "agodesk:page-agent-llm"
+        "agodesk:page-agent-llm",
+        "agodesk:page-agent-page-ready"
       ]
     }
   ]

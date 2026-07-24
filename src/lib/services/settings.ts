@@ -24,6 +24,7 @@ import {
   DEFAULT_SPEECH_SETTINGS,
   DEFAULT_UI_SOUND_SETTINGS,
   UI_SOUND_THEMES,
+  normalizePageAgentStartUrl,
   normalizeSpeechProvider,
   normalizeUiTheme,
 } from "../types/protocol";
@@ -421,6 +422,7 @@ export function normalizeAppSettings(saved: Partial<AppSettings> | null | undefi
       typeof saved?.pageAgentEnabled === "boolean"
         ? saved.pageAgentEnabled
         : DEFAULT_SETTINGS.pageAgentEnabled,
+    pageAgentStartUrl: normalizePageAgentStartUrl(saved?.pageAgentStartUrl),
     fileAccess: normalizeFileAccessSettings(saved?.fileAccess),
     shellAccess: normalizeShellAccessSettings(saved?.shellAccess),
     chatTtsMode: normalizeChatTtsMode(saved?.chatTtsMode),

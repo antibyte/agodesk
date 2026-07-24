@@ -27,6 +27,7 @@
     UI_SOUND_THEMES,
     UI_THEMES,
     UI_THEME_SOUND,
+    normalizePageAgentStartUrl,
     getWsOrigin,
     SPEECH_PROVIDERS,
     type SpeechProvider,
@@ -143,6 +144,7 @@
     | "desktopControlEnabled"
     | "browserControlEnabled"
     | "pageAgentEnabled"
+    | "pageAgentStartUrl"
     | "fileAccess"
     | "shellAccess"
     | "chatTtsMode"
@@ -189,6 +191,7 @@
     desktopControlEnabled?: boolean;
     browserControlEnabled?: boolean;
     pageAgentEnabled?: boolean;
+    pageAgentStartUrl?: string;
     fileAccess?: FileAccessSettings;
     shellAccess?: ShellAccessSettings;
     chatTtsMode?: ChatTtsMode;
@@ -226,6 +229,7 @@
     desktopControlEnabled = true,
     browserControlEnabled = false,
     pageAgentEnabled = false,
+    pageAgentStartUrl = "about:blank",
     fileAccess = DEFAULT_FILE_ACCESS_SETTINGS,
     shellAccess = DEFAULT_SHELL_ACCESS_SETTINGS,
     chatTtsMode = "auto",
@@ -262,6 +266,7 @@
   let draftDesktopControlEnabled = $state(true);
   let draftBrowserControlEnabled = $state(false);
   let draftPageAgentEnabled = $state(false);
+  let draftPageAgentStartUrl = $state("about:blank");
   let draftFileAccess = $state<FileAccessSettings>(
     cloneFileAccessSettings(DEFAULT_FILE_ACCESS_SETTINGS),
   );
@@ -527,6 +532,7 @@
       draftDesktopControlEnabled = desktopControlEnabled;
       draftBrowserControlEnabled = browserControlEnabled;
       draftPageAgentEnabled = pageAgentEnabled;
+      draftPageAgentStartUrl = pageAgentStartUrl;
       draftFileAccess = cloneFileAccessSettings(fileAccess);
       draftShellAccess = cloneShellAccessSettings(shellAccess);
       draftChatTtsMode = chatTtsMode;
@@ -1044,6 +1050,7 @@
       desktopControlEnabled: draftDesktopControlEnabled,
       browserControlEnabled: draftBrowserControlEnabled,
       pageAgentEnabled: draftPageAgentEnabled,
+      pageAgentStartUrl: normalizePageAgentStartUrl(draftPageAgentStartUrl),
       fileAccess: cloneFileAccessSettings(draftFileAccess),
       shellAccess: cloneShellAccessSettings(draftShellAccess),
       chatTtsMode: draftChatTtsMode,
@@ -2002,6 +2009,21 @@
               </label>
 
               <p class="help">{$i18n("settings.desktop.pageAgent.help")}</p>
+
+              {#if draftPageAgentEnabled}
+                <label class="field">
+                  <span class="field-label">{$i18n("settings.desktop.pageAgent.startUrl.label")}</span>
+                  <input
+                    type="text"
+                    class="ui-input"
+                    bind:value={draftPageAgentStartUrl}
+                    oninput={markDirty}
+                    placeholder={$i18n("settings.desktop.pageAgent.startUrl.placeholder")}
+                    disabled={!draftBrowserControlEnabled || !draftDesktopControlEnabled}
+                  />
+                </label>
+                <p class="help">{$i18n("settings.desktop.pageAgent.startUrl.help")}</p>
+              {/if}
 
               <dl class="info-grid">
                 <div>

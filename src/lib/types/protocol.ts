@@ -3151,6 +3151,11 @@ export interface AppSettings {
    * natürlicher Sprache, LLM-Aufrufe laufen über den AuraGo-Proxy.
    */
   pageAgentEnabled: boolean;
+  /**
+   * Start-URL für den Chat-Button „Browser mit Page-Agent öffnen“.
+   * Leer / ungültig fällt auf about:blank zurück.
+   */
+  pageAgentStartUrl: string;
   /** Lokale Ordnerfreigaben für Remote-Dateizugriff. */
   fileAccess: FileAccessSettings;
   /** Remote-Shell-Zugriff für AuraGo-Agents. */
@@ -3184,6 +3189,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   desktopControlEnabled: true,
   browserControlEnabled: true,
   pageAgentEnabled: false,
+  pageAgentStartUrl: "about:blank",
   fileAccess: { ...DEFAULT_FILE_ACCESS_SETTINGS },
   shellAccess: { ...DEFAULT_SHELL_ACCESS_SETTINGS },
   chatTtsMode: "auto",
@@ -3194,6 +3200,39 @@ export const DEFAULT_SETTINGS: AppSettings = {
   localAgent: { ...DEFAULT_LOCAL_AGENT_SETTINGS },
   onboardingCompleted: false,
 };
+
+/**
+ * Normalizes the page-agent start URL used by the chat "open browser" button.
+ * Empty → about:blank. Hosts without a scheme get https://. chrome:// and
+ * similar internal URLs are rejected (CDP injection is blocked there).
+ */
+export function normalizePageAgentStartUrl(raw: unknown): string {
+  const fallback = DEFAULT_SETTINGS.pageAgentStartUrl;
+  if (typeof raw !== "string") {
+    return fallback;
+  }
+  const trimmed = raw.trim();
+  if (!trimmed) {
+    return fallback;
+  }
+  const lower = trimmed.toLowerCase();
+  if (lower === "about:blank") {
+    return "about:blank";
+  }
+  if (
+    lower.startsWith("chrome:") ||
+    lower.startsWith("edge:") ||
+    lower.startsWith("devtools:") ||
+    lower.startsWith("brave:") ||
+    lower.startsWith("view-source:")
+  ) {
+    return fallback;
+  }
+  if (/^[a-z][a-z0-9+.-]*:/i.test(trimmed)) {
+    return trimmed;
+  }
+  return `https://${trimmed.replace(/^\/+/, "")}`;
+}
 
 export const PROTOCOL_VERSION = "agodesk.v1";
 

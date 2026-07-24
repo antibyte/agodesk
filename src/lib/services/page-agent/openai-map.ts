@@ -70,10 +70,11 @@ export function toOpenAiChatCompletion(
   model: string,
 ): OpenAiChatCompletion {
   if (!result.success || !result.message) {
+    const detail = [result.error_code, result.error_message]
+      .filter((part): part is string => typeof part === "string" && part.length > 0)
+      .join(": ");
     throw new Error(
-      result.error_message ||
-        result.error_code ||
-        "AuraGo LLM proxy returned no message for page-agent.",
+      detail || "AuraGo LLM proxy returned no message for page-agent.",
     );
   }
 

@@ -860,6 +860,30 @@ pub async fn browser_page_agent_resolve(
 }
 
 #[tauri::command]
+pub async fn browser_page_agent_execute(
+    state: State<'_, BrowserState>,
+    task: String,
+) -> Result<(), String> {
+    browser::page_agent_execute(&state, task).await
+}
+
+#[tauri::command]
+pub async fn browser_page_agent_navigate(
+    state: State<'_, BrowserState>,
+    url: String,
+) -> Result<(), String> {
+    browser::page_agent_navigate(&state, url).await
+}
+
+#[tauri::command]
+pub async fn browser_page_agent_ensure(
+    state: State<'_, BrowserState>,
+    prefill: Option<String>,
+) -> Result<(), String> {
+    browser::page_agent_ensure(&state, prefill).await
+}
+
+#[tauri::command]
 pub async fn browser_page_agent_disable(state: State<'_, BrowserState>) -> Result<(), String> {
     browser::page_agent_disable(&state).await
 }

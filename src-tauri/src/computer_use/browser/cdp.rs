@@ -5,7 +5,7 @@ use std::time::{Duration, Instant};
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use chromiumoxide::browser::Browser;
 use chromiumoxide::cdp::browser_protocol::page::{
-    AddScriptToEvaluateOnNewDocumentParams, CaptureScreenshotFormat,
+    AddScriptToEvaluateOnNewDocumentParams, CaptureScreenshotFormat, EventLoadEventFired,
     RemoveScriptToEvaluateOnNewDocumentParams, ScriptIdentifier,
 };
 use chromiumoxide::cdp::browser_protocol::target::TargetId;
@@ -34,6 +34,9 @@ pub const PAGE_AGENT_BINDING: &str = "agodeskPageAgentLlm";
 /// Tauri event the CDP layer emits for every page-agent LLM request so the
 /// frontend bridge can proxy it to AuraGo.
 pub const PAGE_AGENT_EVENT: &str = "agodesk:page-agent-llm";
+/// Emitted after a top-level load so the frontend can soft-ensure the in-page agent
+/// survived navigation (link clicks / form submits / go_to_url).
+pub const PAGE_AGENT_PAGE_READY_EVENT: &str = "agodesk:page-agent-page-ready";
 
 const MAX_CONTENT_BYTES: usize = 512 * 1024;
 const ATTACH_POLL_MS: u64 = 200;
@@ -64,6 +67,7 @@ struct PageAgentRuntime {
     source: String,
     script_id: Option<ScriptIdentifier>,
     listener_task: JoinHandle<()>,
+    load_task: JoinHandle<()>,
 }
 
 pub async fn connect(
@@ -354,7 +358,10 @@ pub async fn page_agent_enable(
     bootstrap: String,
 ) -> Result<(), String> {
     ensure_session_alive(state).await?;
-    let source = format!("{bundle}\n;\n{bootstrap}");
+    // Defer until head+body exist: the vendored IIFE injects CSS into
+    // document.head and the panel mounts on document.body. New-document hooks
+    // can run before either is available (amazon.de etc.).
+    let source = wrap_page_agent_source(&format!("{bundle}\n;\n{bootstrap}"));
 
     let mut guard = state.session.lock().await;
     let session = guard
@@ -369,6 +376,37 @@ pub async fn page_agent_enable(
     let runtime = install_page_agent(&page, app, source).await?;
     session.page_agent = Some(runtime);
     Ok(())
+}
+
+/// Wraps the injected source so it only runs once `document.head` and
+/// `document.body` exist. Prevents `appendChild` on null during early
+/// new-document evaluation.
+fn wrap_page_agent_source(source: &str) -> String {
+    let mut wrapped = String::with_capacity(source.len() + 512);
+    wrapped.push_str(
+        r#"(function(){
+  var __agodeskPaStarted = false;
+  function __agodeskPaRun() {
+    if (__agodeskPaStarted) return;
+    if (!document.documentElement || !document.head || !document.body) return;
+    __agodeskPaStarted = true;
+"#,
+    );
+    wrapped.push_str(source);
+    wrapped.push_str(
+        r#"
+  }
+  function __agodeskPaTick() {
+    __agodeskPaRun();
+    if (!__agodeskPaStarted) setTimeout(__agodeskPaTick, 16);
+  }
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", __agodeskPaRun, { once: true });
+  }
+  __agodeskPaTick();
+})();"#,
+    );
+    wrapped
 }
 
 /// Fulfills or rejects a pending page-agent LLM request inside the page by
@@ -391,6 +429,172 @@ pub async fn page_agent_resolve(
         payload = serde_json::to_string(&payload).unwrap_or_else(|_| "\"\"".to_string()),
     );
     run_page_script(&page, &script).await
+}
+
+/// Starts (or resumes) a page-agent task in the active tab after reinjection.
+pub async fn page_agent_execute(state: &BrowserState, task: String) -> Result<(), String> {
+    let page = {
+        let guard = state.session.lock().await;
+        let session = session_ref(&guard)?;
+        session.page.clone()
+    };
+    // After cross-origin navigation the DOM-ready wrap may still be booting
+    // page-agent; wait briefly instead of failing the resume.
+    for attempt in 0..12 {
+        if page_agent_is_ready(&page).await.unwrap_or(false) {
+            break;
+        }
+        if attempt == 11 {
+            return Err("page-agent is not ready after navigation.".to_string());
+        }
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+    let script = format!(
+        r#"(function(){{
+  var agent = window.__agodeskPageAgent;
+  if (!agent || typeof agent.execute !== "function") {{
+    throw new Error("page-agent is not ready");
+  }}
+  if (agent.status === "running") {{
+    return "already-running";
+  }}
+  agent.execute({task});
+  return "started";
+}})()"#,
+        task = serde_json::to_string(&task).unwrap_or_else(|_| "\"\"".to_string()),
+    );
+    run_page_script(&page, &script).await
+}
+
+/// Navigates the active tab for page-agent without the desktop input-approval
+/// gate (the user already asked the in-page agent to open the URL), then
+/// soft-ensures the injection is alive on the new document.
+pub async fn page_agent_navigate(state: &BrowserState, url: String) -> Result<(), String> {
+    ensure_session_alive(state).await?;
+    let trimmed = url.trim();
+    if trimmed.is_empty() {
+        return Err("page-agent navigate requires a non-empty URL.".to_string());
+    }
+
+    let page = {
+        let guard = state.session.lock().await;
+        let session = session_ref(&guard)?;
+        session.page.clone()
+    };
+    with_cdp_timeout(page.goto(trimmed))
+        .await?
+        .map_err(map_page_error)?;
+
+    // Document may still be settling; soft-ensure reinjects if the new-document
+    // hook did not bring the agent back (and never tears down the hook).
+    tokio::time::sleep(Duration::from_millis(250)).await;
+    page_agent_ensure(state, None).await
+}
+
+/// Soft-ensure: if page-agent is missing after a navigation, re-evaluate the
+/// bundled source without removing the new-document hook. Always reveals the
+/// panel and task input when idle. Optional `prefill` fills the input so the
+/// user can continue the previous task with Enter (we no longer auto-execute,
+/// because that hides the input while status is `running`).
+pub async fn page_agent_ensure(
+    state: &BrowserState,
+    prefill: Option<String>,
+) -> Result<(), String> {
+    let (page, source) = {
+        let guard = state.session.lock().await;
+        let session = session_ref(&guard)?;
+        let runtime = session.page_agent.as_ref().ok_or_else(|| {
+            "DESKTOP_BROWSER_UNAVAILABLE: page-agent is not enabled.".to_string()
+        })?;
+        (session.page.clone(), runtime.source.clone())
+    };
+
+    let ready = page_agent_is_ready(&page).await.unwrap_or(false);
+    if !ready {
+        let _ = page
+            .execute(AddBindingParams::new(PAGE_AGENT_BINDING))
+            .await;
+        let has_ctor = evaluate_bool(
+            &page,
+            "typeof window.PageAgent === 'function' && typeof window.PageAgentTool === 'function'",
+        )
+        .await
+        .unwrap_or(false);
+        if has_ctor {
+            run_page_script(
+                &page,
+                "window.__agodeskPageAgentInstalled = false; window.__agodeskPageAgent = null;",
+            )
+            .await?;
+            run_page_script(&page, &source).await?;
+        } else {
+            run_page_script(&page, &source).await?;
+        }
+    }
+
+    let prefill_js = serde_json::to_string(prefill.as_deref().unwrap_or(""))
+        .unwrap_or_else(|_| "\"\"".to_string());
+    let _ = run_page_script(
+        &page,
+        &format!(
+            r#"
+          (function(){{
+            var agent = window.__agodeskPageAgent;
+            var running = !!(agent && agent.status === 'running');
+            // Never force-reset while a resumed task is running — that hides
+            // progress and can interrupt the agent loop after go_to_url.
+            if (typeof window.__agodeskPageAgentReveal === 'function') {{
+              window.__agodeskPageAgentReveal(!running);
+            }} else if (agent && agent.panel
+                && typeof agent.panel.show === 'function') {{
+              agent.panel.show();
+              if (!running && typeof agent.panel.reset === 'function') {{
+                agent.panel.reset();
+                agent.panel.show();
+              }}
+            }}
+            var prefill = {prefill_js};
+            if (prefill && !running) {{
+              var root = document.getElementById('page-agent-runtime_agent-panel');
+              var input = root && root.querySelector('input, textarea');
+              if (input) {{
+                input.value = prefill;
+                try {{ input.focus(); }} catch (e) {{}}
+              }}
+            }}
+          }})();
+        "#
+        ),
+    )
+    .await;
+    Ok(())
+}
+
+async fn page_agent_is_ready(page: &Page) -> Result<bool, String> {
+    evaluate_bool(
+        page,
+        "!!(window.__agodeskPageAgent && typeof window.__agodeskPageAgent.execute === 'function')",
+    )
+    .await
+}
+
+async fn evaluate_bool(page: &Page, expression: &str) -> Result<bool, String> {
+    let params = EvaluateParams::builder()
+        .expression(expression)
+        .return_by_value(true)
+        .await_promise(false)
+        .build()
+        .map_err(map_page_error)?;
+    let result = with_cdp_timeout(page.execute(params))
+        .await?
+        .map_err(map_page_error)?;
+    Ok(result
+        .result
+        .result
+        .value
+        .as_ref()
+        .and_then(|value| value.as_bool())
+        .unwrap_or(false))
 }
 
 /// Removes the page-agent binding, injected document scripts and in-page instance.
@@ -438,16 +642,32 @@ async fn install_page_agent(
         }
     });
 
+    // Any top-level load (link click, redirect, go_to_url) notifies the frontend
+    // so it can soft-ensure the panel is back — addScriptToEvaluateOnNewDocument
+    // alone is not always enough on aggressive sites.
+    let mut load_listener = page
+        .event_listener::<EventLoadEventFired>()
+        .await
+        .map_err(map_page_error)?;
+    let load_app = app.clone();
+    let load_task = tokio::spawn(async move {
+        while load_listener.next().await.is_some() {
+            let _ = load_app.emit(PAGE_AGENT_PAGE_READY_EVENT, ());
+        }
+    });
+
     Ok(PageAgentRuntime {
         app,
         source,
         script_id: Some(script_id),
         listener_task,
+        load_task,
     })
 }
 
 async fn teardown_page_agent(page: &Page, runtime: PageAgentRuntime) {
     runtime.listener_task.abort();
+    runtime.load_task.abort();
     if let Some(identifier) = runtime.script_id {
         let _ = page
             .execute(RemoveScriptToEvaluateOnNewDocumentParams::new(identifier))
@@ -635,6 +855,7 @@ async fn disconnect_inner(state: &BrowserState) -> Result<(), String> {
     if let Some(mut session) = guard.take() {
         if let Some(runtime) = session.page_agent.take() {
             runtime.listener_task.abort();
+            runtime.load_task.abort();
         }
         if session.launched {
             let _ = session.browser.close().await;

@@ -1173,6 +1173,7 @@
         desktopControlEnabled={$settings.desktopControlEnabled}
         browserControlEnabled={$settings.browserControlEnabled}
         pageAgentEnabled={$settings.pageAgentEnabled}
+        pageAgentStartUrl={$settings.pageAgentStartUrl}
         fileAccess={$settings.fileAccess}
         shellAccess={$settings.shellAccess}
         chatTtsMode={$settings.chatTtsMode}
