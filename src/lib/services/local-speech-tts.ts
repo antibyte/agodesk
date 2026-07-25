@@ -262,6 +262,16 @@ export async function speakChatAssistantText(text: string, speech: SpeechSetting
     // Fall through to local TTS.
   }
 
+  // 3) Mistral Voice provider, mic off → unary Voxtral TTS
+  try {
+    const { speakWithMistralTts } = await import("./mistral-tts");
+    if (await speakWithMistralTts(spoken, speech)) {
+      return;
+    }
+  } catch {
+    // Fall through to local TTS.
+  }
+
   if (activeLocalSession && !activeLocalSession.isClosed) {
     await activeLocalSession.speakText(spoken);
     return;
@@ -293,11 +303,20 @@ function notifyChatTtsFailure(error: unknown): void {
   });
 }
 
-export function interruptLocalSpeechPlayback(): void {
+export function interruptLocalSessionAndStandalonePlayback(): void {
   activeLocalSession?.requestClientInterrupt();
   standalonePlayback.interrupt();
+}
+
+export function interruptLocalSpeechPlayback(): void {
+  interruptLocalSessionAndStandalonePlayback();
   void import("./grok-tts")
     .then((mod) => mod.interruptGrokTtsPlayback())
+    .catch(() => {
+      // ignore
+    });
+  void import("./mistral-tts")
+    .then((mod) => mod.interruptMistralTtsPlayback())
     .catch(() => {
       // ignore
     });

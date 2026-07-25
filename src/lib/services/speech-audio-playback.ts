@@ -48,6 +48,25 @@ function int16ToFloat32(pcm: Int16Array): Float32Array {
   return output;
 }
 
+function base64ToFloat32(base64: string): Float32Array {
+  const binary = atob(base64);
+  const usable = binary.length - (binary.length % 4);
+  if (usable <= 0) {
+    return new Float32Array(0);
+  }
+  const bytes = new Uint8Array(usable);
+  for (let index = 0; index < usable; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+  // Copy via DataView so we never share a pooled/unaligned buffer with AudioBuffer.
+  const view = new DataView(bytes.buffer, bytes.byteOffset, usable);
+  const samples = new Float32Array(usable / 4);
+  for (let index = 0; index < samples.length; index += 1) {
+    samples[index] = view.getFloat32(index * 4, true);
+  }
+  return samples;
+}
+
 export class SpeechAudioPlayback {
   private context: AudioContext | null = null;
   private queue: Array<{ samples: Float32Array; rate: number }> = [];
@@ -57,10 +76,17 @@ export class SpeechAudioPlayback {
   private activeSources = 0;
   private playbackAnalyser: AnalyserNode | null = null;
   private sources = new Set<AudioBufferSourceNode>();
+  private htmlAudio: HTMLAudioElement | null = null;
+  private htmlObjectUrl: string | null = null;
 
   /** True while AI voice audio is queued or actively playing (including the tail of the last buffer). */
   get isActive(): boolean {
-    return this.active || this.queue.length > 0 || this.activeSources > 0;
+    return (
+      this.active ||
+      this.queue.length > 0 ||
+      this.activeSources > 0 ||
+      (this.htmlAudio != null && !this.htmlAudio.paused && !this.htmlAudio.ended)
+    );
   }
 
   /**
@@ -92,6 +118,20 @@ export class SpeechAudioPlayback {
     await this.drainQueue();
   }
 
+  /** Enqueue raw float32 little-endian PCM (e.g. Voxtral TTS `response_format: "pcm"`). */
+  async enqueueBase64Float32Pcm(base64: string, sampleRate: number): Promise<void> {
+    const samples = base64ToFloat32(base64);
+    if (samples.length === 0) {
+      return;
+    }
+    if (!this.active) {
+      this.active = true;
+    }
+    const rate = Number.isFinite(sampleRate) && sampleRate > 0 ? sampleRate : DEFAULT_OUTPUT_SAMPLE_RATE;
+    this.queue.push({ samples, rate });
+    await this.drainQueue();
+  }
+
   async enqueueBase64Audio(base64: string, mimeType?: string): Promise<void> {
     if (isPcmMimeType(mimeType)) {
       await this.enqueueBase64Pcm(base64, mimeType);
@@ -103,16 +143,98 @@ export class SpeechAudioPlayback {
       return;
     }
 
+    // Prefer HTMLAudioElement for compressed formats — more reliable in WebView2
+    // than AudioContext.decodeAudioData + BufferSource scheduling.
+    const mime = mimeType?.split(";")[0]?.trim() || "audio/mpeg";
+    try {
+      await this.playHtmlAudio(bytes, mime);
+      return;
+    } catch (htmlError) {
+      console.warn("HTMLAudioElement playback failed, falling back to Web Audio:", htmlError);
+    }
+
     if (!this.active) {
       this.active = true;
     }
 
     const context = await this.ensureContext();
-    const copy = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+    // decodeAudioData detaches its argument; pass an exact-sized ArrayBuffer copy.
+    const exact = bytes.slice();
+    const copy = exact.buffer.slice(exact.byteOffset, exact.byteOffset + exact.byteLength);
     const audioBuffer = await context.decodeAudioData(copy);
     const channel = audioBuffer.getChannelData(0);
     this.queue.push({ samples: channel.slice(), rate: audioBuffer.sampleRate });
     await this.drainQueue();
+  }
+
+  private stopHtmlAudio(): void {
+    if (this.htmlAudio) {
+      try {
+        this.htmlAudio.pause();
+        this.htmlAudio.removeAttribute("src");
+        this.htmlAudio.load();
+      } catch {
+        // ignore
+      }
+      this.htmlAudio = null;
+    }
+    if (this.htmlObjectUrl) {
+      try {
+        URL.revokeObjectURL(this.htmlObjectUrl);
+      } catch {
+        // ignore
+      }
+      this.htmlObjectUrl = null;
+    }
+  }
+
+  private async playHtmlAudio(bytes: Uint8Array, mimeType: string): Promise<void> {
+    this.stopHtmlAudio();
+
+    const copy = bytes.slice();
+    const blob = new Blob([copy.buffer.slice(copy.byteOffset, copy.byteOffset + copy.byteLength)], {
+      type: mimeType,
+    });
+    const url = URL.createObjectURL(blob);
+    this.htmlObjectUrl = url;
+
+    const audio = new Audio();
+    audio.preload = "auto";
+    audio.src = url;
+    this.htmlAudio = audio;
+    this.active = true;
+
+    await new Promise<void>((resolve, reject) => {
+      const cleanup = (): void => {
+        audio.onended = null;
+        audio.onerror = null;
+      };
+      audio.onended = () => {
+        cleanup();
+        this.active = false;
+        this.stopHtmlAudio();
+        resolve();
+      };
+      audio.onerror = () => {
+        cleanup();
+        this.active = false;
+        const mediaError = audio.error;
+        this.stopHtmlAudio();
+        reject(
+          new Error(
+            mediaError
+              ? `HTMLAudioElement error code ${mediaError.code}`
+              : "HTMLAudioElement playback failed",
+          ),
+        );
+      };
+      void audio.play().catch((error) => {
+        cleanup();
+        this.active = false;
+        this.stopHtmlAudio();
+        reject(error instanceof Error ? error : new Error(String(error)));
+      });
+    });
   }
 
   interrupt(): void {
@@ -120,6 +242,7 @@ export class SpeechAudioPlayback {
     this.nextStartTime = 0;
     this.draining = false;
     this.active = false;
+    this.stopHtmlAudio();
 
     for (const source of this.sources) {
       try {
@@ -151,7 +274,9 @@ export class SpeechAudioPlayback {
 
   private async ensureContext(): Promise<AudioContext> {
     if (!this.context || this.context.state === "closed") {
-      this.context = new AudioContext({ sampleRate: DEFAULT_OUTPUT_SAMPLE_RATE });
+      // Prefer the WebView default sample rate. Forcing 24 kHz made some
+      // Windows WebView2 builds reject MP3 buffers decoded at 44.1/48 kHz.
+      this.context = new AudioContext();
       this.nextStartTime = 0;
     }
     if (this.context.state === "suspended") {
@@ -195,7 +320,14 @@ export class SpeechAudioPlayback {
           continue;
         }
 
-        const buffer = context.createBuffer(1, item.samples.length, item.rate);
+        // Some WebViews only accept createBuffer rates that match the context.
+        // Fall back to context.sampleRate (slight pitch/tempo shift) rather than silence.
+        let buffer: AudioBuffer;
+        try {
+          buffer = context.createBuffer(1, item.samples.length, item.rate);
+        } catch {
+          buffer = context.createBuffer(1, item.samples.length, context.sampleRate);
+        }
         buffer.copyToChannel(item.samples, 0);
 
         const source = context.createBufferSource();

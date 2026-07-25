@@ -170,6 +170,34 @@ function normalizeSpeechSettings(
       typeof saved.supertonicVoice === "string" && saved.supertonicVoice.trim().length > 0
         ? normalizeSupertonicVoice(saved.supertonicVoice.trim())
         : DEFAULT_SPEECH_SETTINGS.supertonicVoice,
+    mistralAsrModel:
+      typeof saved.mistralAsrModel === "string" && saved.mistralAsrModel.trim().length > 0
+        ? saved.mistralAsrModel.trim()
+        : DEFAULT_SPEECH_SETTINGS.mistralAsrModel,
+    mistralTtsModel:
+      typeof saved.mistralTtsModel === "string" && saved.mistralTtsModel.trim().length > 0
+        ? saved.mistralTtsModel.trim()
+        : DEFAULT_SPEECH_SETTINGS.mistralTtsModel,
+    mistralVoiceId:
+      typeof saved.mistralVoiceId === "string"
+        ? saved.mistralVoiceId.trim()
+        : DEFAULT_SPEECH_SETTINGS.mistralVoiceId,
+    mistralRealtimeEnabled:
+      typeof saved.mistralRealtimeEnabled === "boolean"
+        ? saved.mistralRealtimeEnabled
+        : DEFAULT_SPEECH_SETTINGS.mistralRealtimeEnabled,
+    mistralRealtimeAsrModel:
+      typeof saved.mistralRealtimeAsrModel === "string" &&
+      saved.mistralRealtimeAsrModel.trim().length > 0
+        ? saved.mistralRealtimeAsrModel.trim()
+        : DEFAULT_SPEECH_SETTINGS.mistralRealtimeAsrModel,
+    mistralTargetStreamingDelayMs: (() => {
+      const raw = saved.mistralTargetStreamingDelayMs;
+      if (typeof raw === "number" && Number.isFinite(raw) && raw >= 120 && raw <= 2400) {
+        return Math.round(raw);
+      }
+      return DEFAULT_SPEECH_SETTINGS.mistralTargetStreamingDelayMs;
+    })(),
     bargeInMode:
       saved.bargeInMode === "energy" ||
       saved.bargeInMode === "silero" ||

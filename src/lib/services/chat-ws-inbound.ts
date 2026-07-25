@@ -151,28 +151,73 @@ function maybeBootstrapConversation(wsService: WebSocketService): void {
 
 const AUTO_TTS_FALLBACK_DELAY_MS = 2_500;
 
+/** Prevents double TTS when both streaming `done` and final `chat.response` arrive. */
+const spokenAssistantRequestIds = new Set<string>();
+
+async function prefersClientCloudTts(): Promise<boolean> {
+  const appSettings = get(settings);
+  try {
+    const { canActiveSpeechSessionSpeakText } = await import("./speech-flow");
+    if (canActiveSpeechSessionSpeakText()) {
+      return true;
+    }
+  } catch {
+    // ignore
+  }
+  try {
+    const { shouldUseGrokTtsForChat } = await import("./grok-tts");
+    const { shouldUseMistralTtsForChat } = await import("./mistral-tts");
+    const { resolveChatSpeakerMode } = await import("./chat-voice-output-status");
+    const opts = {
+      chatTtsOff: appSettings.chatTtsMode === "off",
+      speakerMuted: !resolveChatSpeakerMode(appSettings),
+    };
+    return (
+      shouldUseGrokTtsForChat(appSettings.speech, opts) ||
+      shouldUseMistralTtsForChat(appSettings.speech, opts)
+    );
+  } catch {
+    return false;
+  }
+}
+
+/** Speak an assistant reply (AuraGo WS or local agent). Safe to call multiple times per request_id. */
+export function speakAssistantChatResponse(requestId: string, text: string): void {
+  maybeSpeakAssistantResponse(requestId, text);
+}
+
 function maybeSpeakAssistantResponse(requestId: string, text: string): void {
   const convo = get(chatConversationState);
   if (convo.stoppedRequestIds.includes(requestId)) {
     return;
   }
 
-  // Prefer Grok voice for AuraGo replies:
-  // - live session → force_message
-  // - mic off + provider grok_voice → unary Grok TTS (same voice_id)
+  const spoken = text?.trim() ?? "";
+  if (!spoken || spokenAssistantRequestIds.has(requestId)) {
+    return;
+  }
+
+  // Prefer Grok/Mistral client voice for AuraGo replies:
+  // - live session → session.speakText
+  // - mic off + provider → unary client TTS
   void (async () => {
     const appSettings = get(settings);
+
     try {
       const { canActiveSpeechSessionSpeakText, speakViaActiveSpeechSession } =
         await import("./speech-flow");
       if (canActiveSpeechSessionSpeakText()) {
+        spokenAssistantRequestIds.add(requestId);
         cancelAssistantFrontendTts(requestId);
-        if (await speakViaActiveSpeechSession(text)) {
+        const handled = await speakViaActiveSpeechSession(spoken);
+        if (handled) {
           return;
         }
+        spokenAssistantRequestIds.delete(requestId);
       }
-    } catch {
-      // Fall through.
+    } catch (error) {
+      spokenAssistantRequestIds.delete(requestId);
+      console.warn("Active speech session TTS failed:", error);
     }
 
     try {
@@ -184,13 +229,36 @@ function maybeSpeakAssistantResponse(requestId: string, text: string): void {
           speakerMuted: !resolveChatSpeakerMode(appSettings),
         })
       ) {
+        spokenAssistantRequestIds.add(requestId);
         cancelAssistantFrontendTts(requestId);
-        if (await speakWithGrokTts(text, appSettings.speech)) {
+        if (await speakWithGrokTts(spoken, appSettings.speech)) {
           return;
         }
+        spokenAssistantRequestIds.delete(requestId);
       }
-    } catch {
-      // Fall through to normal chat TTS.
+    } catch (error) {
+      spokenAssistantRequestIds.delete(requestId);
+      console.warn("Grok chat TTS failed:", error);
+    }
+
+    try {
+      const { shouldUseMistralTtsForChat, speakWithMistralTts } = await import("./mistral-tts");
+      const { resolveChatSpeakerMode } = await import("./chat-voice-output-status");
+      const useMistral = shouldUseMistralTtsForChat(appSettings.speech, {
+        chatTtsOff: appSettings.chatTtsMode === "off",
+        speakerMuted: !resolveChatSpeakerMode(appSettings),
+      });
+      if (useMistral) {
+        spokenAssistantRequestIds.add(requestId);
+        cancelAssistantFrontendTts(requestId);
+        if (await speakWithMistralTts(spoken, appSettings.speech)) {
+          return;
+        }
+        spokenAssistantRequestIds.delete(requestId);
+      }
+    } catch (error) {
+      spokenAssistantRequestIds.delete(requestId);
+      console.warn("Mistral chat TTS failed:", error);
     }
 
     const caps = get(sessionState).advertisedCapabilities;
@@ -208,7 +276,8 @@ function maybeSpeakAssistantResponse(requestId: string, text: string): void {
         ? AUTO_TTS_FALLBACK_DELAY_MS
         : 0;
 
-    scheduleAssistantFrontendTts({ requestId, text, delayMs });
+    spokenAssistantRequestIds.add(requestId);
+    scheduleAssistantFrontendTts({ requestId, text: spoken, delayMs });
   })();
 }
 
@@ -313,6 +382,11 @@ export async function handleChatWsMessage(
   const caps = get(sessionState).advertisedCapabilities;
 
   if (isChatAudio(message)) {
+    // Client-side Mistral/Grok TTS owns the voice — AuraGo server audio would
+    // call interruptLocalSpeechPlayback() and kill native WinMM playback mid-utterance.
+    if (await prefersClientCloudTts()) {
+      return;
+    }
     const normalized = normalizeChatAudioPayload(message.payload);
     const conversationId =
       normalized?.conversation_id || get(chatConversationState).activeConversationId || "";

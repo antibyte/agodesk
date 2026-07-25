@@ -2,7 +2,10 @@ import { get } from "svelte/store";
 import { chatConversationState } from "../stores/chat-conversation";
 import { settings } from "../stores/settings";
 import { stopChatAudioPlayback } from "./chat-audio";
-import { interruptLocalSpeechPlayback, speakChatAssistantText } from "./local-speech-tts";
+import {
+  interruptLocalSessionAndStandalonePlayback,
+  speakChatAssistantText,
+} from "./local-speech-tts";
 
 interface PendingFallback {
   requestId: string;
@@ -61,7 +64,10 @@ export function claimServerAudioEnqueue(requestId: string, path: string): boolea
 
 export function onServerAssistantAudioArriving(requestId: string): void {
   cancelAssistantFrontendTts(requestId);
-  interruptLocalSpeechPlayback();
+  // Only stop local/piper. Never kill Mistral/Grok client TTS from server-audio
+  // frames — that race silenced WinMM mid-play. Server audio is also dropped
+  // upstream when prefersClientCloudTts() is true.
+  interruptLocalSessionAndStandalonePlayback();
 }
 
 /**

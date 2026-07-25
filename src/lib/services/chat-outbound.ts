@@ -15,6 +15,7 @@ import {
 import { stopAllChatAssistantTts } from "./chat-audio";
 import { stopChatMediaPlayback } from "./chat-media-playback";
 import { interruptLocalSpeechPlayback } from "./local-speech-tts";
+import { playUiSound } from "./ui-sounds";
 import type { NativeWebSocketService } from "./websocket";
 import { prepareChatAttachment, toChatAttachmentItem } from "./chat-attachment-flow";
 import { setLocalAttachmentPreview, registerSignedAttachmentPaths } from "./chat-attachment-paths";
@@ -25,6 +26,7 @@ import {
   localAgentTurnActive,
   runLocalAgentTurn,
 } from "./local-agent";
+import { speakAssistantChatResponse } from "./chat-ws-inbound";
 
 export interface BuildChatMessageOptions {
   source?: ChatMessagePayload["source"];
@@ -88,11 +90,15 @@ export async function sendChatMessage(
   if (!preferGrokVoice) {
     try {
       const { shouldUseGrokTtsForChat } = await import("./grok-tts");
+      const { shouldUseMistralTtsForChat } = await import("./mistral-tts");
       const { resolveChatSpeakerMode } = await import("./chat-voice-output-status");
-      preferGrokVoice = shouldUseGrokTtsForChat(appSettings.speech, {
+      const clientTtsOptions = {
         chatTtsOff: appSettings.chatTtsMode === "off",
         speakerMuted: !resolveChatSpeakerMode(appSettings),
-      });
+      };
+      preferGrokVoice =
+        shouldUseGrokTtsForChat(appSettings.speech, clientTtsOptions) ||
+        shouldUseMistralTtsForChat(appSettings.speech, clientTtsOptions);
     } catch {
       preferGrokVoice = false;
     }
@@ -161,7 +167,9 @@ async function runLocalAgentChatTurn(
           role: "assistant",
           text: assistantText,
           timestamp: new Date().toISOString(),
+          requestId: userMessage.id,
         });
+        playUiSound("receive");
       },
       onSystemNotice: (notice) => {
         chatMessages.addMessage({
@@ -173,6 +181,16 @@ async function runLocalAgentChatTurn(
         });
       },
     });
+
+    // Local agent never emits chat.response — trigger the same TTS path as AuraGo replies.
+    if (result.assistantText.trim()) {
+      if (result.status === "completed" && !result.handedOff) {
+        speakAssistantChatResponse(userMessage.id, result.assistantText);
+      } else if (result.handedOff) {
+        // Wait-hint only; AuraGo's final answer uses the same request_id via WS.
+        speakAssistantChatResponse(`${userMessage.id}:local-hint`, result.assistantText);
+      }
+    }
 
     // Handoff: leave requestInFlight so chat.response / cancel clears pending.
     if (!result.handedOff) {

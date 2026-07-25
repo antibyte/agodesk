@@ -2903,15 +2903,35 @@ export const DEFAULT_OPENPETS_SETTINGS: OpenPetsSettings = {
   showMessages: false,
 };
 
-/** Speech pipeline backend: cloud Gemini/Grok, hybrid local ASR + online TTS, or fully offline. */
-export type SpeechProvider = "gemini_live" | "grok_voice" | "hybrid" | "offline";
+/**
+ * Speech pipeline backend: cloud Gemini/Grok duplex, Mistral Voxtral (cloud
+ * ASR+TTS via Silero-endpointed utterances), hybrid local ASR + online TTS, or
+ * fully offline.
+ */
+export type SpeechProvider =
+  | "gemini_live"
+  | "grok_voice"
+  | "mistral_voice"
+  | "hybrid"
+  | "offline";
 
 export const SPEECH_PROVIDERS: readonly SpeechProvider[] = [
   "gemini_live",
   "grok_voice",
+  "mistral_voice",
   "hybrid",
   "offline",
 ] as const;
+
+/** Voxtral batch ASR model for the Mistral Voice provider. */
+export const DEFAULT_MISTRAL_ASR_MODEL = "voxtral-mini-latest";
+/** Voxtral TTS model for the Mistral Voice provider. */
+export const DEFAULT_MISTRAL_TTS_MODEL = "voxtral-mini-tts-2603";
+/** Voxtral realtime ASR model for Phase-2 Mistral Voice. */
+export const DEFAULT_MISTRAL_REALTIME_ASR_MODEL =
+  "voxtral-mini-transcribe-realtime-2602";
+/** Target streaming delay (ms) for Phase-2 Mistral Voice. */
+export const DEFAULT_MISTRAL_STREAMING_DELAY_MS = 480;
 
 export type LocalAsrModel =
   | "whisper_small_de"
@@ -2950,6 +2970,18 @@ export interface SpeechSettings {
   offlineTtsBackend: OfflineTtsBackend;
   /** Supertonic preset voice style (e.g. M1, F1); language comes from `language`. */
   supertonicVoice: string;
+  /** Voxtral ASR model id for the Mistral Voice provider. */
+  mistralAsrModel: string;
+  /** Voxtral TTS model id for the Mistral Voice provider. */
+  mistralTtsModel: string;
+  /** Preset or custom Voxtral voice id (empty → Voxtral default preset). */
+  mistralVoiceId: string;
+  /** Prefer realtime ASR + streaming TTS (Phase 2); falls back to batch on errors. */
+  mistralRealtimeEnabled: boolean;
+  /** Voxtral realtime ASR model id when realtime is enabled. */
+  mistralRealtimeAsrModel: string;
+  /** Target streaming delay (ms) for realtime partials / TTS pacing. */
+  mistralTargetStreamingDelayMs: number;
   /** Barge-in (user interruption while AI speaks) detection mode. */
   bargeInMode: "energy" | "silero" | "auto";
 }
@@ -2973,6 +3005,12 @@ export const DEFAULT_SPEECH_SETTINGS: SpeechSettings = {
   offlineTtsVoice: DEFAULT_OFFLINE_TTS_VOICE,
   offlineTtsBackend: "piper",
   supertonicVoice: DEFAULT_SUPERTONIC_VOICE,
+  mistralAsrModel: DEFAULT_MISTRAL_ASR_MODEL,
+  mistralTtsModel: DEFAULT_MISTRAL_TTS_MODEL,
+  mistralVoiceId: "",
+  mistralRealtimeEnabled: true,
+  mistralRealtimeAsrModel: DEFAULT_MISTRAL_REALTIME_ASR_MODEL,
+  mistralTargetStreamingDelayMs: DEFAULT_MISTRAL_STREAMING_DELAY_MS,
   bargeInMode: "auto",
 };
 
@@ -2981,7 +3019,8 @@ export function normalizeSpeechProvider(value: unknown): SpeechProvider {
     value === "hybrid" ||
     value === "offline" ||
     value === "gemini_live" ||
-    value === "grok_voice"
+    value === "grok_voice" ||
+    value === "mistral_voice"
   ) {
     return value;
   }
@@ -2994,6 +3033,10 @@ export function isGeminiSpeechProvider(provider: SpeechProvider): boolean {
 
 export function isGrokSpeechProvider(provider: SpeechProvider): boolean {
   return provider === "grok_voice";
+}
+
+export function isMistralSpeechProvider(provider: SpeechProvider): boolean {
+  return provider === "mistral_voice";
 }
 
 /** Cloud realtime duplex providers (Gemini Live, Grok Voice) that support agent tool calling. */
@@ -3009,8 +3052,16 @@ export function speechProviderRequiresXaiApiKey(provider: SpeechProvider): boole
   return provider === "grok_voice";
 }
 
+export function speechProviderRequiresMistralApiKey(provider: SpeechProvider): boolean {
+  return provider === "mistral_voice";
+}
+
 export function speechProviderRequiresCloudApiKey(provider: SpeechProvider): boolean {
-  return speechProviderRequiresGeminiApiKey(provider) || speechProviderRequiresXaiApiKey(provider);
+  return (
+    speechProviderRequiresGeminiApiKey(provider) ||
+    speechProviderRequiresXaiApiKey(provider) ||
+    speechProviderRequiresMistralApiKey(provider)
+  );
 }
 
 export const DEFAULT_UI_SOUND_SETTINGS: UiSoundSettings = {

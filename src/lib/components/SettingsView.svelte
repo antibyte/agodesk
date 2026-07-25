@@ -34,6 +34,7 @@
     type LocalAsrModel,
     isGeminiSpeechProvider,
     isGrokSpeechProvider,
+    isMistralSpeechProvider,
     speechProviderIsCloudRealtime,
     hasAdvertisedFileRead,
     hasAdvertisedFileWrite,
@@ -63,7 +64,16 @@
     listXaiTtsVoices,
     saveXaiApiKey,
   } from "../services/xai-credentials";
+  import {
+    clearMistralApiKey,
+    hasMistralApiKey,
+    listMistralVoices,
+    saveMistralApiKey,
+    testMistralApiKey,
+    type MistralVoiceOption,
+  } from "../services/mistral-credentials";
   import { testGeminiConnection, testGrokConnection, testLocalSpeechTts } from "../services/speech-flow";
+  import { testMistralSpeechTts } from "../services/mistral-tts";
   import { applyTheme, applyUiTheme } from "../services/theme";
   import LlmProvidersSection from "./LlmProvidersSection.svelte";
   import { providersState } from "../stores/providers";
@@ -322,6 +332,15 @@
   let grokVoicesLoading = $state(false);
   let grokVoicesMessage = $state("");
 
+  let mistralApiKeyInput = $state("");
+  let mistralApiKeyStored = $state(false);
+  let mistralApiKeyBusy = $state(false);
+  let mistralApiKeyMessage = $state("");
+  let mistralApiKeyMessageTone = $state<"success" | "error" | "">("");
+  let mistralVoiceCatalog = $state<MistralVoiceOption[]>([]);
+  let mistralVoicesLoading = $state(false);
+  let mistralVoicesMessage = $state("");
+
   let browserTestBusy = $state(false);
   let browserTestMessage = $state("");
   let browserTestTone = $state<"success" | "error" | "">("");
@@ -386,6 +405,7 @@
 
   const isGeminiSpeechSelected = $derived(isGeminiSpeechProvider(draftSpeech.provider));
   const isGrokSpeechSelected = $derived(isGrokSpeechProvider(draftSpeech.provider));
+  const isMistralSpeechSelected = $derived(isMistralSpeechProvider(draftSpeech.provider));
   const isCloudRealtimeSpeechSelected = $derived(speechProviderIsCloudRealtime(draftSpeech.provider));
   const grokVoiceSelectOptions = $derived(
     mergeGrokVoiceOptions(grokVoiceCatalog, draftSpeech.voiceName),
@@ -421,7 +441,7 @@
     if (draftSpeech.enabled && (isHybridSpeechSelected || isOfflineSpeechSelected)) {
       items.push({ id: "tts", labelKey: "settings.speech.subsection.tts" });
     }
-    if (draftSpeech.enabled && isCloudRealtimeSpeechSelected) {
+    if (draftSpeech.enabled && (isCloudRealtimeSpeechSelected || isMistralSpeechSelected)) {
       items.push({ id: "tests", labelKey: "settings.speech.subsection.tests" });
     }
     return items;
@@ -446,6 +466,9 @@
   let ttsDownloadError = $state<string | null>(null);
   let ttsTestSampleText = $state(localTtsTestPhraseForAppLocale("system"));
   let ttsTestBusy = $state(false);
+  let mistralTtsTestBusy = $state(false);
+  let mistralTtsTestMessage = $state("");
+  let mistralTtsTestTone = $state<"success" | "error">("success");
   let ttsTestMessage = $state("");
   let ttsTestTone = $state<"success" | "error" | "">("");
 
@@ -857,6 +880,38 @@
     if (isGrokSpeechProvider(draftSpeech.provider) && xaiApiKeyStored) {
       void refreshGrokVoiceCatalog();
     }
+    mistralApiKeyStored = await hasMistralApiKey();
+    if (isMistralSpeechProvider(draftSpeech.provider) && mistralApiKeyStored) {
+      void refreshMistralVoiceCatalog();
+    }
+  }
+
+  async function refreshMistralVoiceCatalog(): Promise<void> {
+    if (!isDesktopShell()) {
+      mistralVoiceCatalog = [];
+      return;
+    }
+    mistralVoicesLoading = true;
+    mistralVoicesMessage = "";
+    try {
+      if (!(await hasMistralApiKey())) {
+        mistralVoiceCatalog = [];
+        mistralVoicesMessage = $i18n("settings.speech.mistralVoices.needKey");
+        return;
+      }
+      mistralVoiceCatalog = await listMistralVoices();
+      mistralVoicesMessage = $i18n("settings.speech.mistralVoices.loaded", {
+        count: String(mistralVoiceCatalog.length),
+      });
+    } catch (error) {
+      mistralVoiceCatalog = [];
+      const detail = error instanceof Error ? error.message : String(error);
+      mistralVoicesMessage = detail.trim()
+        ? `${$i18n("settings.speech.mistralVoices.loadFailed")} ${detail.trim()}`
+        : $i18n("settings.speech.mistralVoices.loadFailed");
+    } finally {
+      mistralVoicesLoading = false;
+    }
   }
 
   async function refreshGrokVoiceCatalog(): Promise<void> {
@@ -996,6 +1051,73 @@
       xaiApiKeyMessageTone = "error";
     } finally {
       xaiApiKeyBusy = false;
+    }
+  }
+
+  function setMistralApiKeyFeedback(key: MessageKey, tone: "success" | "error"): void {
+    mistralApiKeyMessage = $i18n(key);
+    mistralApiKeyMessageTone = tone;
+  }
+
+  async function handleSaveMistralApiKey(): Promise<void> {
+    const trimmed = mistralApiKeyInput.trim();
+    if (!trimmed) {
+      setMistralApiKeyFeedback("settings.speech.mistralApiKey.error.empty", "error");
+      return;
+    }
+    mistralApiKeyBusy = true;
+    try {
+      await saveMistralApiKey(trimmed);
+      mistralApiKeyStored = true;
+      mistralApiKeyInput = "";
+      setMistralApiKeyFeedback("settings.speech.mistralApiKey.success.saved", "success");
+      void refreshMistralVoiceCatalog();
+    } catch {
+      setMistralApiKeyFeedback("settings.speech.mistralApiKey.error.saveFailed", "error");
+    } finally {
+      mistralApiKeyBusy = false;
+    }
+  }
+
+  async function handleRemoveMistralApiKey(): Promise<void> {
+    mistralApiKeyBusy = true;
+    try {
+      await clearMistralApiKey();
+      mistralApiKeyStored = false;
+      mistralApiKeyInput = "";
+      setMistralApiKeyFeedback("settings.speech.mistralApiKey.success.removed", "success");
+    } catch {
+      setMistralApiKeyFeedback("settings.speech.mistralApiKey.error.removeFailed", "error");
+    } finally {
+      mistralApiKeyBusy = false;
+    }
+  }
+
+  async function handleTestMistralApiKey(network: boolean): Promise<void> {
+    mistralApiKeyBusy = true;
+    setMistralApiKeyFeedback("settings.speech.mistralApiKey.testing", "success");
+    try {
+      if (mistralApiKeyInput.trim()) {
+        await saveMistralApiKey(mistralApiKeyInput.trim());
+        mistralApiKeyStored = true;
+        mistralApiKeyInput = "";
+      }
+      if (!(await hasMistralApiKey())) {
+        setMistralApiKeyFeedback("settings.speech.mistralApiKey.error.testNoKey", "error");
+        return;
+      }
+      const result = await testMistralApiKey({ network });
+      mistralApiKeyMessage = result.message;
+      mistralApiKeyMessageTone = "success";
+      void refreshMistralVoiceCatalog();
+    } catch (error) {
+      const detail =
+        error instanceof Error ? error.message : typeof error === "string" ? error : "";
+      mistralApiKeyMessage =
+        detail.trim() || $i18n("settings.speech.mistralApiKey.error.testFailed");
+      mistralApiKeyMessageTone = "error";
+    } finally {
+      mistralApiKeyBusy = false;
     }
   }
 
@@ -1360,6 +1482,39 @@
       });
     } finally {
       ttsTestBusy = false;
+    }
+  }
+
+  async function handleTestMistralTts(): Promise<void> {
+    mistralTtsTestBusy = true;
+    mistralTtsTestTone = "success";
+    mistralTtsTestMessage = $i18n("settings.speech.mistralTtsTest.testing");
+    try {
+      const sample =
+        ttsTestSampleText.trim() ||
+        $i18n("settings.speech.mistralTtsTest.defaultPhrase");
+      const result = await testMistralSpeechTts(draftSpeech, sample);
+      if (result.ok) {
+        mistralTtsTestTone = "success";
+        mistralTtsTestMessage = $i18n("settings.speech.mistralTtsTest.success", {
+          bytes: String(result.bytes ?? 0),
+        });
+        if (result.playedNatively) {
+          mistralTtsTestMessage += " [WinMM]";
+        }
+        return;
+      }
+      mistralTtsTestTone = "error";
+      mistralTtsTestMessage = $i18n("settings.speech.mistralTtsTest.failed", {
+        message: result.error ?? $i18n("settings.speech.ttsTest.unknownError"),
+      });
+    } catch (error) {
+      mistralTtsTestTone = "error";
+      mistralTtsTestMessage = $i18n("settings.speech.mistralTtsTest.failed", {
+        message: error instanceof Error ? error.message : String(error),
+      });
+    } finally {
+      mistralTtsTestBusy = false;
     }
   }
 
@@ -3180,6 +3335,181 @@
                   </button>
                 </div>
                 <p class="help">{$i18n("settings.speech.xaiApiKey.testNetworkHelp")}</p>
+              </section>
+            {/if}
+
+            {#if speechSubSection === "tests" && isMistralSpeechSelected}
+              <section class="ui-card">
+                <div class="card-header">
+                  <h2>{$i18n("settings.speech.mistralApiKey.title")}</h2>
+                  <p>{$i18n("settings.speech.mistralApiKeyHelp")}</p>
+                </div>
+
+                <dl class="info-grid compact">
+                  <div>
+                    <dt>{$i18n("settings.speech.mistralApiKey.statusLabel")}</dt>
+                    <dd>
+                      <span class="ui-chip" data-tone={mistralApiKeyStored ? "accepted" : "idle"}>
+                        {mistralApiKeyStored
+                          ? $i18n("settings.speech.mistralApiKey.stored")
+                          : $i18n("settings.speech.mistralApiKey.notStored")}
+                      </span>
+                    </dd>
+                  </div>
+                </dl>
+
+                <label class="field">
+                  <span class="field-label">{$i18n("settings.speech.mistralApiKey.fieldLabel")}</span>
+                  <input
+                    type="password"
+                    bind:value={mistralApiKeyInput}
+                    placeholder={mistralApiKeyStored
+                      ? $i18n("settings.speech.mistralApiKey.placeholderReplace")
+                      : $i18n("settings.speech.mistralApiKey.placeholderNew")}
+                    autocomplete="off"
+                  />
+                </label>
+
+                <label class="field checkbox-field">
+                  <input
+                    type="checkbox"
+                    checked={draftSpeech.mistralRealtimeEnabled}
+                    onchange={(event) => {
+                      draftSpeech = {
+                        ...draftSpeech,
+                        mistralRealtimeEnabled: (event.currentTarget as HTMLInputElement).checked,
+                      };
+                      markDirty();
+                    }}
+                  />
+                  <span>{$i18n("settings.speech.mistralRealtime.enabled")}</span>
+                </label>
+                <p class="help">{$i18n("settings.speech.mistralRealtime.help")}</p>
+
+                {#if draftSpeech.mistralRealtimeEnabled}
+                  <label class="field">
+                    <span class="field-label">{$i18n("settings.speech.mistralRealtime.delayLabel")}</span>
+                    <select
+                      value={String(draftSpeech.mistralTargetStreamingDelayMs)}
+                      onchange={(event) => {
+                        draftSpeech = {
+                          ...draftSpeech,
+                          mistralTargetStreamingDelayMs: Number(
+                            (event.currentTarget as HTMLSelectElement).value,
+                          ),
+                        };
+                        markDirty();
+                      }}
+                    >
+                      <option value="240">240</option>
+                      <option value="480">480</option>
+                      <option value="960">960</option>
+                    </select>
+                  </label>
+                  <p class="help">{$i18n("settings.speech.mistralRealtime.delayHelp")}</p>
+                {/if}
+
+                <label class="field">
+                  <span class="field-label">{$i18n("settings.speech.mistralVoiceId.label")}</span>
+                  <select
+                    value={draftSpeech.mistralVoiceId}
+                    onchange={(event) => {
+                      draftSpeech = {
+                        ...draftSpeech,
+                        mistralVoiceId: (event.currentTarget as HTMLSelectElement).value,
+                      };
+                      markDirty();
+                    }}
+                    disabled={mistralVoicesLoading}
+                  >
+                    <option value="">{$i18n("settings.speech.mistralVoiceId.default")}</option>
+                    {#each mistralVoiceCatalog as voice (voice.id)}
+                      <option value={voice.id}>
+                        {voice.name}{voice.language ? ` (${voice.language})` : ""}
+                      </option>
+                    {/each}
+                    {#if draftSpeech.mistralVoiceId && !mistralVoiceCatalog.some((v) => v.id === draftSpeech.mistralVoiceId)}
+                      <option value={draftSpeech.mistralVoiceId}>{draftSpeech.mistralVoiceId}</option>
+                    {/if}
+                  </select>
+                </label>
+                <div class="action-row">
+                  <button
+                    type="button"
+                    class="ui-btn ui-btn-secondary"
+                    onclick={() => void refreshMistralVoiceCatalog()}
+                    disabled={mistralVoicesLoading || !mistralApiKeyStored}
+                  >
+                    {$i18n("settings.speech.mistralVoices.refresh")}
+                  </button>
+                </div>
+                {#if mistralVoicesMessage}
+                  <p class="help">{mistralVoicesMessage}</p>
+                {/if}
+                <p class="help">{$i18n("settings.speech.mistralVoiceId.help")}</p>
+
+                <div class="action-row">
+                  <button
+                    type="button"
+                    class="ui-btn ui-btn-secondary"
+                    onclick={() => void handleTestMistralTts()}
+                    disabled={mistralTtsTestBusy || !mistralApiKeyStored}
+                  >
+                    {mistralTtsTestBusy
+                      ? $i18n("settings.speech.mistralTtsTest.testing")
+                      : $i18n("settings.speech.mistralTtsTest.button")}
+                  </button>
+                </div>
+                {#if mistralTtsTestMessage}
+                  <p class="help" class:warn={mistralTtsTestTone === "error"}>{mistralTtsTestMessage}</p>
+                {/if}
+
+                {#if mistralApiKeyMessage}
+                  <p
+                    class="api-key-message"
+                    class:success={mistralApiKeyMessageTone === "success"}
+                    class:error={mistralApiKeyMessageTone === "error"}
+                  >
+                    {mistralApiKeyMessage}
+                  </p>
+                {/if}
+
+                <div class="action-row">
+                  <button
+                    type="button"
+                    class="ui-btn ui-btn-primary"
+                    onclick={() => void handleSaveMistralApiKey()}
+                    disabled={mistralApiKeyBusy}
+                  >
+                    {$i18n("settings.speech.mistralApiKey.save")}
+                  </button>
+                  <button
+                    type="button"
+                    class="ui-btn ui-btn-secondary"
+                    onclick={() => void handleTestMistralApiKey(false)}
+                    disabled={mistralApiKeyBusy}
+                  >
+                    {$i18n("settings.speech.mistralApiKey.test")}
+                  </button>
+                  <button
+                    type="button"
+                    class="ui-btn ui-btn-secondary"
+                    onclick={() => void handleTestMistralApiKey(true)}
+                    disabled={mistralApiKeyBusy}
+                    title={$i18n("settings.speech.mistralApiKey.testNetworkHelp")}
+                  >
+                    {$i18n("settings.speech.mistralApiKey.testNetwork")}
+                  </button>
+                  <button
+                    type="button"
+                    class="ui-btn ui-btn-secondary ui-btn-danger"
+                    onclick={() => void handleRemoveMistralApiKey()}
+                    disabled={mistralApiKeyBusy || !mistralApiKeyStored}
+                  >
+                    {$i18n("settings.speech.mistralApiKey.remove")}
+                  </button>
+                </div>
+                <p class="help">{$i18n("settings.speech.mistralApiKey.testNetworkHelp")}</p>
               </section>
             {/if}
           {/if}

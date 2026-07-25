@@ -2,12 +2,14 @@ import type { SpeechSettings, AgentMoodMetadata } from "../types/protocol";
 import {
   speechProviderRequiresGeminiApiKey,
   speechProviderRequiresXaiApiKey,
+  speechProviderRequiresMistralApiKey,
 } from "../types/protocol";
 
 import type { SpeechAgentContext } from "../types/speech";
 
 import { loadGeminiApiKey } from "./gemini-credentials";
 import { hasXaiApiKey } from "./xai-credentials";
+import { hasMistralApiKey } from "./mistral-credentials";
 
 import { isMicrophoneSupported, SpeechAudioCapture } from "./speech-audio";
 
@@ -23,6 +25,7 @@ import { tryCreateSileroVAD, type VoiceActivityDetector } from "./speech-vad";
 import type { ActiveSpeechSession } from "./speech-session";
 import { createActiveSpeechSession } from "./speech-session-factory";
 import { LocalSpeechSession } from "./local-speech-session";
+import { MistralVoiceSession } from "./mistral-voice-session";
 import { registerActiveLocalSpeechSession } from "./local-speech-tts";
 
 let liveSession: ActiveSpeechSession | null = null;
@@ -68,8 +71,8 @@ export function canActiveSpeechSessionSpeakText(): boolean {
 }
 
 /**
- * Speak text through the active live speech session voice (e.g. Grok).
- * Returns true when handled; false when no capable session is active.
+ * Speak text through the active live speech session voice (e.g. Grok/Mistral).
+ * Returns true when handled; false when no capable session is active or speak failed.
  */
 export async function speakViaActiveSpeechSession(text: string): Promise<boolean> {
   const session = liveSession;
@@ -139,6 +142,13 @@ export async function toggleSpeechSession(
       speechState.setError(getTranslateFn()("speechFlow.error.noApiKey.grok_voice"));
       return;
     }
+  } else if (speechProviderRequiresMistralApiKey(speech.provider)) {
+    // Mistral Voice proxies ASR/TTS through Rust with the stored key.
+    const hasKey = await hasMistralApiKey();
+    if (!hasKey) {
+      speechState.setError(getTranslateFn()("speechFlow.error.noApiKey.mistral_voice"));
+      return;
+    }
   }
 
   const agentContext =
@@ -191,7 +201,7 @@ export async function toggleSpeechSession(
       },
 
       onError: (message) => {
-        if (session instanceof LocalSpeechSession) {
+        if (session instanceof LocalSpeechSession || session instanceof MistralVoiceSession) {
           speechState.setStatus("listening");
           speechState.setPartialTranscript(message);
           window.setTimeout(() => {

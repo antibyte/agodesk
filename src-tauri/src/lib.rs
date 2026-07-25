@@ -11,11 +11,14 @@ mod shell;
 mod tray;
 mod window_effects;
 mod ws;
+mod mistral_realtime;
 mod xai_realtime;
 
 use std::sync::atomic::Ordering;
 
 use tauri::{Emitter, Manager, RunEvent, WindowEvent};
+use mistral_realtime::MistralRealtimeState;
+use commands::{MistralNativePlaybackState, MistralTtsStreamState};
 use tray::TrayState;
 use ws::transport::WsTransportState;
 use xai_realtime::XaiRealtimeState;
@@ -29,6 +32,9 @@ pub fn run() {
         .plugin(tauri_plugin_process::init())
         .manage(WsTransportState::default())
         .manage(XaiRealtimeState::default())
+        .manage(MistralRealtimeState::default())
+        .manage(MistralTtsStreamState::default())
+        .manage(MistralNativePlaybackState::default())
         .manage(TrayState::default())
         .manage(computer_use::browser::BrowserState::default())
         .manage(openpets::OpenPetsState::default())
@@ -97,10 +103,24 @@ pub fn run() {
             commands::test_xai_api_key,
             commands::list_xai_tts_voices,
             commands::xai_tts_synthesize,
+            commands::store_mistral_api_key,
+            commands::get_mistral_api_key,
+            commands::delete_mistral_api_key,
+            commands::has_mistral_api_key,
+            commands::test_mistral_api_key,
+            commands::mistral_transcribe,
+            commands::mistral_synthesize,
+            commands::mistral_native_playback_cancel,
+            commands::mistral_synthesize_stream,
+            commands::mistral_synthesize_stream_cancel,
+            commands::list_mistral_voices,
             xai_realtime::xai_realtime_connect,
             xai_realtime::xai_realtime_send,
             xai_realtime::xai_realtime_disconnect,
             xai_realtime::test_xai_realtime_connection,
+            mistral_realtime::mistral_realtime_connect,
+            mistral_realtime::mistral_realtime_send,
+            mistral_realtime::mistral_realtime_disconnect,
             commands::collect_host_info,
             commands::list_displays,
             commands::list_windows,
