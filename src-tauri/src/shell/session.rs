@@ -528,7 +528,7 @@ pub async fn shell_session_list() -> Result<Vec<ShellSessionSummary>, String> {
         manager.cleanup_expired();
         manager.reap_exited();
         let mut out: Vec<_> = manager.sessions.values().map(summary_of).collect();
-        out.sort_by(|a, b| a.started_at_ms.cmp(&b.started_at_ms));
+        out.sort_by_key(|a| a.started_at_ms);
         Ok(out)
     })
     .await

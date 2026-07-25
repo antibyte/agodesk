@@ -779,7 +779,7 @@ pub fn synthesize_supertonic(
         let wanted = (sample_rate as f32 * duration) as usize;
         let slice = &wav[..wanted.min(wav.len())];
         if !wav_cat.is_empty() {
-            wav_cat.extend(std::iter::repeat(0.0f32).take(silence_len));
+            wav_cat.extend(std::iter::repeat_n(0.0f32, silence_len));
         }
         wav_cat.extend_from_slice(slice);
     }

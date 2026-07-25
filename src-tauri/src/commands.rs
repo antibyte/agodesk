@@ -854,7 +854,7 @@ const SND_PURGE: u32 = 0x0040;
 
 /// Convert Voxtral float32 LE PCM into a mono 16-bit WAV buffer.
 fn f32le_pcm_to_wav(pcm: &[u8], sample_rate: u32) -> Result<Vec<u8>, String> {
-    if pcm.len() < 4 || pcm.len() % 4 != 0 {
+    if pcm.len() < 4 || !pcm.len().is_multiple_of(4) {
         return Err(format!("invalid float32 PCM length: {}", pcm.len()));
     }
     let sample_count = pcm.len() / 4;
@@ -913,7 +913,7 @@ fn play_wav_bytes_native(
         let path_for_cleanup = path.clone();
         let cancel = state.cancel.clone();
         // PlaySoundW is blocking with SND_SYNC; run it and allow PURGE from barge-in.
-        let result = std::thread::spawn(move || -> Result<(), String> {
+        std::thread::spawn(move || -> Result<(), String> {
             let ok = unsafe {
                 PlaySoundW(
                     wide.as_ptr(),
@@ -931,9 +931,7 @@ fn play_wav_bytes_native(
             Ok(())
         })
         .join()
-        .map_err(|_| "native WAV playback thread panicked".to_string())?;
-
-        result
+        .map_err(|_| "native WAV playback thread panicked".to_string())?
     }
 
     #[cfg(not(target_os = "windows"))]

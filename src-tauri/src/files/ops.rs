@@ -320,7 +320,7 @@ pub fn file_patch(
     let sha_after = hex::encode(Sha256::digest(updated.as_bytes()));
 
     if !dry_run {
-        if updated.as_bytes().len() as u64 > max_bytes {
+        if updated.len() as u64 > max_bytes {
             return Err("FILE_TOO_LARGE".to_string());
         }
         validate_parent_directory(&resolved.absolute_path)?;

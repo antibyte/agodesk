@@ -30,7 +30,7 @@ function createActivityTimelineStore() {
           !state.requestId ||
           state.requestId === activity.request_id;
 
-        let activities = sameConversation && sameRequest ? [...state.activities] : [];
+        const activities = sameConversation && sameRequest ? [...state.activities] : [];
         const index = activities.findIndex((item) => item.activity_id === activity.activity_id);
         if (index >= 0) {
           activities[index] = { ...activities[index], ...activity };

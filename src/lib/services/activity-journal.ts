@@ -64,7 +64,7 @@ function redactSummary(value: string | undefined): string | undefined {
   }
   let summary = value.slice(0, 240);
   summary = summary.replace(/(api[_-]?key|token|password|secret)\s*[:=]\s*\S+/gi, "$1=[redacted]");
-  summary = summary.replace(/Bearer\s+[A-Za-z0-9._\-]+/gi, "Bearer [redacted]");
+  summary = summary.replace(/Bearer\s+[A-Za-z0-9._-]+/gi, "Bearer [redacted]");
   return summary;
 }
 
