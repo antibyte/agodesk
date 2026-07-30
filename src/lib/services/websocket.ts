@@ -313,6 +313,18 @@ export function isDesktopCommand(
   return message.type === "desktop.command";
 }
 
+export function isVaultSecretPrompt(
+  message: WsMessage,
+): message is WsMessage<import("../types/protocol").VaultSecretPromptPayload> {
+  return message.type === "vault.secret.prompt";
+}
+
+export function isVaultSecretAck(
+  message: WsMessage,
+): message is WsMessage<import("../types/protocol").VaultSecretAckPayload> {
+  return message.type === "vault.secret.ack";
+}
+
 export function isPersonaAssets(
   message: WsMessage,
 ): message is WsMessage<import("../types/protocol").PersonaAssetsPayload> {

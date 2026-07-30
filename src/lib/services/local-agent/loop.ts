@@ -223,7 +223,10 @@ export async function runLocalAgentTurn(
     provider: {
       source: localAgent.providerSource,
       provider_id: localAgent.auragoProviderId,
-      model: localAgent.localProvider?.model,
+      model:
+        localAgent.providerSource === "ollama"
+          ? localAgent.ollamaProvider?.model
+          : localAgent.localProvider?.model,
     },
     tool_trace: toolTrace,
     started_at: startedAt,

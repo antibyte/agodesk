@@ -65,6 +65,7 @@ AuraGo accepts AgoDesk WebSocket messages up to 16 MiB. Desktop screenshot resul
 - `config.provider.oauth.complete` / `config.provider.oauth.status`: complete OAuth and return sanitized authorization status.
 - `config.provider.oauth.revoke`: delete stored OAuth tokens and return sanitized authorization status.
 - `desktop.command` / `desktop.result`: server-to-client command transport for screenshots, discovery, UI automation, browser CDP, permission requests, locally approved input/actions, locally approved file access, and locally enabled remote shell commands.
+- `vault.secret.prompt` / `vault.secret.submit` / `vault.secret.cancel` / `vault.secret.ack`: agent-driven secret entry for clients that advertise `vault.secret.prompt`. The server opens a masked input dialog on the client (`vault.secret.prompt`); the client returns the plaintext exactly once (`vault.secret.submit`) or cancels (`vault.secret.cancel`); the server writes it straight into the vault and closes the dialog (`vault.secret.ack`). The value MUST never appear in logs, tool traces, `agent.activity`, memory, journal, or `chat.response`. See [`AURAGO_VAULT_SECRET_PROMPT_HANDOFF.md`](./AURAGO_VAULT_SECRET_PROMPT_HANDOFF.md).
 
 ## Client Capabilities
 

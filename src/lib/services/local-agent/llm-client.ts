@@ -1,4 +1,4 @@
-import type { LocalAgentSettings } from "../../types/protocol";
+import { DEFAULT_OLLAMA_BASE_URL, type LocalAgentSettings } from "../../types/protocol";
 import type {
   LocalAgentLlmMessage,
   LocalAgentLlmToolCall,
@@ -26,6 +26,9 @@ export interface RunLlmStepOptions {
 export async function runLlmStep(options: RunLlmStepOptions): Promise<LlmStepResult> {
   if (options.settings.providerSource === "local") {
     return runLocalProviderStep(options);
+  }
+  if (options.settings.providerSource === "ollama") {
+    return runOllamaStep(options);
   }
   return runAuragoProxyStep(options);
 }
@@ -83,16 +86,54 @@ async function runLocalProviderStep(options: RunLlmStepOptions): Promise<LlmStep
   }
 
   const endpoint = `${provider.baseUrl.trim().replace(/\/+$/, "")}/chat/completions`;
-  const headers: Record<string, string> = { "Content-Type": "application/json" };
-  if (provider.apiKey.trim()) {
-    headers.Authorization = `Bearer ${provider.apiKey.trim()}`;
+  return runOpenAiCompatibleStep(options, {
+    endpoint,
+    model: provider.model.trim(),
+    apiKey: provider.apiKey.trim(),
+    label: "Lokaler Provider",
+  });
+}
+
+async function runOllamaStep(options: RunLlmStepOptions): Promise<LlmStepResult> {
+  const provider = options.settings.ollamaProvider;
+  if (!provider || !provider.model.trim()) {
+    throw new Error("Ollama-Modell ist nicht konfiguriert.");
   }
 
-  const response = await fetch(endpoint, {
+  const base = (provider.baseUrl.trim() || DEFAULT_OLLAMA_BASE_URL).replace(/\/+$/, "");
+  // Ollama exposes an OpenAI-compatible surface under /v1; append it unless the
+  // user already pointed the base URL at it.
+  const root = base.endsWith("/v1") ? base : `${base}/v1`;
+  return runOpenAiCompatibleStep(options, {
+    endpoint: `${root}/chat/completions`,
+    model: provider.model.trim(),
+    apiKey: "",
+    label: "Ollama",
+  });
+}
+
+interface OpenAiCompatibleConfig {
+  endpoint: string;
+  model: string;
+  apiKey: string;
+  label: string;
+}
+
+/** Shared OpenAI-compatible chat-completions call (local provider + Ollama). */
+async function runOpenAiCompatibleStep(
+  options: RunLlmStepOptions,
+  config: OpenAiCompatibleConfig,
+): Promise<LlmStepResult> {
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (config.apiKey) {
+    headers.Authorization = `Bearer ${config.apiKey}`;
+  }
+
+  const response = await fetch(config.endpoint, {
     method: "POST",
     headers,
     body: JSON.stringify({
-      model: provider.model.trim(),
+      model: config.model,
       messages: options.messages,
       ...(options.tools.length > 0 ? { tools: options.tools, tool_choice: "auto" } : {}),
     }),
@@ -101,7 +142,7 @@ async function runLocalProviderStep(options: RunLlmStepOptions): Promise<LlmStep
   if (!response.ok) {
     const detail = await response.text().catch(() => "");
     throw new Error(
-      `Lokaler Provider antwortete mit ${response.status}${detail ? `: ${detail.slice(0, 200)}` : ""}`,
+      `${config.label} antwortete mit ${response.status}${detail ? `: ${detail.slice(0, 200)}` : ""}`,
     );
   }
 

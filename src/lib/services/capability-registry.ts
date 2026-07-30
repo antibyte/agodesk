@@ -3,7 +3,14 @@
  * Used to keep protocol advertisement, risk metadata, and operation lists aligned.
  */
 
-export type CapabilityCategory = "chat" | "desktop" | "files" | "shell" | "provider" | "persona";
+export type CapabilityCategory =
+  | "chat"
+  | "desktop"
+  | "files"
+  | "shell"
+  | "provider"
+  | "persona"
+  | "vault";
 export type CapabilityRisk = "none" | "observe" | "read" | "write" | "execute" | "control";
 export type CapabilityApprovalMode = "none" | "once" | "per_command" | "per_session";
 export type CapabilityPlatform = "windows" | "linux" | "macos";
@@ -159,6 +166,22 @@ export const CAPABILITY_REGISTRY: readonly CapabilityDefinition[] = [
     approval_mode: "none",
     supported_platforms: ALL_PLATFORMS,
     operations: ["persona.assets.request"],
+  },
+  {
+    // Agent opens a masked input dialog; the user explicitly confirms each entry.
+    // The plaintext goes straight to the AuraGo vault and is never shown to the agent.
+    id: "vault.secret.prompt",
+    version: 1,
+    category: "vault",
+    risk: "write",
+    approval_mode: "once",
+    supported_platforms: ALL_PLATFORMS,
+    operations: [
+      "vault.secret.prompt",
+      "vault.secret.submit",
+      "vault.secret.cancel",
+      "vault.secret.ack",
+    ],
   },
 ] as const;
 

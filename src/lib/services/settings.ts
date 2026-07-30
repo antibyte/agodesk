@@ -18,6 +18,7 @@ import type {
 import {
   DEFAULT_FILE_ACCESS_SETTINGS,
   DEFAULT_LOCAL_AGENT_SETTINGS,
+  DEFAULT_OLLAMA_BASE_URL,
   DEFAULT_OPENPETS_SETTINGS,
   DEFAULT_SETTINGS,
   DEFAULT_SHELL_ACCESS_SETTINGS,
@@ -363,7 +364,11 @@ function normalizeLocalAgentSettings(
   }
 
   const providerSource: LocalAgentProviderSource =
-    saved.providerSource === "local" ? "local" : "aurago";
+    saved.providerSource === "local"
+      ? "local"
+      : saved.providerSource === "ollama"
+        ? "ollama"
+        : "aurago";
 
   const auragoProviderId =
     typeof saved.auragoProviderId === "string" && saved.auragoProviderId.trim().length > 0
@@ -382,6 +387,18 @@ function normalizeLocalAgentSettings(
         }
       : undefined;
 
+  const rawOllamaProvider = saved.ollamaProvider;
+  const ollamaProvider =
+    rawOllamaProvider && typeof rawOllamaProvider === "object"
+      ? {
+          baseUrl:
+            typeof rawOllamaProvider.baseUrl === "string" && rawOllamaProvider.baseUrl.trim()
+              ? rawOllamaProvider.baseUrl.trim()
+              : DEFAULT_OLLAMA_BASE_URL,
+          model: typeof rawOllamaProvider.model === "string" ? rawOllamaProvider.model.trim() : "",
+        }
+      : undefined;
+
   const maxSteps =
     typeof saved.maxSteps === "number" && Number.isFinite(saved.maxSteps) && saved.maxSteps > 0
       ? Math.min(20, Math.floor(saved.maxSteps))
@@ -392,6 +409,7 @@ function normalizeLocalAgentSettings(
     providerSource,
     ...(auragoProviderId ? { auragoProviderId } : {}),
     ...(localProvider ? { localProvider } : {}),
+    ...(ollamaProvider ? { ollamaProvider } : {}),
     maxSteps,
   };
 }

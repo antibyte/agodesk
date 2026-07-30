@@ -20,6 +20,7 @@
     AGODESK_CLIENT_VERSION,
     DEFAULT_FILE_ACCESS_SETTINGS,
     DEFAULT_LOCAL_AGENT_SETTINGS,
+    DEFAULT_OLLAMA_BASE_URL,
     DEFAULT_OPENPETS_SETTINGS,
     DEFAULT_SHELL_ACCESS_SETTINGS,
     DEFAULT_SPEECH_SETTINGS,
@@ -305,7 +306,12 @@
   let draftLocalAgentLocalBaseUrl = $state("");
   let draftLocalAgentLocalApiKey = $state("");
   let draftLocalAgentLocalModel = $state("");
+  let draftLocalAgentOllamaBaseUrl = $state(DEFAULT_OLLAMA_BASE_URL);
+  let draftLocalAgentOllamaModel = $state("");
   let draftLocalAgentMaxSteps = $state(DEFAULT_LOCAL_AGENT_SETTINGS.maxSteps);
+  let ollamaModelOptions = $state<string[]>([]);
+  let ollamaModelsLoading = $state(false);
+  let ollamaModelsError = $state("");
   let deviceId = $state<string | null>(null);
   let hostInfo = $state<HostInfo | null>(null);
   let dirty = $state(false);
@@ -576,6 +582,8 @@
       draftLocalAgentLocalBaseUrl = localAgent.localProvider?.baseUrl ?? "";
       draftLocalAgentLocalApiKey = localAgent.localProvider?.apiKey ?? "";
       draftLocalAgentLocalModel = localAgent.localProvider?.model ?? "";
+      draftLocalAgentOllamaBaseUrl = localAgent.ollamaProvider?.baseUrl ?? DEFAULT_OLLAMA_BASE_URL;
+      draftLocalAgentOllamaModel = localAgent.ollamaProvider?.model ?? "";
       draftLocalAgentMaxSteps = localAgent.maxSteps;
       // Prefer prop over draftLocale so this effect does not re-run on radio clicks.
       ttsTestSampleText = localTtsTestPhraseForAppLocale(locale);
@@ -1198,13 +1206,48 @@
     };
     const hasLocalProvider =
       localProvider.name || localProvider.baseUrl || localProvider.model || localProvider.apiKey;
+    const ollamaProvider = {
+      baseUrl: draftLocalAgentOllamaBaseUrl.trim() || DEFAULT_OLLAMA_BASE_URL,
+      model: draftLocalAgentOllamaModel.trim(),
+    };
+    const hasOllamaProvider = ollamaProvider.model.length > 0;
     return {
       enabled: draftLocalAgentEnabled,
       providerSource: draftLocalAgentProviderSource,
       ...(trimmedProviderId ? { auragoProviderId: trimmedProviderId } : {}),
       ...(hasLocalProvider ? { localProvider } : {}),
+      ...(hasOllamaProvider ? { ollamaProvider } : {}),
       maxSteps: draftLocalAgentMaxSteps,
     };
+  }
+
+  async function loadOllamaModels(): Promise<void> {
+    ollamaModelsError = "";
+    ollamaModelsLoading = true;
+    try {
+      const base = (draftLocalAgentOllamaBaseUrl.trim() || DEFAULT_OLLAMA_BASE_URL).replace(
+        /\/+$/,
+        "",
+      );
+      const root = base.endsWith("/v1") ? base.slice(0, -3) : base;
+      const response = await fetch(`${root}/api/tags`);
+      if (!response.ok) {
+        throw new Error(String(response.status));
+      }
+      const data = (await response.json()) as { models?: Array<{ name?: string }> };
+      const names = (data.models ?? [])
+        .map((entry) => (typeof entry?.name === "string" ? entry.name : ""))
+        .filter((name) => name.length > 0);
+      ollamaModelOptions = names;
+      if (names.length === 0) {
+        ollamaModelsError = $i18n("settings.localAgent.ollama.loadModels.empty");
+      }
+    } catch {
+      ollamaModelOptions = [];
+      ollamaModelsError = $i18n("settings.localAgent.ollama.loadModels.error");
+    } finally {
+      ollamaModelsLoading = false;
+    }
   }
 
   function discardChanges(): void {
@@ -3564,6 +3607,19 @@
                     />
                     <span>{$i18n("settings.localAgent.providerSource.local")}</span>
                   </label>
+                  <label class="radio-field">
+                    <input
+                      type="radio"
+                      name="localAgentProviderSource"
+                      value="ollama"
+                      checked={draftLocalAgentProviderSource === "ollama"}
+                      onchange={() => {
+                        draftLocalAgentProviderSource = "ollama";
+                        dirty = true;
+                      }}
+                    />
+                    <span>{$i18n("settings.localAgent.providerSource.ollama")}</span>
+                  </label>
                 </fieldset>
 
                 {#if draftLocalAgentProviderSource === "aurago"}
@@ -3580,7 +3636,7 @@
                     </select>
                   </label>
                   <p class="help">{$i18n("settings.localAgent.auragoProvider.help")}</p>
-                {:else}
+                {:else if draftLocalAgentProviderSource === "local"}
                   <label class="field">
                     <span>{$i18n("settings.localAgent.local.name")}</span>
                     <input
@@ -3615,6 +3671,47 @@
                     />
                   </label>
                   <p class="help">{$i18n("settings.localAgent.local.help")}</p>
+                {:else}
+                  <label class="field">
+                    <span>{$i18n("settings.localAgent.ollama.baseUrl")}</span>
+                    <input
+                      type="text"
+                      placeholder={DEFAULT_OLLAMA_BASE_URL}
+                      bind:value={draftLocalAgentOllamaBaseUrl}
+                      oninput={() => (dirty = true)}
+                    />
+                  </label>
+                  <label class="field">
+                    <span>{$i18n("settings.localAgent.ollama.model")}</span>
+                    <input
+                      type="text"
+                      list="ollama-model-options"
+                      placeholder={$i18n("settings.localAgent.ollama.model.placeholder")}
+                      bind:value={draftLocalAgentOllamaModel}
+                      oninput={() => (dirty = true)}
+                    />
+                    <datalist id="ollama-model-options">
+                      {#each ollamaModelOptions as model (model)}
+                        <option value={model}></option>
+                      {/each}
+                    </datalist>
+                  </label>
+                  <div class="field">
+                    <button
+                      type="button"
+                      class="ui-btn ui-btn-secondary"
+                      onclick={() => void loadOllamaModels()}
+                      disabled={ollamaModelsLoading}
+                    >
+                      {ollamaModelsLoading
+                        ? $i18n("settings.localAgent.ollama.loadModels.loading")
+                        : $i18n("settings.localAgent.ollama.loadModels")}
+                    </button>
+                    {#if ollamaModelsError}
+                      <p class="help error">{ollamaModelsError}</p>
+                    {/if}
+                  </div>
+                  <p class="help">{$i18n("settings.localAgent.ollama.help")}</p>
                 {/if}
 
                 <label class="field">
@@ -3958,6 +4055,10 @@
     border-radius: 0.5rem;
     border: 1px solid color-mix(in srgb, var(--color-accent) 35%, var(--color-border));
     background: color-mix(in srgb, var(--color-accent) 8%, var(--color-input-bg));
+  }
+
+  .help.error {
+    color: var(--color-danger);
   }
 
   .asr-download {

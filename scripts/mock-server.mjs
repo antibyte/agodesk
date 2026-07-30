@@ -462,6 +462,14 @@ wss.on("connection", (socket, request) => {
         handleConfigProviderOauthRevoke(message, session, send);
         break;
 
+      case "vault.secret.submit":
+        handleVaultSecretSubmit(message, session, send);
+        break;
+
+      case "vault.secret.cancel":
+        handleVaultSecretCancel(message, session, send);
+        break;
+
       case "desktop.result":
         console.log(
           "[desktop.result]",
@@ -577,6 +585,69 @@ function sendSessionClear(session, send, reason) {
     payload: {
       session_id: newSessionId,
       ...(reason ? { reason } : {}),
+    },
+  });
+}
+
+/**
+ * Simulate the AuraGo vault write. The plaintext value is intentionally NOT
+ * logged — only the fact that a secret was stored.
+ * @param {WsMessage} message
+ * @param {{ sessionId: string, pendingVaultSecret?: { requestId: string, vaultKey: string } }} session
+ * @param {(message: WsMessage) => void} send
+ */
+function handleVaultSecretSubmit(message, session, send) {
+  const requestId = String(message.payload?.request_id ?? "");
+  const vaultKey = String(message.payload?.vault_key ?? "");
+  const hasValue = typeof message.payload?.value === "string" && message.payload.value.length > 0;
+  console.log("[vault.secret.submit]", JSON.stringify({ request_id: requestId, vault_key: vaultKey, present: hasValue }));
+
+  const pending = session.pendingVaultSecret;
+  if (!pending || pending.requestId !== requestId) {
+    send({
+      id: randomUUID(),
+      type: "vault.secret.ack",
+      timestamp: new Date().toISOString(),
+      payload: {
+        session_id: session.sessionId,
+        request_id: requestId,
+        status: "error",
+        error_code: "VAULT_SECRET_TIMEOUT",
+      },
+    });
+    return;
+  }
+  session.pendingVaultSecret = null;
+  send({
+    id: randomUUID(),
+    type: "vault.secret.ack",
+    timestamp: new Date().toISOString(),
+    payload: {
+      session_id: session.sessionId,
+      request_id: requestId,
+      status: hasValue ? "stored" : "error",
+      ...(hasValue ? { vault_key: vaultKey || pending.vaultKey } : { error_code: "VAULT_WRITE_FAILED" }),
+    },
+  });
+}
+
+/**
+ * @param {WsMessage} message
+ * @param {{ sessionId: string, pendingVaultSecret?: { requestId: string } }} session
+ * @param {(message: WsMessage) => void} send
+ */
+function handleVaultSecretCancel(message, session, send) {
+  const requestId = String(message.payload?.request_id ?? "");
+  console.log("[vault.secret.cancel]", JSON.stringify({ request_id: requestId }));
+  session.pendingVaultSecret = null;
+  send({
+    id: randomUUID(),
+    type: "vault.secret.ack",
+    timestamp: new Date().toISOString(),
+    payload: {
+      session_id: session.sessionId,
+      request_id: requestId,
+      status: "cancelled",
     },
   });
 }
@@ -1048,6 +1119,36 @@ function handleChatMessage(message, session, send) {
 
   if (text.trim().toLowerCase() === "/newsession") {
     sendSessionClear(session, send, "Mock: neue Session gestartet (Chat-Verlauf gelöscht).");
+    return;
+  }
+
+  if (text.trim().toLowerCase().startsWith("/vault-secret")) {
+    const advertised = resolveAdvertisedCapabilities(session.clientCapabilities);
+    if (!advertised.includes("vault.secret.prompt")) {
+      sendSessionError(
+        send,
+        requestId,
+        "UNSUPPORTED_CAPABILITY",
+        "Client hat vault.secret.prompt nicht verhandelt.",
+      );
+      return;
+    }
+    // Optional custom key: "/vault-secret MY_KEY"
+    const parts = text.trim().split(/\s+/);
+    const vaultKey = parts[1] && /^[A-Z0-9_]{1,64}$/.test(parts[1]) ? parts[1] : "OPENAI_API_KEY";
+    const vaultRequestId = `vsreq-${randomUUID().slice(0, 8)}`;
+    session.pendingVaultSecret = { requestId: vaultRequestId, vaultKey };
+    send({
+      id: randomUUID(),
+      type: "vault.secret.prompt",
+      timestamp: new Date().toISOString(),
+      payload: {
+        session_id: session.sessionId,
+        request_id: vaultRequestId,
+        prompt: `Bitte gib deinen ${vaultKey} ein. (Mock-Agent)`,
+        vault_key: vaultKey,
+      },
+    });
     return;
   }
 

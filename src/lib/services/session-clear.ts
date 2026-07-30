@@ -7,6 +7,7 @@ import { normalizeSessionClearPayload } from "../types/protocol";
 import { clearRemoteControlState, resetDesktopCommandState } from "./desktop-flow";
 import { resetDesktopSession } from "./desktop";
 import { stopSpeechSession } from "./speech-flow";
+import { resetVaultSecretPrompt } from "./vault-secret-prompt-flow";
 
 export interface SessionClearApplyResult {
   sessionId: string;
@@ -23,6 +24,7 @@ export async function applySessionClear(payload: unknown): Promise<SessionClearA
   await resetDesktopSession().catch(() => {});
   resetDesktopCommandState();
   clearRemoteControlState();
+  resetVaultSecretPrompt();
   chatPlanState.reset();
   agentMoodState.reset();
 

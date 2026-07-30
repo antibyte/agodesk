@@ -83,6 +83,10 @@ export type MessageType =
   | "desktop.command"
   | "desktop.result"
   | "desktop.stream.frame"
+  | "vault.secret.prompt"
+  | "vault.secret.submit"
+  | "vault.secret.cancel"
+  | "vault.secret.ack"
   | "local.agent.remote_tool"
   | "local.agent.remote_tool.result"
   | "local.agent.handoff"
@@ -338,6 +342,46 @@ export interface KnowledgeArchiveStatusPayload {
   chunk_count?: number;
   title?: string;
 }
+
+/**
+ * Agent-driven secret entry. The server opens a masked input dialog on the
+ * client; the plaintext is returned exactly once via `vault.secret.submit` and
+ * written straight into the AuraGo vault. The agent/LLM never sees the value.
+ */
+export interface VaultSecretPromptPayload {
+  session_id: string;
+  request_id: string;
+  /** Free text set by the agent, shown above the input field. */
+  prompt: string;
+  /** Target vault key (e.g. OPENAI_API_KEY). A display label, not a secret. */
+  vault_key: string;
+}
+
+export interface VaultSecretSubmitPayload {
+  session_id: string;
+  request_id: string;
+  vault_key: string;
+  /** Plaintext secret — the only place it is transported. Never logged. */
+  value: string;
+}
+
+export interface VaultSecretCancelPayload {
+  session_id: string;
+  request_id: string;
+}
+
+export type VaultSecretAckStatus = "stored" | "cancelled" | "error";
+
+export interface VaultSecretAckPayload {
+  session_id: string;
+  request_id: string;
+  status: VaultSecretAckStatus;
+  vault_key?: string;
+  error_code?: string;
+}
+
+/** Max prompt length shown in the dialog; longer prompts are truncated. */
+export const VAULT_SECRET_PROMPT_MAX_CHARS = 2000;
 
 export interface ChatMessagePayload {
   session_id: string;
@@ -1655,6 +1699,53 @@ export function normalizeKnowledgeArchiveStatusPayload(
     ...(error ? { error } : {}),
     ...(chunkCount !== undefined ? { chunk_count: chunkCount } : {}),
     ...(title ? { title } : {}),
+  };
+}
+
+export function normalizeVaultSecretPromptPayload(
+  payload: unknown,
+): VaultSecretPromptPayload | null {
+  if (!payload || typeof payload !== "object") {
+    return null;
+  }
+  const record = payload as Record<string, unknown>;
+  const sessionId = readString(record, "session_id", "sessionId");
+  const requestId = readString(record, "request_id", "requestId");
+  const vaultKey = readString(record, "vault_key", "vaultKey");
+  if (!sessionId || !requestId || !vaultKey) {
+    return null;
+  }
+  const promptRaw = readString(record, "prompt") ?? "";
+  const prompt = promptRaw.slice(0, VAULT_SECRET_PROMPT_MAX_CHARS);
+  return {
+    session_id: sessionId,
+    request_id: requestId,
+    prompt,
+    vault_key: vaultKey,
+  };
+}
+
+export function normalizeVaultSecretAckPayload(payload: unknown): VaultSecretAckPayload | null {
+  if (!payload || typeof payload !== "object") {
+    return null;
+  }
+  const record = payload as Record<string, unknown>;
+  const sessionId = readString(record, "session_id", "sessionId");
+  const requestId = readString(record, "request_id", "requestId");
+  const statusRaw = readString(record, "status");
+  const validStatuses: VaultSecretAckStatus[] = ["stored", "cancelled", "error"];
+  const status = validStatuses.find((candidate) => candidate === statusRaw);
+  if (!sessionId || !requestId || !status) {
+    return null;
+  }
+  const vaultKey = readString(record, "vault_key", "vaultKey");
+  const errorCode = readString(record, "error_code", "errorCode");
+  return {
+    session_id: sessionId,
+    request_id: requestId,
+    status,
+    ...(vaultKey ? { vault_key: vaultKey } : {}),
+    ...(errorCode ? { error_code: errorCode } : {}),
   };
 }
 
@@ -3149,7 +3240,7 @@ export const DEFAULT_FILE_ACCESS_SETTINGS: FileAccessSettings = {
   roots: [],
 };
 
-export type LocalAgentProviderSource = "aurago" | "local";
+export type LocalAgentProviderSource = "aurago" | "local" | "ollama";
 
 export interface LocalAgentLocalProvider {
   name: string;
@@ -3158,15 +3249,28 @@ export interface LocalAgentLocalProvider {
   model: string;
 }
 
+/** Lokale Ollama-Instanz (nutzt den OpenAI-kompatiblen Endpunkt `/v1`). */
+export interface LocalAgentOllamaProvider {
+  /** Basis-URL der Ollama-Instanz, z. B. `http://localhost:11434`. */
+  baseUrl: string;
+  /** Ollama-Modellname, z. B. `llama3.1`. */
+  model: string;
+}
+
+/** Standard-Basis-URL einer lokalen Ollama-Installation. */
+export const DEFAULT_OLLAMA_BASE_URL = "http://localhost:11434";
+
 export interface LocalAgentSettings {
   /** Lokalen Agenten aktivieren (übernimmt Chat-Turns lokal). */
   enabled: boolean;
-  /** LLM-Quelle: AuraGo-Providerkatalog oder lokal angelegter Provider. */
+  /** LLM-Quelle: AuraGo-Providerkatalog, lokaler Provider oder Ollama. */
   providerSource: LocalAgentProviderSource;
   /** Ausgewählter AuraGo-Provider (nur bei providerSource="aurago"). */
   auragoProviderId?: string;
   /** Lokal angelegter Provider (nur bei providerSource="local"). */
   localProvider?: LocalAgentLocalProvider;
+  /** Ollama-Instanz (nur bei providerSource="ollama"). */
+  ollamaProvider?: LocalAgentOllamaProvider;
   /** Maximale Anzahl Tool-Iterationen pro Turn. */
   maxSteps: number;
 }
@@ -3303,6 +3407,7 @@ export const AGODESK_CHAT_ATTACHMENTS_CAPABILITY = "chat.attachments";
 export const AGODESK_KNOWLEDGE_ARCHIVE_UPLOAD_CAPABILITY = "knowledge.archive.upload";
 export const AGODESK_INTEGRATIONS_WEBHOSTS_CAPABILITY = "integrations.webhosts";
 export const AGODESK_SYSTEM_WARNINGS_CAPABILITY = "system.warnings";
+export const AGODESK_VAULT_SECRET_PROMPT_CAPABILITY = "vault.secret.prompt";
 export {
   AGODESK_CONFIG_PROVIDERS_READ_CAPABILITY,
   AGODESK_CONFIG_PROVIDERS_WRITE_CAPABILITY,
@@ -3325,6 +3430,7 @@ export const AGODESK_BASE_CAPABILITIES = [
   AGODESK_KNOWLEDGE_ARCHIVE_UPLOAD_CAPABILITY,
   AGODESK_INTEGRATIONS_WEBHOSTS_CAPABILITY,
   AGODESK_SYSTEM_WARNINGS_CAPABILITY,
+  AGODESK_VAULT_SECRET_PROMPT_CAPABILITY,
   AGODESK_CONFIG_PROVIDERS_READ_CAPABILITY,
   AGODESK_CONFIG_PROVIDERS_WRITE_CAPABILITY,
   AGODESK_CONFIG_PROVIDERS_OAUTH_CAPABILITY,
@@ -3359,6 +3465,7 @@ export const AGODESK_CLIENT_CAPABILITIES = [
   AGODESK_KNOWLEDGE_ARCHIVE_UPLOAD_CAPABILITY,
   AGODESK_INTEGRATIONS_WEBHOSTS_CAPABILITY,
   AGODESK_SYSTEM_WARNINGS_CAPABILITY,
+  AGODESK_VAULT_SECRET_PROMPT_CAPABILITY,
   AGODESK_CONFIG_PROVIDERS_READ_CAPABILITY,
   AGODESK_CONFIG_PROVIDERS_WRITE_CAPABILITY,
   AGODESK_CONFIG_PROVIDERS_OAUTH_CAPABILITY,
@@ -3623,6 +3730,10 @@ export function hasAdvertisedKnowledgeArchiveUpload(capabilities: readonly strin
   return hasAdvertisedCapability(capabilities, AGODESK_KNOWLEDGE_ARCHIVE_UPLOAD_CAPABILITY);
 }
 
+export function hasAdvertisedVaultSecretPrompt(capabilities: readonly string[]): boolean {
+  return hasAdvertisedCapability(capabilities, AGODESK_VAULT_SECRET_PROMPT_CAPABILITY);
+}
+
 /** Server must advertise upload + attachments before chat.message with files works. */
 export function canUseChatAttachments(capabilities: readonly string[]): boolean {
   return hasAdvertisedChatMediaUpload(capabilities) && hasAdvertisedChatAttachments(capabilities);
@@ -3757,6 +3868,7 @@ export function agodeskClientCapabilities(
     AGODESK_KNOWLEDGE_ARCHIVE_UPLOAD_CAPABILITY,
     AGODESK_INTEGRATIONS_WEBHOSTS_CAPABILITY,
     AGODESK_SYSTEM_WARNINGS_CAPABILITY,
+    AGODESK_VAULT_SECRET_PROMPT_CAPABILITY,
     AGODESK_CONFIG_PROVIDERS_READ_CAPABILITY,
     AGODESK_CONFIG_PROVIDERS_WRITE_CAPABILITY,
     AGODESK_CONFIG_PROVIDERS_OAUTH_CAPABILITY,

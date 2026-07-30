@@ -17,7 +17,7 @@ export function toRfc3339(date: Date = new Date()): string {
 }
 
 export interface LocalAgentProviderInfo {
-  source: "aurago" | "local";
+  source: "aurago" | "local" | "ollama";
   provider_id?: string;
   model?: string;
 }

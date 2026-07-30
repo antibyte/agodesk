@@ -9,6 +9,7 @@
   import PairingBanner from "./PairingBanner.svelte";
   import RemoteControlBanner from "./RemoteControlBanner.svelte";
   import ShellApprovalBanner from "./ShellApprovalBanner.svelte";
+  import VaultSecretPromptModal from "./VaultSecretPromptModal.svelte";
   import UpdateBanner from "./UpdateBanner.svelte";
   import ChatPlanFloatingPanel from "./ChatPlanFloatingPanel.svelte";
   import ActivityTimelinePanel from "./ActivityTimelinePanel.svelte";
@@ -54,6 +55,7 @@
     stopActiveChatRequest,
   } from "../services/chat-outbound";
   import { addFilesToKnowledgeArchive } from "../services/knowledge-archive-flow";
+  import { cancelVaultSecret, submitVaultSecret } from "../services/vault-secret-prompt-flow";
   import { localAgentReady, localAgentTurnActive } from "../services/local-agent";
   import {
     createNewChatConversation,
@@ -1401,6 +1403,11 @@
       />
     </div>
   {/if}
+
+  <VaultSecretPromptModal
+    onSubmit={(secret: string) => void submitVaultSecret((m: WsMessage) => wsService.send(m), secret)}
+    onCancel={() => void cancelVaultSecret((m: WsMessage) => wsService.send(m))}
+  />
 
   {#if CertificateTrustModalLazy}
     <CertificateTrustModalLazy

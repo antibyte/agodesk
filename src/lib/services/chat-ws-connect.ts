@@ -6,6 +6,7 @@ import { stopSpeechSession } from "./speech-flow";
 import { chatPlanState } from "../stores/chat-plan";
 import { agentMoodState } from "../stores/agent-mood";
 import { resetChatConversationRuntimeState } from "./chat-conversation-flow";
+import { resetVaultSecretPrompt } from "./vault-secret-prompt-flow";
 import { WebSocketService, type ErrorHandler } from "./websocket";
 import type { ClientErrorCode, WsMessage } from "../types/protocol";
 import { isTlsFatalError } from "../types/protocol";
@@ -24,6 +25,7 @@ export async function resetChatSessionState(): Promise<void> {
   resetDesktopCommandState();
   clearRemoteControlState();
   clearPersonaAssets();
+  resetVaultSecretPrompt();
   sessionState.reset();
   chatPlanState.reset();
   agentMoodState.reset();

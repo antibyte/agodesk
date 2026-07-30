@@ -833,7 +833,9 @@
     padding: 0.55rem 0.75rem;
     border: none;
     background: transparent;
+    /* Explicit fill — WebView2 otherwise paints ButtonText (often black). */
     color: var(--color-text);
+    -webkit-text-fill-color: var(--color-text);
     text-align: left;
     cursor: pointer;
   }
@@ -848,6 +850,7 @@
     opacity: 0.85;
     font-size: 0.75rem;
     color: var(--color-muted);
+    -webkit-text-fill-color: var(--color-muted);
   }
 
   .provider-toggle-main {
@@ -860,7 +863,8 @@
   .provider-toggle-name {
     font-weight: 600;
     font-size: 0.92rem;
-    color: var(--color-text-strong, var(--color-text));
+    color: var(--color-text);
+    -webkit-text-fill-color: var(--color-text);
   }
 
   .provider-toggle-meta {

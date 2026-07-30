@@ -40,6 +40,10 @@ import {
   handleKnowledgeArchiveStatusMessage,
   rejectAnyPendingKnowledgeArchive,
 } from "./knowledge-archive-flow";
+import {
+  handleVaultSecretAckMessage,
+  handleVaultSecretPromptMessage,
+} from "./vault-secret-prompt-flow";
 import { clearAttachmentPathCache } from "./chat-attachment-paths";
 import { bootstrapAgodeskFeatures } from "./agodesk-features-bootstrap";
 import { handleIntegrationsWebhostsMessage } from "./integrations-flow";
@@ -79,6 +83,8 @@ import {
   isChatSessions,
   isChatVoiceOutputStatus,
   isDesktopCommand,
+  isVaultSecretPrompt,
+  isVaultSecretAck,
   isIntegrationsWebhosts,
   isConfigProviders,
   isConfigProvider,
@@ -441,6 +447,16 @@ export async function handleChatWsMessage(
 
   if (isKnowledgeArchiveStatus(message)) {
     handleKnowledgeArchiveStatusMessage(message.payload);
+    return;
+  }
+
+  if (isVaultSecretPrompt(message)) {
+    handleVaultSecretPromptMessage(message);
+    return;
+  }
+
+  if (isVaultSecretAck(message)) {
+    handleVaultSecretAckMessage(message.payload);
     return;
   }
 
