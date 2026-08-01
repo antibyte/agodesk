@@ -141,17 +141,26 @@ export async function listWindowsOnDisplay(displayId: string): Promise<WindowInf
   return windows.filter((window) => window.display_id === displayId);
 }
 
+export async function setScreenCaptureApproval(approved: boolean): Promise<void> {
+  await invoke("set_screen_capture_approval", { approved });
+}
+
 export async function captureScreen(
   options: CaptureScreenshotParams = {},
 ): Promise<CaptureScreenshotResult> {
-  return invoke<CaptureScreenshotResult>("capture_screen", {
-    options: {
-      displayId: options.display_id,
-      windowId: options.window_id,
-      format: options.format,
-      quality: options.quality,
-    },
-  });
+  await setScreenCaptureApproval(true);
+  try {
+    return await invoke<CaptureScreenshotResult>("capture_screen", {
+      options: {
+        displayId: options.display_id,
+        windowId: options.window_id,
+        format: options.format,
+        quality: options.quality,
+      },
+    });
+  } finally {
+    await setScreenCaptureApproval(false).catch(() => {});
+  }
 }
 
 export async function captureDisplay(
@@ -1058,7 +1067,11 @@ export async function executeDesktopCommand(
     const message = error instanceof Error ? error.message : "Desktop command failed.";
     result.error = message;
     if (!result.error_code) {
-      result.error_code = "DESKTOP_OPERATION_UNSUPPORTED";
+      const code = message.split(":")[0]?.trim();
+      result.error_code =
+        code === "DESKTOP_CAPTURE_NOT_APPROVED"
+          ? "DESKTOP_CAPTURE_NOT_APPROVED"
+          : "DESKTOP_OPERATION_UNSUPPORTED";
     }
   }
 

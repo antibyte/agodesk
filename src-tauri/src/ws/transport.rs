@@ -84,6 +84,7 @@ pub async fn fetch_server_asset(
     pinned_fingerprint: Option<String>,
     device_id: Option<String>,
     session_id: Option<String>,
+    allowed_origins: Option<Vec<String>>,
 ) -> Result<crate::ws::asset_fetch::FetchedAsset, String> {
     if server_url.trim().is_empty() {
         return Err("serverUrl is required.".to_string());
@@ -91,6 +92,7 @@ pub async fn fetch_server_asset(
     if asset_url.trim().is_empty() {
         return Err("assetUrl is required.".to_string());
     }
+    let allowed_origins = allowed_origins.unwrap_or_default();
     tokio::task::spawn_blocking(move || {
         crate::ws::asset_fetch::fetch_server_asset_impl(
             &app,
@@ -99,6 +101,7 @@ pub async fn fetch_server_asset(
             pinned_fingerprint.as_deref(),
             device_id.as_deref(),
             session_id.as_deref(),
+            &allowed_origins,
         )
     })
     .await

@@ -7,6 +7,7 @@ import { resolvePersonaAssetUrl } from "../types/protocol";
 import { formatInvokeError } from "./errors";
 
 import { sessionState } from "../stores/session";
+import { settings } from "../stores/settings";
 
 import {
   buildAttachmentMediaPath,
@@ -252,12 +253,14 @@ export async function fetchServerAssetDataUrl(
     }
   }
   const auth = readAssetFetchAuth();
+  const allowedOrigins = get(settings).assetFetchAllowedOrigins ?? [];
   const { invoke } = await import("@tauri-apps/api/core");
   return invoke<FetchedServerAsset>("fetch_server_asset", {
     serverUrl,
     assetUrl,
     ...auth,
     ...(pinnedFingerprint ? { pinnedFingerprint } : {}),
+    ...(allowedOrigins.length > 0 ? { allowedOrigins } : {}),
   });
 }
 

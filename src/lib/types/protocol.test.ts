@@ -378,8 +378,10 @@ test("agodeskClientCapabilities enthaelt remote.desktop.stream", () => {
   assert.ok(agodeskClientCapabilities(true).includes("remote.desktop.stream"));
 });
 
-test("requiresRemoteControlBanner ohne Screenshot und UI-Tree", () => {
-  assert.equal(requiresRemoteControlBanner("desktop_screenshot"), false);
+test("requiresRemoteControlBanner fuer Screenshot/Stream und Input", () => {
+  assert.equal(requiresRemoteControlBanner("desktop_screenshot"), true);
+  assert.equal(requiresRemoteControlBanner("desktop_stream_start"), true);
+  assert.equal(requiresRemoteControlBanner("desktop_stream_stop"), true);
   assert.equal(requiresRemoteControlBanner("desktop_ui_tree"), false);
   assert.equal(requiresRemoteControlBanner("desktop_input"), true);
   assert.equal(requiresRemoteControlBanner("desktop_ui_action"), true);

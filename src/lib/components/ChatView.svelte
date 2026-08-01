@@ -1173,6 +1173,7 @@
         showWindowHotkey={$settings.showWindowHotkey}
         speechHotkey={$settings.speechHotkey}
         desktopControlEnabled={$settings.desktopControlEnabled}
+        assetFetchAllowedOrigins={$settings.assetFetchAllowedOrigins}
         browserControlEnabled={$settings.browserControlEnabled}
         pageAgentEnabled={$settings.pageAgentEnabled}
         pageAgentStartUrl={$settings.pageAgentStartUrl}

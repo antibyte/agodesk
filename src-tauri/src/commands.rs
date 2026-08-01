@@ -8,10 +8,11 @@ use crate::computer_use::{
     perform_ui_action as computer_use_ui_action, ui_tree_for_window as computer_use_ui_tree,
 };
 use crate::desktop::{
-    capture_screen as desktop_capture_screen, inject_input_checked,
-    list_displays as desktop_list_displays, list_windows as desktop_list_windows,
-    permission_status as desktop_permission_status, set_input_approved, CaptureResult,
-    CaptureScreenOptions, ControlPermissionStatus, DisplayInfo, InputEvent, WindowInfo,
+    capture_screen as desktop_capture_screen, clear_desktop_approvals, inject_input_checked,
+    is_screen_capture_approved, list_displays as desktop_list_displays,
+    list_windows as desktop_list_windows, permission_status as desktop_permission_status,
+    set_input_approved, set_screen_capture_approved, CaptureResult, CaptureScreenOptions,
+    ControlPermissionStatus, DisplayInfo, InputEvent, WindowInfo,
 };
 use crate::speech::sidecar_client::dispatch_speech_op;
 use base64::Engine as _;
@@ -1682,6 +1683,11 @@ pub fn list_windows() -> Result<Vec<WindowInfo>, String> {
 
 #[tauri::command]
 pub fn capture_screen(options: CaptureScreenOptions) -> Result<CaptureResult, String> {
+    if !is_screen_capture_approved()? {
+        return Err(
+            "DESKTOP_CAPTURE_NOT_APPROVED: Screen capture requires an active approval.".to_string(),
+        );
+    }
     desktop_capture_screen(options)
 }
 
@@ -1701,13 +1707,62 @@ pub fn set_input_approval(approved: bool) -> Result<(), String> {
 }
 
 #[tauri::command]
+pub fn set_screen_capture_approval(approved: bool) -> Result<(), String> {
+    set_screen_capture_approved(approved)
+}
+
+#[tauri::command]
 pub fn reset_desktop_session() -> Result<(), String> {
-    set_input_approved(false)
+    clear_desktop_approvals()
+}
+
+fn is_allowed_external_url(url: &str) -> bool {
+    let trimmed = url.trim();
+    let Some((scheme, rest)) = trimmed.split_once(':') else {
+        return false;
+    };
+    if rest.starts_with("//") {
+        // hierarchical: https://… / http://…
+    } else if scheme.eq_ignore_ascii_case("mailto") {
+        return !rest.is_empty();
+    } else {
+        return false;
+    }
+    matches!(
+        scheme.to_ascii_lowercase().as_str(),
+        "https" | "http" | "mailto"
+    )
 }
 
 #[tauri::command]
 pub fn open_external_url(url: String) -> Result<(), String> {
+    if !is_allowed_external_url(&url) {
+        return Err(
+            "EXTERNAL_URL_DENIED: Only http, https, and mailto URLs are allowed.".to_string(),
+        );
+    }
     open::that(&url).map_err(|error| error.to_string())
+}
+
+#[cfg(test)]
+mod open_external_url_tests {
+    use super::is_allowed_external_url;
+
+    #[test]
+    fn allows_http_https_mailto() {
+        assert!(is_allowed_external_url("https://example.com/a"));
+        assert!(is_allowed_external_url("http://127.0.0.1:8080"));
+        assert!(is_allowed_external_url("mailto:user@example.com"));
+    }
+
+    #[test]
+    fn denies_dangerous_schemes() {
+        assert!(!is_allowed_external_url("file:///C:/secret.txt"));
+        assert!(!is_allowed_external_url("javascript:alert(1)"));
+        assert!(!is_allowed_external_url("data:text/html,hi"));
+        assert!(!is_allowed_external_url("ms-settings:privacy"));
+        assert!(!is_allowed_external_url("not a url"));
+    }
 }
 
 #[tauri::command]

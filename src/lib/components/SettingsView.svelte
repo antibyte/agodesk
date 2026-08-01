@@ -153,6 +153,7 @@
     | "showWindowHotkey"
     | "speechHotkey"
     | "desktopControlEnabled"
+    | "assetFetchAllowedOrigins"
     | "browserControlEnabled"
     | "pageAgentEnabled"
     | "pageAgentStartUrl"
@@ -200,6 +201,7 @@
     showWindowHotkey?: string;
     speechHotkey?: string;
     desktopControlEnabled?: boolean;
+    assetFetchAllowedOrigins?: string[];
     browserControlEnabled?: boolean;
     pageAgentEnabled?: boolean;
     pageAgentStartUrl?: string;
@@ -238,6 +240,7 @@
     showWindowHotkey = "Alt+Shift+G",
     speechHotkey = DEFAULT_SPEECH_HOTKEY,
     desktopControlEnabled = true,
+    assetFetchAllowedOrigins = [],
     browserControlEnabled = false,
     pageAgentEnabled = false,
     pageAgentStartUrl = "about:blank",
@@ -275,6 +278,7 @@
   let draftShowWindowHotkey = $state("Alt+Shift+G");
   let draftSpeechHotkey = $state(DEFAULT_SPEECH_HOTKEY);
   let draftDesktopControlEnabled = $state(true);
+  let draftAssetFetchAllowedOriginsText = $state("");
   let draftBrowserControlEnabled = $state(false);
   let draftPageAgentEnabled = $state(false);
   let draftPageAgentStartUrl = $state("about:blank");
@@ -559,6 +563,7 @@
       draftShowWindowHotkey = showWindowHotkey;
       draftSpeechHotkey = speechHotkey;
       draftDesktopControlEnabled = desktopControlEnabled;
+      draftAssetFetchAllowedOriginsText = assetFetchAllowedOrigins.join("\n");
       draftBrowserControlEnabled = browserControlEnabled;
       draftPageAgentEnabled = pageAgentEnabled;
       draftPageAgentStartUrl = pageAgentStartUrl;
@@ -1178,6 +1183,10 @@
       showWindowHotkey: draftShowWindowHotkey.trim(),
       speechHotkey: draftSpeechHotkey.trim(),
       desktopControlEnabled: draftDesktopControlEnabled,
+      assetFetchAllowedOrigins: draftAssetFetchAllowedOriginsText
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter(Boolean),
       browserControlEnabled: draftBrowserControlEnabled,
       pageAgentEnabled: draftPageAgentEnabled,
       pageAgentStartUrl: normalizePageAgentStartUrl(draftPageAgentStartUrl),
@@ -1744,6 +1753,18 @@
               </label>
 
               <p class="help">{$i18n("settings.connection.serverUrl.help")}</p>
+
+              <label class="field">
+                <span class="field-label">{$i18n("settings.connection.assetAllowlist.label")}</span>
+                <textarea
+                  class="ui-input"
+                  rows="3"
+                  bind:value={draftAssetFetchAllowedOriginsText}
+                  oninput={markDirty}
+                  placeholder={$i18n("settings.connection.assetAllowlist.placeholder")}
+                ></textarea>
+              </label>
+              <p class="help">{$i18n("settings.connection.assetAllowlist.help")}</p>
 
               <div class="preset-grid">
                 {#each SERVER_PRESETS as preset (preset.id)}

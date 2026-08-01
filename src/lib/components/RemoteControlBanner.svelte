@@ -26,6 +26,9 @@
     switch (operation) {
       case "desktop_screenshot":
         return $i18n("remoteControl.operation.screenshot");
+      case "desktop_stream_start":
+      case "desktop_stream_stop":
+        return $i18n("remoteControl.operation.screenshot");
       case "desktop_input":
         return $i18n("remoteControl.operation.input");
       case "desktop_ui_tree":

@@ -2369,6 +2369,7 @@ export type DesktopErrorCode =
   | "DESKTOP_SESSION_NOT_APPROVED"
   | "DESKTOP_INPUT_NOT_APPROVED"
   | "DESKTOP_INPUT_DENIED"
+  | "DESKTOP_CAPTURE_NOT_APPROVED"
   | "DESKTOP_STREAM_UNSUPPORTED"
   | "DESKTOP_STREAM_NOT_ACTIVE"
   | "DESKTOP_OPERATION_UNSUPPORTED"
@@ -2885,7 +2886,10 @@ export function requiresRemoteControlBanner(operation: string, params?: unknown)
   }
   return (
     (DESKTOP_INPUT_OPERATIONS as readonly string[]).includes(operation) ||
-    operation === "desktop_permission_request"
+    operation === "desktop_permission_request" ||
+    operation === "desktop_screenshot" ||
+    operation === "desktop_stream_start" ||
+    operation === "desktop_stream_stop"
   );
 }
 
@@ -3299,6 +3303,11 @@ export interface AppSettings {
   speechHotkey: string;
   /** Screenshots und Remote-Eingaben über desktop.command erlauben. */
   desktopControlEnabled: boolean;
+  /**
+   * Extra HTTP(S)-Origins für `fetch_server_asset` neben der Server-Origin.
+   * Ein Eintrag pro Origin, z. B. `https://cdn.example.com`.
+   */
+  assetFetchAllowedOrigins: string[];
   /** Browser-Automatisierung (CDP) separat freigeben. */
   browserControlEnabled: boolean;
   /**
@@ -3342,6 +3351,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   showWindowHotkey: "Alt+Shift+G",
   speechHotkey: "Alt+Shift+M",
   desktopControlEnabled: true,
+  assetFetchAllowedOrigins: [],
   browserControlEnabled: true,
   pageAgentEnabled: false,
   pageAgentStartUrl: "about:blank",

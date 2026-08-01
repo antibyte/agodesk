@@ -128,6 +128,7 @@ pub fn run() {
             commands::control_permission_status,
             commands::inject_input,
             commands::set_input_approval,
+            commands::set_screen_capture_approval,
             commands::reset_desktop_session,
             commands::get_active_window,
             commands::get_ui_tree,

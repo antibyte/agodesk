@@ -460,6 +460,7 @@ export function normalizeAppSettings(saved: Partial<AppSettings> | null | undefi
       typeof saved?.desktopControlEnabled === "boolean"
         ? saved.desktopControlEnabled
         : DEFAULT_SETTINGS.desktopControlEnabled,
+    assetFetchAllowedOrigins: normalizeAssetFetchAllowedOrigins(saved?.assetFetchAllowedOrigins),
     browserControlEnabled:
       typeof saved?.browserControlEnabled === "boolean"
         ? saved.browserControlEnabled
@@ -489,6 +490,30 @@ export function normalizeAppSettings(saved: Partial<AppSettings> | null | undefi
         ? saved.onboardingCompleted
         : DEFAULT_SETTINGS.onboardingCompleted,
   };
+}
+
+function normalizeAssetFetchAllowedOrigins(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [...DEFAULT_SETTINGS.assetFetchAllowedOrigins];
+  }
+  const seen = new Set<string>();
+  const origins: string[] = [];
+  for (const entry of value) {
+    if (typeof entry !== "string") {
+      continue;
+    }
+    const trimmed = entry.trim();
+    if (!trimmed) {
+      continue;
+    }
+    const key = trimmed.toLowerCase();
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    origins.push(trimmed);
+  }
+  return origins;
 }
 
 function normalizeChatTtsMode(value: unknown): ChatTtsMode {

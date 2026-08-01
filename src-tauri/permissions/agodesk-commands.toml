@@ -42,6 +42,7 @@ commands.allow = [
   "control_permission_status",
   "inject_input",
   "set_input_approval",
+  "set_screen_capture_approval",
   "reset_desktop_session",
   "get_active_window",
   "get_ui_tree",

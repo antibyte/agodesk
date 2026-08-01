@@ -93,13 +93,9 @@ pub fn is_local_network_ip(ip: std::net::IpAddr) -> bool {
     }
 }
 
-pub fn determine_asset_tls_mode(host: &str, pinned_fingerprint: Option<&str>) -> TlsMode {
-    if is_homelab_host(host) {
-        if pinned_fingerprint.is_some() {
-            return TlsMode::PinnedSelfSignedDev;
-        }
-        return TlsMode::InsecureLoopbackDev;
-    }
+pub fn determine_asset_tls_mode(_host: &str, pinned_fingerprint: Option<&str>) -> TlsMode {
+    // Align with WS: never silently accept invalid certs on LAN/homelab without a pin.
+    // User confirms once via CertificateTrustModal → pin → PinnedSelfSignedDev.
     if pinned_fingerprint.is_some() {
         return TlsMode::PinnedSelfSignedDev;
     }
@@ -387,10 +383,10 @@ mod tests {
     }
 
     #[test]
-    fn determine_asset_tls_mode_allows_insecure_on_lan_without_pin() {
+    fn determine_asset_tls_mode_uses_system_on_lan_without_pin() {
         assert_eq!(
             determine_asset_tls_mode("192.168.1.10", None),
-            TlsMode::InsecureLoopbackDev
+            TlsMode::System
         );
     }
 
@@ -402,10 +398,18 @@ mod tests {
     }
 
     #[test]
-    fn determine_asset_tls_mode_allows_insecure_on_tailscale_without_pin() {
+    fn determine_asset_tls_mode_uses_system_on_tailscale_without_pin() {
         assert_eq!(
             determine_asset_tls_mode("aurago-manifest.taild1480.ts.net", None),
-            TlsMode::InsecureLoopbackDev
+            TlsMode::System
+        );
+    }
+
+    #[test]
+    fn determine_asset_tls_mode_uses_pin_when_present() {
+        assert_eq!(
+            determine_asset_tls_mode("192.168.1.10", Some("ABC123")),
+            TlsMode::PinnedSelfSignedDev
         );
     }
 }

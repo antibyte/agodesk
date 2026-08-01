@@ -31,8 +31,10 @@ pub fn fetch_server_asset_impl(
     pinned_fingerprint_override: Option<&str>,
     _device_id: Option<&str>,
     _session_id: Option<&str>,
+    allowed_origins: &[String],
 ) -> Result<FetchedAsset, String> {
     let asset = Url::parse(asset_url).map_err(|error| error.to_string())?;
+    ensure_asset_origin_allowed(&asset, server_url, allowed_origins)?;
 
     let mut current_url = asset;
     let mut redirects = 0usize;
@@ -85,6 +87,7 @@ pub fn fetch_server_asset_impl(
                     ));
                 }
                 current_url = resolve_redirect_url(&current_url, &location)?;
+                ensure_asset_origin_allowed(&current_url, server_url, allowed_origins)?;
                 redirects += 1;
             }
             Err(FetchError::Failed(message)) => {
@@ -331,6 +334,44 @@ fn resolve_redirect_url(base: &Url, location: &str) -> Result<Url, String> {
     Url::parse(location)
         .or_else(|_| base.join(location))
         .map_err(|error| format!("Invalid redirect location: {error}"))
+}
+
+fn normalize_allowed_origin(raw: &str) -> Result<String, String> {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return Err("Empty allowed origin.".to_string());
+    }
+    let url = if trimmed.contains("://") {
+        Url::parse(trimmed).map_err(|error| error.to_string())?
+    } else {
+        Url::parse(&format!("https://{trimmed}")).map_err(|error| error.to_string())?
+    };
+    if url.scheme() != "http" && url.scheme() != "https" {
+        return Err(format!("Unsupported allowlist scheme: {}", url.scheme()));
+    }
+    http_origin_from_url(&url)
+}
+
+fn ensure_asset_origin_allowed(
+    asset_url: &Url,
+    server_url: &str,
+    allowed_origins: &[String],
+) -> Result<(), String> {
+    let asset_origin = http_origin_from_url(asset_url)?;
+    let server_origin = server_http_origin(server_url)?;
+    if asset_origin == server_origin {
+        return Ok(());
+    }
+    for entry in allowed_origins {
+        if let Ok(allowed) = normalize_allowed_origin(entry) {
+            if asset_origin == allowed {
+                return Ok(());
+            }
+        }
+    }
+    Err(format!(
+        "ASSET_ORIGIN_DENIED: Asset origin {asset_origin} is not allowed for server {server_origin}."
+    ))
 }
 
 fn resolve_server_asset_url(server_url: &str, asset_url: &str) -> Result<Url, String> {
@@ -896,5 +937,51 @@ mod tests {
             resolved.as_str(),
             "https://aurago.local:8443/api/agodesk/media/upload/att-1?agodesk_exp=1&agodesk_sig=abc",
         );
+    }
+
+    #[test]
+    fn ensure_asset_origin_allows_server_origin() {
+        let asset = Url::parse("https://aurago.local:8443/media/a.png").unwrap();
+        assert!(ensure_asset_origin_allowed(
+            &asset,
+            "wss://aurago.local:8443/api/agodesk/ws",
+            &[],
+        )
+        .is_ok());
+    }
+
+    #[test]
+    fn ensure_asset_origin_denies_foreign_host() {
+        let asset = Url::parse("http://127.0.0.1:9/secret").unwrap();
+        let err = ensure_asset_origin_allowed(
+            &asset,
+            "wss://aurago.local:8443/api/agodesk/ws",
+            &[],
+        )
+        .unwrap_err();
+        assert!(err.contains("ASSET_ORIGIN_DENIED"));
+    }
+
+    #[test]
+    fn ensure_asset_origin_allows_allowlist_entry() {
+        let asset = Url::parse("https://cdn.example.com/x.png").unwrap();
+        assert!(ensure_asset_origin_allowed(
+            &asset,
+            "wss://aurago.local:8443/api/agodesk/ws",
+            &["https://cdn.example.com".to_string()],
+        )
+        .is_ok());
+    }
+
+    #[test]
+    fn ensure_asset_origin_denies_redirect_target_not_on_allowlist() {
+        let asset = Url::parse("https://evil.example/x.png").unwrap();
+        let err = ensure_asset_origin_allowed(
+            &asset,
+            "wss://aurago.local:8443/api/agodesk/ws",
+            &["https://cdn.example.com".to_string()],
+        )
+        .unwrap_err();
+        assert!(err.contains("ASSET_ORIGIN_DENIED"));
     }
 }

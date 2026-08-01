@@ -47,6 +47,7 @@ import {
 import { clearAttachmentPathCache } from "./chat-attachment-paths";
 import { bootstrapAgodeskFeatures } from "./agodesk-features-bootstrap";
 import { handleIntegrationsWebhostsMessage } from "./integrations-flow";
+import { runSystemConnectedCleanup } from "./system-connected-cleanup";
 import {
   handleConfigProviderCatalogMessage,
   handleConfigProviderMessage,
@@ -330,6 +331,7 @@ export async function handleChatWsMessage(
 
   if (isSystemConnected(message)) {
     ctx.setPairingBusy(true);
+    await runSystemConnectedCleanup();
     sessionState.reset();
     chatMediaState.reset();
     clearAttachmentPathCache();
