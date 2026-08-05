@@ -1,14 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import type { LocalAgentLlmResultPayload } from "../../types/local-agent-protocol.ts";
-import {
-  parseOpenAiChatRequest,
-  toOpenAiChatCompletion,
-} from "./openai-map.ts";
-import {
-  buildPageAgentBootstrap,
-  resolvePageAgentLanguage,
-} from "./bootstrap.ts";
+import { parseOpenAiChatRequest, toOpenAiChatCompletion } from "./openai-map.ts";
+import { buildPageAgentBootstrap, resolvePageAgentLanguage } from "./bootstrap.ts";
 
 test("parseOpenAiChatRequest extracts messages, tools, model and tool_choice", () => {
   const body = JSON.stringify({
@@ -39,9 +33,7 @@ test("toOpenAiChatCompletion maps tool_calls with stringified arguments", () => 
     success: true,
     message: {
       role: "assistant",
-      tool_calls: [
-        { id: "call_1", name: "macro", arguments: { action: { click: "#imprint" } } },
-      ],
+      tool_calls: [{ id: "call_1", name: "macro", arguments: { action: { click: "#imprint" } } }],
     },
     error_code: null,
     error_message: null,
@@ -113,7 +105,10 @@ test("buildPageAgentBootstrap wires the binding and resolver without real secret
   assert.match(script, /__agodeskPageAgentReveal/);
   // After a finished task we expand history (done/summary) instead of reset().
   assert.match(script, /panel\.expand/);
-  assert.match(script, /Never reset after a finished task|hides the done\/summary|no done card to wipe|Keep the done card/i);
+  assert.match(
+    script,
+    /Never reset after a finished task|hides the done\/summary|no done card to wipe|Keep the done card/i,
+  );
   assert.match(script, /go_to_url/);
   assert.match(script, /experimentalScriptExecutionTool:\s*true/);
   assert.match(script, /resumeTask/);

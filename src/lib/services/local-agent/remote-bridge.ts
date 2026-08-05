@@ -102,28 +102,23 @@ export function rejectAllLocalAgentWaiters(error: Error): void {
 }
 
 /** Called by the inbound router for local.agent.remote_tool.result. */
-export function handleLocalAgentRemoteToolResult(
-  payload: unknown,
-  envelopeId?: string,
-): boolean {
+export function handleLocalAgentRemoteToolResult(payload: unknown, envelopeId?: string): boolean {
   const normalized = normalizeLocalAgentRemoteToolResult(payload);
   if (!normalized) {
     // Fall back: envelope id only, so we still unblock the waiter.
-    if (envelopeId && resolveWaiter(envelopeId, "remote_tool", {
-      request_id: envelopeId,
-      success: false,
-      error_message: "Malformed local.agent.remote_tool.result payload.",
-    })) {
+    if (
+      envelopeId &&
+      resolveWaiter(envelopeId, "remote_tool", {
+        request_id: envelopeId,
+        success: false,
+        error_message: "Malformed local.agent.remote_tool.result payload.",
+      })
+    ) {
       return true;
     }
     return false;
   }
-  return resolveWaiterByAnyId(
-    "remote_tool",
-    normalized,
-    normalized.request_id,
-    envelopeId,
-  );
+  return resolveWaiterByAnyId("remote_tool", normalized, normalized.request_id, envelopeId);
 }
 
 /** Called by the inbound router for local.agent.llm.result. */
@@ -143,11 +138,14 @@ export function handleLocalAgentLlmResult(payload: unknown, envelopeId?: string)
       keys: payload && typeof payload === "object" ? Object.keys(payload as object) : [],
       preview: safePayloadPreview(payload),
     });
-    if (envelopeId && resolveWaiter(envelopeId, "llm", {
-      request_id: envelopeId,
-      success: false,
-      error_message: "Malformed local.agent.llm.result payload.",
-    })) {
+    if (
+      envelopeId &&
+      resolveWaiter(envelopeId, "llm", {
+        request_id: envelopeId,
+        success: false,
+        error_message: "Malformed local.agent.llm.result payload.",
+      })
+    ) {
       return true;
     }
     return false;

@@ -153,8 +153,7 @@ function envelope<T>(type: WsMessage["type"], payload: T, id?: string): WsMessag
 }
 
 export function buildLocalAgentRemoteToolMessage(
-  payload: Omit<LocalAgentRemoteToolPayload, "client_timestamp"> &
-    Partial<LocalAgentClientMeta>,
+  payload: Omit<LocalAgentRemoteToolPayload, "client_timestamp"> & Partial<LocalAgentClientMeta>,
 ): WsMessage<LocalAgentRemoteToolPayload> {
   return envelope("local.agent.remote_tool", withClientTimestamp(payload));
 }
@@ -216,9 +215,7 @@ export function normalizeLocalAgentRemoteToolResult(
   };
 }
 
-export function normalizeLocalAgentLlmResult(
-  payload: unknown,
-): LocalAgentLlmResultPayload | null {
+export function normalizeLocalAgentLlmResult(payload: unknown): LocalAgentLlmResultPayload | null {
   const record = asRecord(payload);
   if (!record) {
     return null;
@@ -407,9 +404,7 @@ function normalizeAssistantMessageRecord(
 
   const content =
     coerceAssistantContent(messageRecord.content) ||
-    (typeof messageRecord.reasoning_content === "string"
-      ? messageRecord.reasoning_content
-      : "") ||
+    (typeof messageRecord.reasoning_content === "string" ? messageRecord.reasoning_content : "") ||
     (typeof messageRecord.text === "string" ? messageRecord.text : "");
 
   return {

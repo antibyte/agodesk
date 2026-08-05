@@ -149,10 +149,7 @@ test("catalogEntryUsesOauth requires concrete oauth_setup endpoints or explicit 
     }),
     true,
   );
-  assert.equal(
-    catalogEntryUsesOauth({ id: "google", name: "Google", auth_type: "oauth" }),
-    true,
-  );
+  assert.equal(catalogEntryUsesOauth({ id: "google", name: "Google", auth_type: "oauth" }), true);
   // Weak/partial signals must NOT be treated as OAuth support: AuraGo would reject
   // oauth.start with "OAuth2 configuration incomplete: auth_type".
   assert.equal(
@@ -190,10 +187,7 @@ test("catalogEntryUsesOauth is false for pure api_key providers without oauth si
     catalogEntryUsesOauth({ id: "anthropic", name: "Anthropic", auth_type: "api_key" }),
     false,
   );
-  assert.equal(
-    catalogEntryUsesOauth({ id: "groq", name: "Groq" }),
-    false,
-  );
+  assert.equal(catalogEntryUsesOauth({ id: "groq", name: "Groq" }), false);
 });
 
 test("catalogEntrySupportsApiKey allows dual-auth catalog providers", () => {
@@ -217,7 +211,10 @@ test("catalogEntrySupportsApiKey allows dual-auth catalog providers", () => {
 });
 
 test("resolveCatalogAuthType prefers oauth only with concrete oauth_setup endpoints", () => {
-  assert.equal(resolveCatalogAuthType({ id: "openai", name: "Openai", auth_type: "api_key" }), "api_key");
+  assert.equal(
+    resolveCatalogAuthType({ id: "openai", name: "Openai", auth_type: "api_key" }),
+    "api_key",
+  );
   assert.equal(
     resolveCatalogAuthType({
       id: "openai",
@@ -230,7 +227,10 @@ test("resolveCatalogAuthType prefers oauth only with concrete oauth_setup endpoi
     }),
     "oauth",
   );
-  assert.equal(resolveCatalogAuthType({ id: "google", name: "Google", auth_type: "oauth" }), "oauth");
+  assert.equal(
+    resolveCatalogAuthType({ id: "google", name: "Google", auth_type: "oauth" }),
+    "oauth",
+  );
   assert.equal(
     resolveCatalogAuthType({
       id: "google",

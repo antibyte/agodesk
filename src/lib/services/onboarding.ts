@@ -21,9 +21,7 @@ export function isOnboardingCompletedInSettings(appSettings: AppSettings): boole
   return appSettings.onboardingCompleted === true;
 }
 
-export async function resolveOnboardingInSettings(
-  appSettings: AppSettings,
-): Promise<AppSettings> {
+export async function resolveOnboardingInSettings(appSettings: AppSettings): Promise<AppSettings> {
   if (appSettings.onboardingCompleted) {
     return appSettings;
   }

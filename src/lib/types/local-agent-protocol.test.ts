@@ -82,9 +82,7 @@ test("normalizeLocalAgentLlmResult parses string tool_call arguments", () => {
     message: {
       role: "assistant",
       content: "",
-      tool_calls: [
-        { id: "call_1", name: "file_read", arguments: '{"path":"a.txt"}' },
-      ],
+      tool_calls: [{ id: "call_1", name: "file_read", arguments: '{"path":"a.txt"}' }],
     },
   });
   assert.ok(normalized?.message);

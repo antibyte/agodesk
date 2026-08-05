@@ -1001,6 +1001,7 @@
   "upload.error.fileTooLarge": "Bestand overschrijdt de server-uploadlimiet.",
   "upload.error.httpFailed": "Upload mislukt met HTTP {status}.",
   "upload.error.knowledgeArchiveFailed": "Upload naar kennisarchief mislukt.",
+  "upload.error.originDenied": "Uploaddoel is niet toegestaan (origin niet op de allowlist).",
   "upload.error.urlUnresolved": "Upload-URL kon niet worden opgelost ten opzichte van de server-URL.",
   "vaultSecretPrompt.cancel": "Annuleren",
   "vaultSecretPrompt.hide": "Verbergen",

@@ -600,7 +600,10 @@ function handleVaultSecretSubmit(message, session, send) {
   const requestId = String(message.payload?.request_id ?? "");
   const vaultKey = String(message.payload?.vault_key ?? "");
   const hasValue = typeof message.payload?.value === "string" && message.payload.value.length > 0;
-  console.log("[vault.secret.submit]", JSON.stringify({ request_id: requestId, vault_key: vaultKey, present: hasValue }));
+  console.log(
+    "[vault.secret.submit]",
+    JSON.stringify({ request_id: requestId, vault_key: vaultKey, present: hasValue }),
+  );
 
   const pending = session.pendingVaultSecret;
   if (!pending || pending.requestId !== requestId) {
@@ -626,7 +629,9 @@ function handleVaultSecretSubmit(message, session, send) {
       session_id: session.sessionId,
       request_id: requestId,
       status: hasValue ? "stored" : "error",
-      ...(hasValue ? { vault_key: vaultKey || pending.vaultKey } : { error_code: "VAULT_WRITE_FAILED" }),
+      ...(hasValue
+        ? { vault_key: vaultKey || pending.vaultKey }
+        : { error_code: "VAULT_WRITE_FAILED" }),
     },
   });
 }
@@ -1798,7 +1803,11 @@ const MOCK_PROVIDER_CATALOG = [
 const MOCK_CATALOG_MODELS = [
   { id: "gemini-2.5-flash", name: "Gemini 2.5 Flash", provider_id: "google" },
   { id: "gemini-2.5-pro", name: "Gemini 2.5 Pro", provider_id: "google" },
-  { id: "gemini-2.5-flash-native-audio", name: "Gemini 2.5 Flash Native Audio", provider_id: "google" },
+  {
+    id: "gemini-2.5-flash-native-audio",
+    name: "Gemini 2.5 Flash Native Audio",
+    provider_id: "google",
+  },
   { id: "gpt-4o", name: "GPT-4o", provider_id: "openai" },
   { id: "gpt-4o-mini", name: "GPT-4o mini", provider_id: "openai" },
   { id: "o3", name: "o3", provider_id: "openai" },
@@ -1932,7 +1941,11 @@ function handleConfigProviderUpsert(message, session, send) {
     oauth_scopes: input.oauth_scopes ?? existing.oauth_scopes,
     secrets: {
       api_key: applySecretOp(existing.secrets?.api_key, apiKeyOp, true),
-      oauth_client_secret: applySecretOp(existing.secrets?.oauth_client_secret, oauthSecretOp, true),
+      oauth_client_secret: applySecretOp(
+        existing.secrets?.oauth_client_secret,
+        oauthSecretOp,
+        true,
+      ),
     },
     oauth: existing.oauth ?? { configured: false, authorized: false, missing_fields: [] },
     references: existing.references ?? [],

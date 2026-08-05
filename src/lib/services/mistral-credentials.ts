@@ -42,9 +42,10 @@ export async function listMistralVoices(): Promise<MistralVoiceOption[]> {
   if (!isDesktopShell()) {
     return [];
   }
-  const raw = await invoke<
-    Array<{ id?: string; name?: string; slug?: string | null; language?: string | null }>
-  >("list_mistral_voices");
+  const raw =
+    await invoke<
+      Array<{ id?: string; name?: string; slug?: string | null; language?: string | null }>
+    >("list_mistral_voices");
   return (raw ?? [])
     .map((entry) => ({
       id: (entry.id ?? "").trim(),

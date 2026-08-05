@@ -330,10 +330,7 @@ export function handleConfigProviderTestResultMessage(
   const normalized = normalizeConfigProviderTestResultPayload(payload, { fallbackProviderId });
   if (!normalized) {
     providersState.setTestLoadingProviderId(null);
-    rejectWaiterByKind(
-      "test_result",
-      new Error("Unexpected provider test response from AuraGo."),
-    );
+    rejectWaiterByKind("test_result", new Error("Unexpected provider test response from AuraGo."));
     return null;
   }
   providersState.setTestLoadingProviderId(null);

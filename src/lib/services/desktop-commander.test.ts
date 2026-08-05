@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { normalizeAgentActivityPayload } from "../types/protocol.ts";
+import { CAPABILITY_REGISTRY, capabilityIdForDesktopOperation } from "./capability-registry.ts";
 import {
-  CAPABILITY_REGISTRY,
-  capabilityIdForDesktopOperation,
-} from "./capability-registry.ts";
-import { appendActivityJournal, clearActivityJournal, queryActivityJournal } from "./activity-journal.ts";
+  appendActivityJournal,
+  clearActivityJournal,
+  queryActivityJournal,
+} from "./activity-journal.ts";
 import { buildActivityTree } from "../stores/activity-timeline.ts";
 
 describe("normalizeAgentActivityPayload", () => {

@@ -226,10 +226,7 @@ export function extractGrokInputTranscript(event: Record<string, unknown>): {
 
 export function extractGrokOutputAudioDelta(event: Record<string, unknown>): string | null {
   const type = extractGrokEventType(event);
-  if (
-    type !== "response.output_audio.delta" &&
-    type !== "response.audio.delta"
-  ) {
+  if (type !== "response.output_audio.delta" && type !== "response.audio.delta") {
     return null;
   }
   if (typeof event.delta === "string" && event.delta) {
@@ -321,9 +318,7 @@ export class GrokVoiceSession {
   applyAgentMood(mood: AgentMoodMetadata | null): void {
     this.agentMood = mood;
     if (this.transportOpen && this.setupDone) {
-      void this.sendJson(
-        buildGrokSessionUpdate(this.speech, this.agentContext, this.agentMood),
-      );
+      void this.sendJson(buildGrokSessionUpdate(this.speech, this.agentContext, this.agentMood));
     }
   }
 
@@ -494,9 +489,7 @@ export class GrokVoiceSession {
       } else if (state === "closed") {
         this.transportOpen = false;
         if (!this.closed && !this.setupDone) {
-          this.rejectSetup?.(
-            new Error("Grok Voice WebSocket geschlossen (kein session.updated)."),
-          );
+          this.rejectSetup?.(new Error("Grok Voice WebSocket geschlossen (kein session.updated)."));
         } else if (!this.closed && this.setupDone) {
           this.callbacks.onStatus?.("idle");
         }
@@ -507,8 +500,7 @@ export class GrokVoiceSession {
       if (connectionId !== this.connectionId) {
         return;
       }
-      const message =
-        event.payload?.message?.trim() || "Grok Voice WebSocket-Fehler.";
+      const message = event.payload?.message?.trim() || "Grok Voice WebSocket-Fehler.";
       this.rejectSetup?.(new Error(message));
       if (this.setupDone) {
         this.callbacks.onError?.(message);
@@ -603,9 +595,7 @@ export class GrokVoiceSession {
     if (type === "session.created" || type === "session.updated") {
       if (!this.sessionUpdateSent) {
         this.sessionUpdateSent = true;
-        void this.sendJson(
-          buildGrokSessionUpdate(this.speech, this.agentContext, this.agentMood),
-        );
+        void this.sendJson(buildGrokSessionUpdate(this.speech, this.agentContext, this.agentMood));
       }
       // Complete on first session event so the mic path is ready; session.update still applies.
       this.completeSetup();
@@ -692,10 +682,7 @@ export class GrokVoiceSession {
     }
   }
 
-  private async runToolCalls(
-    calls: GeminiFunctionCall[],
-    connectionId: number,
-  ): Promise<void> {
+  private async runToolCalls(calls: GeminiFunctionCall[], connectionId: number): Promise<void> {
     if (connectionId !== this.connectionId || !this.callbacks.onToolCalls) {
       return;
     }

@@ -26,8 +26,7 @@ const translations = {
     checkingAvailability: "Vérification de la disponibilité de ce raccourci…",
   },
   es: {
-    captureUnavailable:
-      "Este atajo ya lo usa el sistema u otra aplicación. Elige otro distinto.",
+    captureUnavailable: "Este atajo ya lo usa el sistema u otra aplicación. Elige otro distinto.",
     checkingAvailability: "Comprobando si este atajo está disponible…",
   },
   it: {
@@ -41,18 +40,15 @@ const translations = {
     checkingAvailability: "Controleren of deze sneltoets beschikbaar is…",
   },
   pl: {
-    captureUnavailable:
-      "Ten skrót jest już używany przez system lub inną aplikację. Wybierz inny.",
+    captureUnavailable: "Ten skrót jest już używany przez system lub inną aplikację. Wybierz inny.",
     checkingAvailability: "Sprawdzanie, czy ten skrót jest dostępny…",
   },
   pt: {
-    captureUnavailable:
-      "Este atalho já é usado pelo sistema ou por outra app. Escolha outro.",
+    captureUnavailable: "Este atalho já é usado pelo sistema ou por outra app. Escolha outro.",
     checkingAvailability: "A verificar se este atalho está disponível…",
   },
   cs: {
-    captureUnavailable:
-      "Tato zkratka je již používána systémem nebo jinou aplikací. Zvolte jinou.",
+    captureUnavailable: "Tato zkratka je již používána systémem nebo jinou aplikací. Zvolte jinou.",
     checkingAvailability: "Kontrola, zda je tato zkratka dostupná…",
   },
   da: {
@@ -61,8 +57,7 @@ const translations = {
     checkingAvailability: "Tjekker om denne genvej er ledig…",
   },
   sv: {
-    captureUnavailable:
-      "Denna genväg används redan av systemet eller en annan app. Välj en annan.",
+    captureUnavailable: "Denna genväg används redan av systemet eller en annan app. Välj en annan.",
     checkingAvailability: "Kontrollerar om genvägen är ledig…",
   },
   no: {
@@ -91,10 +86,7 @@ const translations = {
   },
 };
 
-const prefixes = [
-  "settings.appearance.showWindowHotkey",
-  "settings.speech.hotkey",
-];
+const prefixes = ["settings.appearance.showWindowHotkey", "settings.speech.hotkey"];
 
 /**
  * Insert new keys immediately after an anchor key, preserving existing order.

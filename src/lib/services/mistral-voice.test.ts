@@ -43,10 +43,7 @@ test("normalizeAppSettings füllt Mistral-Defaults und behält Custom-Werte", ()
 test("normalizeAppSettings fills Phase-2 realtime defaults", () => {
   const normalized = normalizeAppSettings({ speech: { provider: "mistral_voice" } });
   assert.equal(normalized.speech.mistralRealtimeEnabled, true);
-  assert.equal(
-    normalized.speech.mistralRealtimeAsrModel,
-    "voxtral-mini-transcribe-realtime-2602",
-  );
+  assert.equal(normalized.speech.mistralRealtimeAsrModel, "voxtral-mini-transcribe-realtime-2602");
   assert.equal(normalized.speech.mistralTargetStreamingDelayMs, 480);
 });
 

@@ -34,7 +34,11 @@
 </script>
 
 {#if visible}
-  <aside class="warnings-panel glass-panel panel-slide-in" aria-label={$i18n("warnings.title")} use:focusTrap>
+  <aside
+    class="warnings-panel glass-panel panel-slide-in"
+    aria-label={$i18n("warnings.title")}
+    use:focusTrap
+  >
     <header class="panel-header">
       <div>
         <h2>{$i18n("warnings.title")}</h2>

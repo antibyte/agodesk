@@ -30,11 +30,11 @@ for (const file of fs.readdirSync(dir).filter((f) => f.endsWith(".json"))) {
   const full = path.join(dir, file);
   const data = JSON.parse(fs.readFileSync(full, "utf8"));
   Object.assign(data, locale === "de" ? de : en);
-  const sorted = Object.fromEntries(Object.keys(data).sort().map((k) => [k, data[k]]));
-  fs.writeFileSync(full, `${JSON.stringify(sorted, null, 2)}\n`);
-  console.log(
-    "updated",
-    file,
-    Boolean(sorted["settings.speech.xaiApiKey.error.rateLimited"]),
+  const sorted = Object.fromEntries(
+    Object.keys(data)
+      .sort()
+      .map((k) => [k, data[k]]),
   );
+  fs.writeFileSync(full, `${JSON.stringify(sorted, null, 2)}\n`);
+  console.log("updated", file, Boolean(sorted["settings.speech.xaiApiKey.error.rateLimited"]));
 }

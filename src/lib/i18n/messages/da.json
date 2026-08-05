@@ -1001,6 +1001,7 @@
   "upload.error.fileTooLarge": "Filen overskrider serverens uploadgrænse.",
   "upload.error.httpFailed": "Upload mislykkedes med HTTP {status}.",
   "upload.error.knowledgeArchiveFailed": "Upload til vidensarkivet mislykkedes.",
+  "upload.error.originDenied": "Uploadmål er ikke tilladt (origin ikke på allowlist).",
   "upload.error.urlUnresolved": "Upload-URL kunne ikke opløses i forhold til server-URL.",
   "vaultSecretPrompt.cancel": "Annuller",
   "vaultSecretPrompt.hide": "Skjul",

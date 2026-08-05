@@ -153,8 +153,7 @@ export async function synthesizeMistralSpeechStreaming(
 
     unlisteners.push(
       await listen<{ message: string }>("mistral-tts:error", (event) => {
-        const message =
-          event.payload.message?.trim() || "Mistral streaming TTS failed";
+        const message = event.payload.message?.trim() || "Mistral streaming TTS failed";
         streamError = new Error(message);
         settleDone(true);
       }),
@@ -267,10 +266,7 @@ export async function synthesizeMistralSpeech(
   }
 }
 
-export async function speakWithMistralTts(
-  text: string,
-  speech: SpeechSettings,
-): Promise<boolean> {
+export async function speakWithMistralTts(text: string, speech: SpeechSettings): Promise<boolean> {
   if (!shouldUseMistralTtsForChat(speech)) {
     console.warn("Mistral chat TTS skipped (provider/voiceResponses/mute)");
     return false;

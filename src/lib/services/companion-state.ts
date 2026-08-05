@@ -86,10 +86,20 @@ export function readCompanionStateFromDom(): CompanionState | null {
 /** Subscribe to stores and mirror companion state on `<html>`. */
 export function initCompanionStateSync(): () => void {
   const unsubscribeConnection = connectionStatus.subscribe((conn) => {
-    syncCompanionState(conn, get(sessionState).status, get(chatConversationState), get(speechState));
+    syncCompanionState(
+      conn,
+      get(sessionState).status,
+      get(chatConversationState),
+      get(speechState),
+    );
   });
   const unsubscribeSession = sessionState.subscribe((session) => {
-    syncCompanionState(get(connectionStatus), session.status, get(chatConversationState), get(speechState));
+    syncCompanionState(
+      get(connectionStatus),
+      session.status,
+      get(chatConversationState),
+      get(speechState),
+    );
   });
   const unsubscribeChat = chatConversationState.subscribe((chat) => {
     syncCompanionState(get(connectionStatus), get(sessionState).status, chat, get(speechState));

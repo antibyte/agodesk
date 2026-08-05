@@ -12,7 +12,9 @@ const patches = JSON.parse(fs.readFileSync(patchesPath, "utf8"));
 
 function writeJson(filePath, data) {
   const sorted = Object.fromEntries(Object.entries(data).sort(([a], [b]) => a.localeCompare(b)));
-  const lines = Object.entries(sorted).map(([key, value]) => `  "${key}": ${JSON.stringify(value)}`);
+  const lines = Object.entries(sorted).map(
+    ([key, value]) => `  "${key}": ${JSON.stringify(value)}`,
+  );
   fs.writeFileSync(filePath, `{\n${lines.join(",\n")}\n}\n`, "utf8");
 }
 

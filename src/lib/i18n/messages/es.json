@@ -1001,6 +1001,7 @@
   "upload.error.fileTooLarge": "El archivo supera el límite de carga del servidor.",
   "upload.error.httpFailed": "Error de carga con HTTP {status}.",
   "upload.error.knowledgeArchiveFailed": "Error al subir al archivo de conocimiento.",
+  "upload.error.originDenied": "El destino de carga no está permitido (origen fuera de la lista).",
   "upload.error.urlUnresolved": "No se pudo resolver la URL de carga respecto a la URL del servidor.",
   "vaultSecretPrompt.cancel": "Cancelar",
   "vaultSecretPrompt.hide": "Ocultar",

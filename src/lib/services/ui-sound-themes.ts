@@ -356,7 +356,14 @@ const papyrus: UiSoundThemeDefinition = {
   events: {
     send: [
       { freq: 2200, type: "noise", startOffset: 0, attack: 0.002, decay: 0.06, peakGain: 0.06 },
-      { freq: 320, type: "triangle", startOffset: 0.02, attack: 0.004, decay: 0.05, peakGain: 0.06 },
+      {
+        freq: 320,
+        type: "triangle",
+        startOffset: 0.02,
+        attack: 0.004,
+        decay: 0.05,
+        peakGain: 0.06,
+      },
     ],
     receive: [
       { freq: 260, type: "triangle", startOffset: 0, attack: 0.004, decay: 0.07, peakGain: 0.1 },
@@ -364,7 +371,14 @@ const papyrus: UiSoundThemeDefinition = {
     ],
     success: [
       { freq: 294, type: "triangle", startOffset: 0, attack: 0.004, decay: 0.06, peakGain: 0.09 },
-      { freq: 440, type: "triangle", startOffset: 0.05, attack: 0.004, decay: 0.08, peakGain: 0.09 },
+      {
+        freq: 440,
+        type: "triangle",
+        startOffset: 0.05,
+        attack: 0.004,
+        decay: 0.08,
+        peakGain: 0.09,
+      },
     ],
     error: [
       { freq: 165, type: "triangle", startOffset: 0, attack: 0.004, decay: 0.1, peakGain: 0.11 },
@@ -403,11 +417,25 @@ const chaos: UiSoundThemeDefinition = {
         peakGain: 0.1,
         freqEnd: 1200,
       },
-      { freq: 950, type: "sawtooth", startOffset: 0.05, attack: 0.002, decay: 0.08, peakGain: 0.08 },
+      {
+        freq: 950,
+        type: "sawtooth",
+        startOffset: 0.05,
+        attack: 0.002,
+        decay: 0.08,
+        peakGain: 0.08,
+      },
     ],
     success: [
       { freq: 523, type: "square", startOffset: 0, attack: 0.002, decay: 0.06, peakGain: 0.09 },
-      { freq: 784, type: "sawtooth", startOffset: 0.05, attack: 0.002, decay: 0.07, peakGain: 0.09 },
+      {
+        freq: 784,
+        type: "sawtooth",
+        startOffset: 0.05,
+        attack: 0.002,
+        decay: 0.07,
+        peakGain: 0.09,
+      },
       {
         freq: 1046,
         type: "square",
@@ -440,7 +468,14 @@ const chaos: UiSoundThemeDefinition = {
         peakGain: 0.08,
         freqEnd: 1300,
       },
-      { freq: 2000, type: "sawtooth", startOffset: 0.03, attack: 0.002, decay: 0.06, peakGain: 0.06 },
+      {
+        freq: 2000,
+        type: "sawtooth",
+        startOffset: 0.03,
+        attack: 0.002,
+        decay: 0.06,
+        peakGain: 0.06,
+      },
     ],
   },
 };

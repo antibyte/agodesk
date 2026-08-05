@@ -22,7 +22,14 @@ ws.on("message", (raw) => {
   const message = JSON.parse(raw.toString());
   if (message.type === "system.connected") {
     sessionId = message.payload.session_id;
-    send("session.start", { pairing_token: "mock-pairing-token", client_capabilities: ["config.providers.read", "config.providers.write", "config.providers.oauth"] });
+    send("session.start", {
+      pairing_token: "mock-pairing-token",
+      client_capabilities: [
+        "config.providers.read",
+        "config.providers.write",
+        "config.providers.oauth",
+      ],
+    });
     return;
   }
   if (message.type === "session.accepted") {
@@ -32,7 +39,11 @@ ws.on("message", (raw) => {
   }
   if (message.type === "config.provider.catalog") {
     catalogProviders = message.payload.providers;
-    send("config.provider.catalog.detail", { session_id: sessionId, provider_id: "google", include_models: true });
+    send("config.provider.catalog.detail", {
+      session_id: sessionId,
+      provider_id: "google",
+      include_models: true,
+    });
     return;
   }
   if (message.type === "config.provider.catalog" && pending.has(message.id)) {
@@ -41,17 +52,36 @@ ws.on("message", (raw) => {
   }
   if (message.type === "config.provider") {
     if (message.payload.provider?.id === createdProviderId) {
-      send("config.provider.oauth.start", { session_id: sessionId, provider_id: createdProviderId, redirect_uri: "http://127.0.0.1:8765/oauth/callback" });
+      send("config.provider.oauth.start", {
+        session_id: sessionId,
+        provider_id: createdProviderId,
+        redirect_uri: "http://127.0.0.1:8765/oauth/callback",
+      });
     }
     return;
   }
   if (message.type === "config.provider.oauth.started") {
     authUrl = message.payload.auth_url;
-    send("config.provider.oauth.complete", { session_id: sessionId, provider_id: createdProviderId, redirect_url: `${authUrl}&mock=1` });
+    send("config.provider.oauth.complete", {
+      session_id: sessionId,
+      provider_id: createdProviderId,
+      redirect_url: `${authUrl}&mock=1`,
+    });
     return;
   }
   if (message.type === "config.provider.oauth.status") {
-    console.log(JSON.stringify({ ok: true, status: message.payload, authUrl, catalogDetailModels: catalogDetail?.models?.length }, null, 2));
+    console.log(
+      JSON.stringify(
+        {
+          ok: true,
+          status: message.payload,
+          authUrl,
+          catalogDetailModels: catalogDetail?.models?.length,
+        },
+        null,
+        2,
+      ),
+    );
     ws.close();
     process.exit(0);
   }
@@ -90,6 +120,14 @@ ws.on("message", () => {
 });
 
 setTimeout(() => {
-  console.error("TIMEOUT — flow did not complete. Last state:", JSON.stringify({ sessionId, catalogProviders: catalogProviders.map((p) => p.id), createdProviderId, authUrl }));
+  console.error(
+    "TIMEOUT — flow did not complete. Last state:",
+    JSON.stringify({
+      sessionId,
+      catalogProviders: catalogProviders.map((p) => p.id),
+      createdProviderId,
+      authUrl,
+    }),
+  );
   process.exit(2);
 }, 8000);

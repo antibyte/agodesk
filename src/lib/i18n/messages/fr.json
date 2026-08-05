@@ -1001,6 +1001,7 @@
   "upload.error.fileTooLarge": "Le fichier dépasse la limite d’upload du serveur.",
   "upload.error.httpFailed": "Échec de l’upload avec HTTP {status}.",
   "upload.error.knowledgeArchiveFailed": "Échec de l’upload vers l’archive de connaissances.",
+  "upload.error.originDenied": "La cible d’upload n’est pas autorisée (origine absente de la liste).",
   "upload.error.urlUnresolved": "L’URL d’upload n’a pas pu être résolue par rapport à l’URL du serveur.",
   "vaultSecretPrompt.cancel": "Annuler",
   "vaultSecretPrompt.hide": "Masquer",

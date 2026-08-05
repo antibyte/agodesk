@@ -52,9 +52,7 @@ export function parseOpenAiChatRequest(bodyText: string): OpenAiChatRequest {
   }
   return {
     messages: asArray<LocalAgentLlmMessage>(parsed.messages),
-    tools: Array.isArray(parsed.tools)
-      ? (parsed.tools as Record<string, unknown>[])
-      : undefined,
+    tools: Array.isArray(parsed.tools) ? (parsed.tools as Record<string, unknown>[]) : undefined,
     model: typeof parsed.model === "string" ? parsed.model : undefined,
     tool_choice: parsed.tool_choice,
   };
@@ -73,9 +71,7 @@ export function toOpenAiChatCompletion(
     const detail = [result.error_code, result.error_message]
       .filter((part): part is string => typeof part === "string" && part.length > 0)
       .join(": ");
-    throw new Error(
-      detail || "AuraGo LLM proxy returned no message for page-agent.",
-    );
+    throw new Error(detail || "AuraGo LLM proxy returned no message for page-agent.");
   }
 
   const message = result.message;

@@ -17,8 +17,7 @@ function walk(dir, out = []) {
   return out;
 }
 
-const re =
-  /settings\.speech\.hotkey\.[a-zA-Z]+["']?\s*:\s*["']((?:\\.|[^"'\\])*)["']/g;
+const re = /settings\.speech\.hotkey\.[a-zA-Z]+["']?\s*:\s*["']((?:\\.|[^"'\\])*)["']/g;
 
 const byKey = new Map();
 for (const f of walk(sessionsRoot)) {
@@ -38,10 +37,7 @@ for (const f of walk(sessionsRoot)) {
       const keyMatch = full.match(/settings\.speech\.hotkey\.[a-zA-Z]+/);
       if (!keyMatch) continue;
       const key = keyMatch[0];
-      let value = m[1]
-        .replace(/\\n/g, "\n")
-        .replace(/\\"/g, '"')
-        .replace(/\\\\/g, "\\");
+      let value = m[1].replace(/\\n/g, "\n").replace(/\\"/g, '"').replace(/\\\\/g, "\\");
       if (!byKey.has(key)) byKey.set(key, new Set());
       byKey.get(key).add(value);
     }
@@ -50,7 +46,11 @@ for (const f of walk(sessionsRoot)) {
 
 console.log("Recovered keys from sessions:");
 for (const [k, vals] of [...byKey.entries()].sort()) {
-  console.log(k, "=>", [...vals].map((v) => v.slice(0, 80)));
+  console.log(
+    k,
+    "=>",
+    [...vals].map((v) => v.slice(0, 80)),
+  );
 }
 
 // Rebuild speech.hotkey block for all locales by cloning showWindowHotkey + known speech-specific strings.
@@ -90,13 +90,11 @@ const speechSpecific = {
   es: {
     title: "Atajo de speech-to-text",
     help: "Atajo global para iniciar y detener el reconocimiento de voz. Predeterminado: Alt + Shift + M.",
-    conflictWarning:
-      "Este atajo es el mismo que el de mostrar ventana. Elige otro distinto.",
+    conflictWarning: "Este atajo es el mismo que el de mostrar ventana. Elige otro distinto.",
     invalidWarning: "Formato no válido. Ejemplo: Alt+Shift+M",
     captureInvalid:
       "Combinación no válida: usa al menos un modificador más una letra, número o tecla de función.",
-    error:
-      "No se pudo registrar el atajo de speech-to-text (puede estar en uso por otra app).",
+    error: "No se pudo registrar el atajo de speech-to-text (puede estar en uso por otra app).",
   },
   it: {
     title: "Scorciatoia speech-to-text",
@@ -112,8 +110,7 @@ const speechSpecific = {
   nl: {
     title: "Speech-to-text-sneltoets",
     help: "Globale sneltoets om spraakherkenning te starten en te stoppen. Standaard: Alt + Shift + M.",
-    conflictWarning:
-      "Deze sneltoets is hetzelfde als de venster-sneltoets. Kies een andere.",
+    conflictWarning: "Deze sneltoets is hetzelfde als de venster-sneltoets. Kies een andere.",
     invalidWarning: "Ongeldig formaat. Voorbeeld: Alt+Shift+M",
     captureInvalid:
       "Ongeldige combinatie — gebruik minstens één modifier plus een letter, cijfer of functietoets.",
@@ -123,8 +120,7 @@ const speechSpecific = {
   pl: {
     title: "Skrót speech-to-text",
     help: "Globalny skrót do uruchamiania i zatrzymywania rozpoznawania mowy. Domyślnie: Alt + Shift + M.",
-    conflictWarning:
-      "Ten skrót jest taki sam jak skrót pokazywania okna. Wybierz inny.",
+    conflictWarning: "Ten skrót jest taki sam jak skrót pokazywania okna. Wybierz inny.",
     invalidWarning: "Nieprawidłowy format. Przykład: Alt+Shift+M",
     captureInvalid:
       "Nieprawidłowa kombinacja — użyj co najmniej jednego modyfikatora oraz litery, cyfry lub klawisza funkcyjnego.",
@@ -134,8 +130,7 @@ const speechSpecific = {
   pt: {
     title: "Atalho speech-to-text",
     help: "Atalho global para iniciar e parar o reconhecimento de voz. Predefinição: Alt + Shift + M.",
-    conflictWarning:
-      "Este atalho é o mesmo que o de mostrar janela. Escolha outro.",
+    conflictWarning: "Este atalho é o mesmo que o de mostrar janela. Escolha outro.",
     invalidWarning: "Formato inválido. Exemplo: Alt+Shift+M",
     captureInvalid:
       "Combinação inválida — use pelo menos um modificador mais uma letra, número ou tecla de função.",
@@ -145,8 +140,7 @@ const speechSpecific = {
   cs: {
     title: "Zkratka speech-to-text",
     help: "Globální zkratka pro spuštění a zastavení rozpoznávání řeči. Výchozí: Alt + Shift + M.",
-    conflictWarning:
-      "Tato zkratka je stejná jako zkratka pro zobrazení okna. Zvolte jinou.",
+    conflictWarning: "Tato zkratka je stejná jako zkratka pro zobrazení okna. Zvolte jinou.",
     invalidWarning: "Neplatný formát. Příklad: Alt+Shift+M",
     captureInvalid:
       "Neplatná kombinace — použijte alespoň jeden modifikátor plus písmeno, číslo nebo funkční klávesu.",
@@ -156,30 +150,25 @@ const speechSpecific = {
   da: {
     title: "Speech-to-text-genvej",
     help: "Global genvej til at starte og stoppe talegenkendelse. Standard: Alt + Shift + M.",
-    conflictWarning:
-      "Denne genvej er identisk med vindue-genvejen. Vælg en anden.",
+    conflictWarning: "Denne genvej er identisk med vindue-genvejen. Vælg en anden.",
     invalidWarning: "Ugyldigt format. Eksempel: Alt+Shift+M",
     captureInvalid:
       "Ugyldig kombination — brug mindst én modifier plus et bogstav, tal eller funktionstast.",
-    error:
-      "Speech-to-text-genvej kunne ikke registreres (måske allerede i brug af en anden app).",
+    error: "Speech-to-text-genvej kunne ikke registreres (måske allerede i brug af en anden app).",
   },
   sv: {
     title: "Speech-to-text-genväg",
     help: "Global genväg för att starta och stoppa taligenkänning. Standard: Alt + Shift + M.",
-    conflictWarning:
-      "Denna genväg är densamma som fönster-genvägen. Välj en annan.",
+    conflictWarning: "Denna genväg är densamma som fönster-genvägen. Välj en annan.",
     invalidWarning: "Ogiltigt format. Exempel: Alt+Shift+M",
     captureInvalid:
       "Ogiltig kombination — använd minst en modifierare plus en bokstav, siffra eller funktionstangent.",
-    error:
-      "Speech-to-text-genväg kunde inte registreras (kan redan användas av en annan app).",
+    error: "Speech-to-text-genväg kunde inte registreras (kan redan användas av en annan app).",
   },
   no: {
     title: "Speech-to-text-snarvei",
     help: "Global snarvei for å starte og stoppe talegjenkjenning. Standard: Alt + Shift + M.",
-    conflictWarning:
-      "Denne snarveien er den samme som vindu-snarveien. Velg en annen.",
+    conflictWarning: "Denne snarveien er den samme som vindu-snarveien. Velg en annen.",
     invalidWarning: "Ugyldig format. Eksempel: Alt+Shift+M",
     captureInvalid:
       "Ugyldig kombinasjon — bruk minst én modifier pluss en bokstav, et tall eller en funksjonstast.",
@@ -200,7 +189,8 @@ const speechSpecific = {
   ja: {
     title: "音声入力ホットキー",
     help: "音声認識の開始と停止用のグローバルショートカット。既定: Alt + Shift + M。",
-    conflictWarning: "このショートカットはウィンドウ表示ホットキーと同じです。別のものを選んでください。",
+    conflictWarning:
+      "このショートカットはウィンドウ表示ホットキーと同じです。別のものを選んでください。",
     invalidWarning: "形式が無効です。例: Alt+Shift+M",
     captureInvalid:
       "無効な組み合わせです。修飾キーと文字・数字・ファンクションキーを組み合わせてください。",
@@ -264,8 +254,7 @@ for (const file of fs.readdirSync(messagesDir).filter((f) => f.endsWith(".json")
   }
   if (!data["settings.speech.hotkey.checkingAvailability"]) {
     data["settings.speech.hotkey.checkingAvailability"] =
-      data["settings.appearance.showWindowHotkey.checkingAvailability"] ??
-      "Checking…";
+      data["settings.appearance.showWindowHotkey.checkingAvailability"] ?? "Checking…";
   }
 
   fs.writeFileSync(filePath, JSON.stringify(data, null, 2) + "\n");

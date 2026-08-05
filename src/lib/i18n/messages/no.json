@@ -1001,6 +1001,7 @@
   "upload.error.fileTooLarge": "Filen overskrider serverens opplastingsgrense.",
   "upload.error.httpFailed": "Opplasting mislyktes med HTTP {status}.",
   "upload.error.knowledgeArchiveFailed": "Opplasting til kunnskapsarkivet mislyktes.",
+  "upload.error.originDenied": "Opplastingsmål er ikke tillatt (origin ikke på allowlist).",
   "upload.error.urlUnresolved": "Opplastings-URL kunne ikke løses mot server-URL.",
   "vaultSecretPrompt.cancel": "Avbryt",
   "vaultSecretPrompt.hide": "Skjul",

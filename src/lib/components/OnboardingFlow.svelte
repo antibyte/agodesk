@@ -64,94 +64,104 @@
     aria-modal="true"
     aria-labelledby="onboarding-title"
   >
-      <header class="onboarding-header">
-        <p class="onboarding-kicker font-display">agodesk</p>
-        <h1 id="onboarding-title" class="font-display">
-          {$i18n(`onboarding.step${step + 1}.title` as MessageKey)}
-        </h1>
-        <p class="onboarding-lead">{$i18n(`onboarding.step${step + 1}.description` as MessageKey)}</p>
-      </header>
+    <header class="onboarding-header">
+      <p class="onboarding-kicker font-display">agodesk</p>
+      <h1 id="onboarding-title" class="font-display">
+        {$i18n(`onboarding.step${step + 1}.title` as MessageKey)}
+      </h1>
+      <p class="onboarding-lead">{$i18n(`onboarding.step${step + 1}.description` as MessageKey)}</p>
+    </header>
 
-      {#if step === 0}
-        <div class="locale-grid">
-          <label class="locale-card" class:selected={locale === "system"}>
+    {#if step === 0}
+      <div class="locale-grid">
+        <label class="locale-card" class:selected={locale === "system"}>
+          <input
+            type="radio"
+            checked={locale === "system"}
+            onchange={() => onLocaleChange?.("system")}
+          />
+          <strong>{$i18n("locale.setting.system")}</strong>
+        </label>
+        {#each APP_LOCALES as appLocale (appLocale)}
+          <label class="locale-card" class:selected={locale === appLocale}>
             <input
               type="radio"
-              checked={locale === "system"}
-              onchange={() => onLocaleChange?.("system")}
+              checked={locale === appLocale}
+              onchange={() => onLocaleChange?.(appLocale)}
             />
-            <strong>{$i18n("locale.setting.system")}</strong>
+            <strong>{LOCALE_LABELS[appLocale]}</strong>
           </label>
-          {#each APP_LOCALES as appLocale (appLocale)}
-            <label class="locale-card" class:selected={locale === appLocale}>
-              <input
-                type="radio"
-                checked={locale === appLocale}
-                onchange={() => onLocaleChange?.(appLocale)}
-              />
-              <strong>{LOCALE_LABELS[appLocale]}</strong>
-            </label>
-          {/each}
-        </div>
-      {:else if step === 1}
-        <label class="field">
-          <span>{$i18n("settings.connection.serverUrl.label")}</span>
-          <input
-            class="ui-input"
-            type="url"
-            value={serverUrl}
-            placeholder={$i18n("settings.connection.serverUrl.placeholder")}
-            oninput={(event) => onServerUrlChange?.((event.currentTarget as HTMLInputElement).value)}
-          />
-        </label>
-        <label class="field">
-          <span>{$i18n("pairing.step2")}</span>
-          <input
-            class="ui-input"
-            type="password"
-            value={pairingToken}
-            autocomplete="off"
-            placeholder={$i18n("pairing.token.placeholder")}
-            oninput={(event) =>
-              onPairingTokenChange?.((event.currentTarget as HTMLInputElement).value)}
-          />
-        </label>
-        <div class="action-row">
-          <button type="button" class="ui-btn ui-btn-secondary" disabled={busy} onclick={() => onConnect?.()}>
-            {$i18n("onboarding.connect")}
-          </button>
-          <button type="button" class="ui-btn ui-btn-primary" disabled={busy || !pairingToken.trim()} onclick={() => onPair?.()}>
-            {$i18n("onboarding.pair")}
-          </button>
-        </div>
-      {:else}
-        <label class="field checkbox-field">
-          <input
-            type="checkbox"
-            checked={speechEnabled}
-            onchange={(event) =>
-              onSpeechEnabledChange?.((event.currentTarget as HTMLInputElement).checked)}
-          />
-          <span>{$i18n("onboarding.speechEnable")}</span>
-        </label>
-        <p class="help">{$i18n("onboarding.speechHelp")}</p>
-      {/if}
+        {/each}
+      </div>
+    {:else if step === 1}
+      <label class="field">
+        <span>{$i18n("settings.connection.serverUrl.label")}</span>
+        <input
+          class="ui-input"
+          type="url"
+          value={serverUrl}
+          placeholder={$i18n("settings.connection.serverUrl.placeholder")}
+          oninput={(event) => onServerUrlChange?.((event.currentTarget as HTMLInputElement).value)}
+        />
+      </label>
+      <label class="field">
+        <span>{$i18n("pairing.step2")}</span>
+        <input
+          class="ui-input"
+          type="password"
+          value={pairingToken}
+          autocomplete="off"
+          placeholder={$i18n("pairing.token.placeholder")}
+          oninput={(event) =>
+            onPairingTokenChange?.((event.currentTarget as HTMLInputElement).value)}
+        />
+      </label>
+      <div class="action-row">
+        <button
+          type="button"
+          class="ui-btn ui-btn-secondary"
+          disabled={busy}
+          onclick={() => onConnect?.()}
+        >
+          {$i18n("onboarding.connect")}
+        </button>
+        <button
+          type="button"
+          class="ui-btn ui-btn-primary"
+          disabled={busy || !pairingToken.trim()}
+          onclick={() => onPair?.()}
+        >
+          {$i18n("onboarding.pair")}
+        </button>
+      </div>
+    {:else}
+      <label class="field checkbox-field">
+        <input
+          type="checkbox"
+          checked={speechEnabled}
+          onchange={(event) =>
+            onSpeechEnabledChange?.((event.currentTarget as HTMLInputElement).checked)}
+        />
+        <span>{$i18n("onboarding.speechEnable")}</span>
+      </label>
+      <p class="help">{$i18n("onboarding.speechHelp")}</p>
+    {/if}
 
-      <footer class="onboarding-footer">
-        <div class="step-dots" aria-hidden="true">
-          {#each [0, 1, 2] as dot (dot)}
-            <span class="dot" class:active={dot === step}></span>
-          {/each}
-        </div>
-        <div class="footer-actions">
-          <button type="button" class="ui-btn ui-btn-link" onclick={() => onSkip?.()}>
-            {$i18n("onboarding.skip")}
-          </button>
-          <button type="button" class="ui-btn ui-btn-primary" onclick={nextStep}>
-            {step === 2 ? $i18n("onboarding.finish") : $i18n("onboarding.next")}
-          </button>
-        </div>
-      </footer>
+    <footer class="onboarding-footer">
+      <div class="step-dots" aria-hidden="true">
+        {#each [0, 1, 2] as dot (dot)}
+          <span class="dot" class:active={dot === step}></span>
+        {/each}
+      </div>
+      <div class="footer-actions">
+        <button type="button" class="ui-btn ui-btn-link" onclick={() => onSkip?.()}>
+          {$i18n("onboarding.skip")}
+        </button>
+        <button type="button" class="ui-btn ui-btn-primary" onclick={nextStep}>
+          {step === 2 ? $i18n("onboarding.finish") : $i18n("onboarding.next")}
+        </button>
+      </div>
+    </footer>
   </dialog>
 {/if}
 

@@ -27,56 +27,52 @@
     aria-labelledby="catalog-title"
     onclick={(event) => event.stopPropagation()}
   >
-      <header class="catalog-header">
-        <h2 id="catalog-title">{$i18n("settings.llmProviders.catalog.title")}</h2>
-        <p>{$i18n("settings.llmProviders.catalog.description")}</p>
-      </header>
+    <header class="catalog-header">
+      <h2 id="catalog-title">{$i18n("settings.llmProviders.catalog.title")}</h2>
+      <p>{$i18n("settings.llmProviders.catalog.description")}</p>
+    </header>
 
-      {#if busy}
-        <p class="catalog-loading">{$i18n("settings.llmProviders.catalog.loading")}</p>
-      {:else if selectableEntries.length === 0}
-        <p class="catalog-empty">{$i18n("settings.llmProviders.catalog.empty")}</p>
-      {:else}
-        <ul class="catalog-list">
-          {#each selectableEntries as entry (entry.id)}
-            <li>
-              <button
-                type="button"
-                class="catalog-item"
-                onclick={() => onSelect?.(entry)}
-              >
-                <span class="catalog-name">{entry.name}</span>
-                {#if entry.base_url}
-                  <span class="catalog-base-url">{entry.base_url}</span>
-                {/if}
-                {#if entry.default_model}
-                  <span class="catalog-model">{entry.default_model}</span>
-                {/if}
-                {#if entry.models_count !== undefined}
-                  <span class="catalog-models-count">
-                    {$i18n("settings.llmProviders.catalog.modelsCount", {
-                      count: String(entry.models_count),
-                    })}
-                  </span>
-                {/if}
-                {#if entry.missing_credentials && entry.missing_credentials.length > 0}
-                  <span class="catalog-missing">
-                    {$i18n("settings.llmProviders.missingFields")}:
-                    {entry.missing_credentials.join(", ")}
-                  </span>
-                {/if}
-              </button>
-            </li>
-          {/each}
-        </ul>
-      {/if}
+    {#if busy}
+      <p class="catalog-loading">{$i18n("settings.llmProviders.catalog.loading")}</p>
+    {:else if selectableEntries.length === 0}
+      <p class="catalog-empty">{$i18n("settings.llmProviders.catalog.empty")}</p>
+    {:else}
+      <ul class="catalog-list">
+        {#each selectableEntries as entry (entry.id)}
+          <li>
+            <button type="button" class="catalog-item" onclick={() => onSelect?.(entry)}>
+              <span class="catalog-name">{entry.name}</span>
+              {#if entry.base_url}
+                <span class="catalog-base-url">{entry.base_url}</span>
+              {/if}
+              {#if entry.default_model}
+                <span class="catalog-model">{entry.default_model}</span>
+              {/if}
+              {#if entry.models_count !== undefined}
+                <span class="catalog-models-count">
+                  {$i18n("settings.llmProviders.catalog.modelsCount", {
+                    count: String(entry.models_count),
+                  })}
+                </span>
+              {/if}
+              {#if entry.missing_credentials && entry.missing_credentials.length > 0}
+                <span class="catalog-missing">
+                  {$i18n("settings.llmProviders.missingFields")}:
+                  {entry.missing_credentials.join(", ")}
+                </span>
+              {/if}
+            </button>
+          </li>
+        {/each}
+      </ul>
+    {/if}
 
-      <div class="catalog-actions">
-        <button type="button" class="ui-btn ghost" onclick={() => onClose?.()}>
-          {$i18n("certModal.cancel")}
-        </button>
-      </div>
-    </dialog>
+    <div class="catalog-actions">
+      <button type="button" class="ui-btn ghost" onclick={() => onClose?.()}>
+        {$i18n("certModal.cancel")}
+      </button>
+    </div>
+  </dialog>
 {/if}
 
 <style>

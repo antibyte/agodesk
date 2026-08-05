@@ -52,9 +52,7 @@ async function rememberRestoredSize(): Promise<void> {
  * @param currentlyMaximized Optional UI state — preferred when isMaximized() lags
  *   on undecorated transparent Windows windows.
  */
-export async function toggleMaximizeMainWindow(
-  currentlyMaximized?: boolean,
-): Promise<boolean> {
+export async function toggleMaximizeMainWindow(currentlyMaximized?: boolean): Promise<boolean> {
   if (!isDesktopShell()) {
     return false;
   }
@@ -63,9 +61,7 @@ export async function toggleMaximizeMainWindow(
     const reported = await win.isMaximized().catch(() => false);
     // Prefer explicit UI state when the OS report is inconsistent.
     const wasMax =
-      typeof currentlyMaximized === "boolean"
-        ? currentlyMaximized || reported
-        : reported;
+      typeof currentlyMaximized === "boolean" ? currentlyMaximized || reported : reported;
 
     if (!wasMax) {
       await rememberRestoredSize();

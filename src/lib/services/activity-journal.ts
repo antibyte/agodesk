@@ -96,11 +96,13 @@ export function appendActivityJournal(entry: ActivityJournalEntry): void {
   persist();
 }
 
-export function queryActivityJournal(options: {
-  conversationId?: string;
-  failedOnly?: boolean;
-  limit?: number;
-} = {}): ActivityJournalEntry[] {
+export function queryActivityJournal(
+  options: {
+    conversationId?: string;
+    failedOnly?: boolean;
+    limit?: number;
+  } = {},
+): ActivityJournalEntry[] {
   loadFromStorage();
   let entries = [...memory];
   if (options.conversationId) {

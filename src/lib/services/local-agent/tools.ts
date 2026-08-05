@@ -170,10 +170,10 @@ export const DISCOVERABLE_TOOLS: LocalToolSpec[] = [
         path: { type: "string" },
         patches: {
           type: "array",
-          items: schema(
-            { old_text: { type: "string" }, new_text: { type: "string" } },
-            ["old_text", "new_text"],
-          ),
+          items: schema({ old_text: { type: "string" }, new_text: { type: "string" } }, [
+            "old_text",
+            "new_text",
+          ]),
         },
         dry_run: { type: "boolean" },
       },

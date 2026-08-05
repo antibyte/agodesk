@@ -45,9 +45,7 @@
     }
   });
 
-  const mitmProduct = $derived(
-    probe ? detectAntivirusTlsInterception(probe.issuer) : null,
-  );
+  const mitmProduct = $derived(probe ? detectAntivirusTlsInterception(probe.issuer) : null);
 
   $effect(() => {
     if (!open || !serverUrl.startsWith("wss://")) {

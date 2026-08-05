@@ -1001,6 +1001,7 @@
   "upload.error.fileTooLarge": "फ़ाइल सर्वर अपलोड सीमा से अधिक है।",
   "upload.error.httpFailed": "अपलोड HTTP {status} के साथ विफल।",
   "upload.error.knowledgeArchiveFailed": "ज्ञान संग्रह अपलोड विफल।",
+  "upload.error.originDenied": "अपलोड लक्ष्य अनुमत नहीं है (origin allowlist पर नहीं)।",
   "upload.error.urlUnresolved": "सर्वर URL के सापेक्ष अपलोड URL हल नहीं हो सका।",
   "vaultSecretPrompt.cancel": "रद्द करें",
   "vaultSecretPrompt.hide": "छिपाएँ",

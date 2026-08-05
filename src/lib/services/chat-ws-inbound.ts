@@ -59,10 +59,7 @@ import {
   rejectProviderWaiterByRequestId,
 } from "./providers-flow";
 import { handleSystemWarningsMessage } from "./system-warnings-flow";
-import {
-  handleLocalAgentLlmResult,
-  handleLocalAgentRemoteToolResult,
-} from "./local-agent";
+import { handleLocalAgentLlmResult, handleLocalAgentRemoteToolResult } from "./local-agent";
 import { shouldUseFrontendTtsForSettings } from "./chat-tts-policy";
 import { syncAuraGoVoiceOutputStatus } from "./chat-voice-output-status";
 import { saveSettings } from "./settings";

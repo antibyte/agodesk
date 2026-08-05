@@ -51,15 +51,49 @@
             <stop offset="0.5" stop-color="#22f0ff" />
             <stop offset="1" stop-color="#ff2bd6" />
           </linearGradient>
-          <radialGradient id="cg1-b" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(32 32) rotate(90) scale(18)">
+          <radialGradient
+            id="cg1-b"
+            cx="0"
+            cy="0"
+            r="1"
+            gradientUnits="userSpaceOnUse"
+            gradientTransform="translate(32 32) rotate(90) scale(18)"
+          >
             <stop stop-color="#b8ff3c" stop-opacity="0.9" />
             <stop offset="1" stop-color="#b8ff3c" stop-opacity="0" />
           </radialGradient>
         </defs>
-        <circle cx="32" cy="32" r="22" stroke="url(#cg1-a)" stroke-width="1.8" stroke-dasharray="7 4 2 4" opacity="0.95" />
-        <circle cx="32" cy="32" r="15" stroke="#ff2bd6" stroke-width="1.2" stroke-dasharray="3 5" opacity="0.7" />
-        <path d="M10 30h12M42 34h12M30 10v10M34 44v10" stroke="#22f0ff" stroke-width="1.6" stroke-linecap="round" />
-        <path d="M18 18l6 4M46 46l-6-4M46 18l-5 5M18 46l5-5" stroke="#c026ff" stroke-width="1.3" stroke-linecap="round" opacity="0.85" />
+        <circle
+          cx="32"
+          cy="32"
+          r="22"
+          stroke="url(#cg1-a)"
+          stroke-width="1.8"
+          stroke-dasharray="7 4 2 4"
+          opacity="0.95"
+        />
+        <circle
+          cx="32"
+          cy="32"
+          r="15"
+          stroke="#ff2bd6"
+          stroke-width="1.2"
+          stroke-dasharray="3 5"
+          opacity="0.7"
+        />
+        <path
+          d="M10 30h12M42 34h12M30 10v10M34 44v10"
+          stroke="#22f0ff"
+          stroke-width="1.6"
+          stroke-linecap="round"
+        />
+        <path
+          d="M18 18l6 4M46 46l-6-4M46 18l-5 5M18 46l5-5"
+          stroke="#c026ff"
+          stroke-width="1.3"
+          stroke-linecap="round"
+          opacity="0.85"
+        />
         <circle cx="32" cy="32" r="5" fill="url(#cg1-b)" />
         <circle cx="32" cy="32" r="2.2" fill="#fff" opacity="0.95" />
         <circle cx="20" cy="22" r="1.4" fill="#ffb020" />
@@ -79,9 +113,26 @@
             <stop offset="1" stop-color="#b8ff3c" stop-opacity="0.35" />
           </linearGradient>
         </defs>
-        <path d="M36 6 18 32h12l-5 24 24-30H33l3-20Z" fill="url(#cg2-b)" stroke="url(#cg2-a)" stroke-width="1.8" stroke-linejoin="round" />
-        <path d="M34 10 22 30h8l-3 16 14-18h-8l3-18Z" stroke="#22f0ff" stroke-width="1.1" stroke-linejoin="round" opacity="0.75" />
-        <path d="M40 14h6M16 40h7M48 42l4 4" stroke="#b8ff3c" stroke-width="1.4" stroke-linecap="round" />
+        <path
+          d="M36 6 18 32h12l-5 24 24-30H33l3-20Z"
+          fill="url(#cg2-b)"
+          stroke="url(#cg2-a)"
+          stroke-width="1.8"
+          stroke-linejoin="round"
+        />
+        <path
+          d="M34 10 22 30h8l-3 16 14-18h-8l3-18Z"
+          stroke="#22f0ff"
+          stroke-width="1.1"
+          stroke-linejoin="round"
+          opacity="0.75"
+        />
+        <path
+          d="M40 14h6M16 40h7M48 42l4 4"
+          stroke="#b8ff3c"
+          stroke-width="1.4"
+          stroke-linecap="round"
+        />
         <circle cx="28" cy="28" r="1.6" fill="#fff" />
         <circle cx="38" cy="36" r="1.2" fill="#ffb020" />
       </svg>
@@ -95,13 +146,30 @@
             <stop offset="1" stop-color="#ff4d6d" />
           </linearGradient>
         </defs>
-        <path d="M32 8c10 7 18 12 18 22a18 18 0 1 1-36 0c0-6 4-11 10-15" stroke="url(#cg3-a)" stroke-width="2" stroke-linecap="round" />
-        <path d="M32 8c7 5 12 9 12 16a12 12 0 1 1-24 0c0-4 2-7 6-10" stroke="#ff2bd6" stroke-width="1.2" stroke-linecap="round" opacity="0.7" />
+        <path
+          d="M32 8c10 7 18 12 18 22a18 18 0 1 1-36 0c0-6 4-11 10-15"
+          stroke="url(#cg3-a)"
+          stroke-width="2"
+          stroke-linecap="round"
+        />
+        <path
+          d="M32 8c7 5 12 9 12 16a12 12 0 1 1-24 0c0-4 2-7 6-10"
+          stroke="#ff2bd6"
+          stroke-width="1.2"
+          stroke-linecap="round"
+          opacity="0.7"
+        />
         <path d="M32 8v16l10-5" stroke="#b8ff3c" stroke-width="1.6" stroke-linejoin="round" />
         <path d="M32 24l-7 4" stroke="#22f0ff" stroke-width="1.3" stroke-linecap="round" />
         <circle cx="32" cy="30" r="3" fill="#c026ff" opacity="0.85" />
         <circle cx="32" cy="30" r="1.3" fill="#fff" />
-        <path d="M14 20h5M48 44h6M50 16l-4 4" stroke="#ffb020" stroke-width="1.3" stroke-linecap="round" opacity="0.85" />
+        <path
+          d="M14 20h5M48 44h6M50 16l-4 4"
+          stroke="#ffb020"
+          stroke-width="1.3"
+          stroke-linecap="round"
+          opacity="0.85"
+        />
       </svg>
     </span>
     <span class="chaos-glyph chaos-glyph-4">
@@ -112,7 +180,14 @@
             <stop offset="0.4" stop-color="#ff2bd6" />
             <stop offset="1" stop-color="#22f0ff" />
           </linearGradient>
-          <radialGradient id="cg4-b" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(32 30) rotate(90) scale(16)">
+          <radialGradient
+            id="cg4-b"
+            cx="0"
+            cy="0"
+            r="1"
+            gradientUnits="userSpaceOnUse"
+            gradientTransform="translate(32 30) rotate(90) scale(16)"
+          >
             <stop stop-color="#c026ff" stop-opacity="0.45" />
             <stop offset="1" stop-color="#c026ff" stop-opacity="0" />
           </radialGradient>
@@ -126,7 +201,13 @@
           stroke-width="1.7"
           stroke-linejoin="round"
         />
-        <path d="M32 16 34.5 26l10 1.4-8 6.8 2.4 10L32 38.5l-6.9 5.7 2.4-10-8-6.8 10-1.4Z" stroke="#b8ff3c" stroke-width="1.1" stroke-linejoin="round" opacity="0.8" />
+        <path
+          d="M32 16 34.5 26l10 1.4-8 6.8 2.4 10L32 38.5l-6.9 5.7 2.4-10-8-6.8 10-1.4Z"
+          stroke="#b8ff3c"
+          stroke-width="1.1"
+          stroke-linejoin="round"
+          opacity="0.8"
+        />
         <circle cx="32" cy="30" r="2" fill="#fff" />
         <circle cx="22" cy="18" r="1.3" fill="#22f0ff" />
         <circle cx="44" cy="42" r="1.3" fill="#ffb020" />
@@ -141,12 +222,36 @@
             <stop offset="1" stop-color="#b8ff3c" />
           </linearGradient>
         </defs>
-        <path d="M12 50 28 10l8 18 14-8-10 32H12Z" fill="#22f0ff" fill-opacity="0.1" stroke="url(#cg5-a)" stroke-width="1.8" stroke-linejoin="round" />
-        <path d="M18 46 30 18l5 12 9-5-7 23H18Z" stroke="#ff2bd6" stroke-width="1.1" stroke-linejoin="round" opacity="0.75" />
-        <path d="M8 16h10M46 48h10M52 12l-8 8M10 40l6 2" stroke="#ffb020" stroke-width="1.4" stroke-linecap="round" />
+        <path
+          d="M12 50 28 10l8 18 14-8-10 32H12Z"
+          fill="#22f0ff"
+          fill-opacity="0.1"
+          stroke="url(#cg5-a)"
+          stroke-width="1.8"
+          stroke-linejoin="round"
+        />
+        <path
+          d="M18 46 30 18l5 12 9-5-7 23H18Z"
+          stroke="#ff2bd6"
+          stroke-width="1.1"
+          stroke-linejoin="round"
+          opacity="0.75"
+        />
+        <path
+          d="M8 16h10M46 48h10M52 12l-8 8M10 40l6 2"
+          stroke="#ffb020"
+          stroke-width="1.4"
+          stroke-linecap="round"
+        />
         <circle cx="30" cy="28" r="2" fill="#b8ff3c" />
         <circle cx="40" cy="34" r="1.4" fill="#fff" />
-        <path d="M24 36h12" stroke="#c026ff" stroke-width="1.2" stroke-linecap="round" opacity="0.8" />
+        <path
+          d="M24 36h12"
+          stroke="#c026ff"
+          stroke-width="1.2"
+          stroke-linecap="round"
+          opacity="0.8"
+        />
       </svg>
     </span>
     <span class="chaos-glyph chaos-glyph-6">
@@ -158,9 +263,37 @@
             <stop offset="1" stop-color="#22f0ff" />
           </linearGradient>
         </defs>
-        <rect x="12" y="12" width="36" height="36" rx="3" stroke="#22f0ff" stroke-width="1.3" transform="rotate(14 32 32)" opacity="0.55" />
-        <rect x="14" y="14" width="32" height="32" rx="2" stroke="url(#cg6-a)" stroke-width="1.8" transform="rotate(-10 32 32)" />
-        <rect x="20" y="20" width="20" height="20" stroke="#b8ff3c" stroke-width="1.1" transform="rotate(6 32 32)" opacity="0.8" />
+        <rect
+          x="12"
+          y="12"
+          width="36"
+          height="36"
+          rx="3"
+          stroke="#22f0ff"
+          stroke-width="1.3"
+          transform="rotate(14 32 32)"
+          opacity="0.55"
+        />
+        <rect
+          x="14"
+          y="14"
+          width="32"
+          height="32"
+          rx="2"
+          stroke="url(#cg6-a)"
+          stroke-width="1.8"
+          transform="rotate(-10 32 32)"
+        />
+        <rect
+          x="20"
+          y="20"
+          width="20"
+          height="20"
+          stroke="#b8ff3c"
+          stroke-width="1.1"
+          transform="rotate(6 32 32)"
+          opacity="0.8"
+        />
         <path d="M20 32h24M32 20v24" stroke="#ff2bd6" stroke-width="1.4" opacity="0.9" />
         <path d="M24 24l16 16M40 24 24 40" stroke="#ffb020" stroke-width="1.1" opacity="0.65" />
         <circle cx="32" cy="32" r="2.4" fill="#fff" />
@@ -177,12 +310,31 @@
             <stop offset="1" stop-color="#22f0ff" />
           </linearGradient>
         </defs>
-        <path d="M8 32c8-14 16-20 24-20s16 6 24 20c-8 14-16 20-24 20S16 46 8 32Z" stroke="url(#cg7-a)" stroke-width="1.8" fill="#c026ff" fill-opacity="0.08" />
-        <ellipse cx="32" cy="32" rx="10" ry="16" stroke="#b8ff3c" stroke-width="1.2" opacity="0.75" />
+        <path
+          d="M8 32c8-14 16-20 24-20s16 6 24 20c-8 14-16 20-24 20S16 46 8 32Z"
+          stroke="url(#cg7-a)"
+          stroke-width="1.8"
+          fill="#c026ff"
+          fill-opacity="0.08"
+        />
+        <ellipse
+          cx="32"
+          cy="32"
+          rx="10"
+          ry="16"
+          stroke="#b8ff3c"
+          stroke-width="1.2"
+          opacity="0.75"
+        />
         <circle cx="32" cy="32" r="6" stroke="#22f0ff" stroke-width="1.3" />
         <circle cx="32" cy="32" r="2.5" fill="#ff2bd6" />
         <circle cx="32" cy="32" r="1.1" fill="#fff" />
-        <path d="M14 20 20 24M50 44 44 40M50 20 44 24M14 44l6-4" stroke="#ffb020" stroke-width="1.2" stroke-linecap="round" />
+        <path
+          d="M14 20 20 24M50 44 44 40M50 20 44 24M14 44l6-4"
+          stroke="#ffb020"
+          stroke-width="1.2"
+          stroke-linecap="round"
+        />
       </svg>
     </span>
     <span class="chaos-glyph chaos-glyph-8">
@@ -194,9 +346,27 @@
             <stop offset="1" stop-color="#ff2bd6" />
           </linearGradient>
         </defs>
-        <path d="M32 8 48 20v24L32 56 16 44V20Z" stroke="url(#cg8-a)" stroke-width="1.8" stroke-linejoin="round" fill="#22f0ff" fill-opacity="0.08" />
-        <path d="M32 16 42 23v18L32 48 22 41V23Z" stroke="#c026ff" stroke-width="1.2" stroke-linejoin="round" opacity="0.8" />
-        <path d="M32 8v48M16 20l32 24M48 20 16 44" stroke="#ffb020" stroke-width="1" opacity="0.45" />
+        <path
+          d="M32 8 48 20v24L32 56 16 44V20Z"
+          stroke="url(#cg8-a)"
+          stroke-width="1.8"
+          stroke-linejoin="round"
+          fill="#22f0ff"
+          fill-opacity="0.08"
+        />
+        <path
+          d="M32 16 42 23v18L32 48 22 41V23Z"
+          stroke="#c026ff"
+          stroke-width="1.2"
+          stroke-linejoin="round"
+          opacity="0.8"
+        />
+        <path
+          d="M32 8v48M16 20l32 24M48 20 16 44"
+          stroke="#ffb020"
+          stroke-width="1"
+          opacity="0.45"
+        />
         <circle cx="32" cy="32" r="3" fill="#ff2bd6" />
         <circle cx="32" cy="32" r="1.2" fill="#fff" />
         <circle cx="24" cy="26" r="1.2" fill="#b8ff3c" />
@@ -571,7 +741,9 @@
     animation:
       chaos-float-breathe 6.8s cubic-bezier(0.4, 0, 0.2, 1) infinite,
       chaos-glyph-glitch 3.4s steps(1, end) infinite;
-    animation-delay: -6s, -1.6s;
+    animation-delay:
+      -6s,
+      -1.6s;
   }
 
   /* 2 + 6: accel trail */
@@ -581,7 +753,9 @@
     animation:
       chaos-float-dash 8.5s cubic-bezier(0.45, 0.05, 0.2, 1) infinite,
       chaos-glyph-glitch 5.2s steps(1, end) infinite;
-    animation-delay: -2.2s, -1s;
+    animation-delay:
+      -2.2s,
+      -1s;
   }
   .chaos-glyph-2::before {
     animation-duration: 8.5s;
@@ -598,7 +772,9 @@
     animation:
       chaos-float-dash 10s cubic-bezier(0.45, 0.05, 0.2, 1) infinite,
       chaos-glyph-glitch 4.8s steps(1, end) infinite;
-    animation-delay: -3s, -0.8s;
+    animation-delay:
+      -3s,
+      -0.8s;
   }
   .chaos-glyph-6::before {
     animation-duration: 10s;
@@ -616,7 +792,9 @@
     animation:
       chaos-float 7.1s cubic-bezier(0.4, 0, 0.2, 1) infinite,
       chaos-glyph-phase 4.1s steps(1, end) infinite;
-    animation-delay: -4s, -0.5s;
+    animation-delay:
+      -4s,
+      -0.5s;
   }
   .chaos-glyph-7 {
     bottom: 28%;
@@ -625,7 +803,9 @@
     animation:
       chaos-float 7.6s cubic-bezier(0.4, 0, 0.2, 1) infinite,
       chaos-glyph-phase 3.9s steps(1, end) infinite;
-    animation-delay: -2.8s, -1.2s;
+    animation-delay:
+      -2.8s,
+      -1.2s;
   }
 
   /* 4 + 8: warp mix (scale pops + trail flashes) */
@@ -635,7 +815,9 @@
     animation:
       chaos-float-warp 9.2s cubic-bezier(0.4, 0, 0.2, 1) infinite,
       chaos-glyph-glitch 5.6s steps(1, end) infinite;
-    animation-delay: -1.4s, -2s;
+    animation-delay:
+      -1.4s,
+      -2s;
   }
   .chaos-glyph-4::after {
     animation-duration: 9.2s;
@@ -648,7 +830,9 @@
     animation:
       chaos-float-warp 8.8s cubic-bezier(0.4, 0, 0.2, 1) infinite,
       chaos-glyph-glitch 5s steps(1, end) infinite;
-    animation-delay: -5s, -2.4s;
+    animation-delay:
+      -5s,
+      -2.4s;
   }
   .chaos-glyph-8::after {
     animation-duration: 8.8s;
@@ -877,7 +1061,9 @@
         transparent 1px,
         transparent 3px
       );
-    background-size: 48px 48px, 100% 100%;
+    background-size:
+      48px 48px,
+      100% 100%;
     mix-blend-mode: screen;
   }
 
@@ -1412,13 +1598,25 @@
       chaos-hue 14s linear infinite;
   }
   :global(:root[data-ui-theme="chaos"]) .aurora-layer-a {
-    background: radial-gradient(ellipse 70% 55% at 20% 30%, rgba(192, 38, 255, 0.35), transparent 60%);
+    background: radial-gradient(
+      ellipse 70% 55% at 20% 30%,
+      rgba(192, 38, 255, 0.35),
+      transparent 60%
+    );
   }
   :global(:root[data-ui-theme="chaos"]) .aurora-layer-b {
-    background: radial-gradient(ellipse 65% 50% at 78% 60%, rgba(34, 240, 255, 0.28), transparent 58%);
+    background: radial-gradient(
+      ellipse 65% 50% at 78% 60%,
+      rgba(34, 240, 255, 0.28),
+      transparent 58%
+    );
   }
   :global(:root[data-ui-theme="chaos"]) .aurora-layer-c {
-    background: radial-gradient(ellipse 55% 45% at 50% 80%, rgba(255, 43, 214, 0.22), transparent 55%);
+    background: radial-gradient(
+      ellipse 55% 45% at 50% 80%,
+      rgba(255, 43, 214, 0.22),
+      transparent 55%
+    );
   }
   :global(:root[data-ui-theme="chaos"]) .chaos-extras {
     display: block;

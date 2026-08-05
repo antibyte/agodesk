@@ -31,8 +31,7 @@ const de = {
   "settings.speech.grokVoices.refresh": "Stimmen von xAI laden",
   "settings.speech.grokVoices.loading": "Stimmen werden geladen…",
   "settings.speech.grokVoices.loaded": "{count} Stimmen aus xAI / lokalem Katalog.",
-  "settings.speech.grokVoices.loadFailed":
-    "Voller Katalog nicht geladen; zeige eingebaute Liste.",
+  "settings.speech.grokVoices.loadFailed": "Voller Katalog nicht geladen; zeige eingebaute Liste.",
   "settings.speech.grokVoices.needKey":
     "xAI API-Key speichern, um den vollen Stimmenkatalog zu laden.",
 };
@@ -42,7 +41,11 @@ for (const file of fs.readdirSync(dir).filter((f) => f.endsWith(".json"))) {
   const full = path.join(dir, file);
   const data = JSON.parse(fs.readFileSync(full, "utf8"));
   Object.assign(data, locale === "de" ? de : en);
-  const sorted = Object.fromEntries(Object.keys(data).sort().map((k) => [k, data[k]]));
+  const sorted = Object.fromEntries(
+    Object.keys(data)
+      .sort()
+      .map((k) => [k, data[k]]),
+  );
   fs.writeFileSync(full, `${JSON.stringify(sorted, null, 2)}\n`);
   console.log("ok", file);
 }

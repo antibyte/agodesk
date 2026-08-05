@@ -2,7 +2,14 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-const dir = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "src", "lib", "i18n", "messages");
+const dir = path.join(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "..",
+  "src",
+  "lib",
+  "i18n",
+  "messages",
+);
 
 const en = {
   "settings.speech.provider.grok_voice.title": "Grok Voice",
@@ -50,7 +57,8 @@ const de = {
   "settings.speech.xaiApiKey.error.saveFailed": "API-Key konnte nicht gespeichert werden.",
   "settings.speech.xaiApiKey.error.testFailed": "Verbindungstest fehlgeschlagen.",
   "settings.speech.xaiApiKey.error.testGrokOnly": "Verbindungstest gilt nur für Grok Voice.",
-  "settings.speech.xaiApiKey.error.testNoKey": "Bitte zuerst einen API-Key eingeben oder speichern.",
+  "settings.speech.xaiApiKey.error.testNoKey":
+    "Bitte zuerst einen API-Key eingeben oder speichern.",
   "settings.speech.xaiApiKey.fieldLabel": "xAI API-Key",
   "settings.speech.xaiApiKey.freeKeyLink": "xAI Console",
   "settings.speech.xaiApiKey.freeKeyPrompt": "API-Key hier holen:",
@@ -76,7 +84,16 @@ for (const file of fs.readdirSync(dir).filter((f) => f.endsWith(".json"))) {
   const data = JSON.parse(fs.readFileSync(full, "utf8"));
   const map = localeMaps[locale] ?? en;
   Object.assign(data, map);
-  const sorted = Object.fromEntries(Object.keys(data).sort().map((k) => [k, data[k]]));
+  const sorted = Object.fromEntries(
+    Object.keys(data)
+      .sort()
+      .map((k) => [k, data[k]]),
+  );
   fs.writeFileSync(full, `${JSON.stringify(sorted, null, 2)}\n`);
-  console.log("updated", file, "has grok", Boolean(sorted["settings.speech.provider.grok_voice.title"]));
+  console.log(
+    "updated",
+    file,
+    "has grok",
+    Boolean(sorted["settings.speech.provider.grok_voice.title"]),
+  );
 }

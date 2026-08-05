@@ -346,8 +346,7 @@ export function normalizeConfigProvider(raw: unknown): ConfigProvider | null {
   const record = raw as Record<string, unknown>;
   const id = readString(record, "id");
   const name =
-    readString(record, "name", "label", "display_name", "displayName") ??
-    readString(record, "id");
+    readString(record, "name", "label", "display_name", "displayName") ?? readString(record, "id");
   const type = readString(record, "type", "aura_provider_type", "auraProviderType");
   if (!id || !name || !type) {
     return null;
@@ -358,8 +357,7 @@ export function normalizeConfigProvider(raw: unknown): ConfigProvider | null {
         .map((entry) => normalizeReference(entry))
         .filter((entry): entry is ConfigProviderReference => entry !== null)
     : undefined;
-  const model =
-    readString(record, "model") ?? readString(record, "default_model", "defaultModel");
+  const model = readString(record, "model") ?? readString(record, "default_model", "defaultModel");
 
   return {
     id,
@@ -518,8 +516,7 @@ function normalizeCatalogEntry(raw: unknown): ConfigProviderCatalogEntry | null 
     });
   }
   const resolvedAuthType =
-    authType ??
-    (oauthSetup?.auth_url || oauthSetup?.token_url ? ("oauth" as const) : undefined);
+    authType ?? (oauthSetup?.auth_url || oauthSetup?.token_url ? ("oauth" as const) : undefined);
   return {
     id,
     name,

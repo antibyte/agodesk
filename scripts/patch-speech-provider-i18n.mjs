@@ -80,8 +80,7 @@ const byLocale = {
     "settings.speech.voiceName.label.grok_voice": "Grok voice",
     "speechFlow.error.noApiKey.gemini_live":
       "No Gemini API key stored. Please save one in Settings.",
-    "speechFlow.error.noApiKey.grok_voice":
-      "No xAI API key stored. Please save one in Settings.",
+    "speechFlow.error.noApiKey.grok_voice": "No xAI API key stored. Please save one in Settings.",
     "settings.speech.voiceResponses": "Spoken replies from Gemini (voice)",
     "settings.speech.voiceResponsesHelp":
       "Native-audio models can reply by voice (24 kHz PCM). Reply text also appears as a chat message.",
@@ -99,7 +98,11 @@ for (const file of fs.readdirSync(dir).filter((f) => f.endsWith(".json"))) {
   const full = path.join(dir, file);
   const data = JSON.parse(fs.readFileSync(full, "utf8"));
   Object.assign(data, byLocale[locale] ?? byLocale.en);
-  const sorted = Object.fromEntries(Object.keys(data).sort().map((k) => [k, data[k]]));
+  const sorted = Object.fromEntries(
+    Object.keys(data)
+      .sort()
+      .map((k) => [k, data[k]]),
+  );
   fs.writeFileSync(full, `${JSON.stringify(sorted, null, 2)}\n`);
   console.log("updated", file);
 }

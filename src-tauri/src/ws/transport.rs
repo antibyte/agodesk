@@ -121,6 +121,7 @@ pub async fn upload_chat_attachment(
     pinned_fingerprint: Option<String>,
     device_id: Option<String>,
     session_id: Option<String>,
+    allowed_origins: Option<Vec<String>>,
 ) -> Result<crate::ws::asset_fetch::UploadedAttachment, String> {
     let _ = (device_id, session_id);
     if server_url.trim().is_empty() {
@@ -136,6 +137,7 @@ pub async fn upload_chat_attachment(
         return Err("bytes is required.".to_string());
     }
     let field = upload_field.unwrap_or_else(|| "file".to_string());
+    let allowed_origins = allowed_origins.unwrap_or_default();
     tokio::task::spawn_blocking(move || {
         crate::ws::asset_fetch::upload_chat_attachment_impl(
             &app,
@@ -146,6 +148,7 @@ pub async fn upload_chat_attachment(
             &bytes,
             &field,
             pinned_fingerprint.as_deref(),
+            &allowed_origins,
         )
     })
     .await

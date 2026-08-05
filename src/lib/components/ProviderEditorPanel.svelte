@@ -112,9 +112,7 @@
       catalogEntryUsesOauth(catalogEntry),
   );
 
-  const showAuthTypeSelector = $derived(
-    canWrite && supportsApiKeyAuth && supportsOauthAuth,
-  );
+  const showAuthTypeSelector = $derived(canWrite && supportsApiKeyAuth && supportsOauthAuth);
 
   const usesOauthFlow = $derived(draftAuthType === "oauth" && supportsOauthAuth);
 
@@ -124,8 +122,8 @@
     mode === "create" &&
       Boolean(
         catalogEntry?.oauth_setup?.auth_url ||
-          catalogEntry?.oauth_setup?.token_url ||
-          catalogEntry?.oauth_provider,
+        catalogEntry?.oauth_setup?.token_url ||
+        catalogEntry?.oauth_provider,
       ),
   );
 
@@ -204,10 +202,7 @@
         auth_type: draftAuthType,
         ...(draftAuthType === "oauth"
           ? {
-              oauth_provider:
-                provider?.oauth_provider ||
-                catalogEntry?.oauth_provider ||
-                undefined,
+              oauth_provider: provider?.oauth_provider || catalogEntry?.oauth_provider || undefined,
               oauth_auth_url: draftOauthAuthUrl.trim() || undefined,
               oauth_token_url: draftOauthTokenUrl.trim() || undefined,
               oauth_client_id: draftOauthClientId.trim() || undefined,
@@ -306,10 +301,7 @@
         </label>
         <label class="full">
           <span>{$i18n("settings.llmProviders.fields.baseUrl")}</span>
-          <input
-            bind:value={draftBaseUrl}
-            disabled={!canWrite || busy || catalogBaseUrlLocked}
-          />
+          <input bind:value={draftBaseUrl} disabled={!canWrite || busy || catalogBaseUrlLocked} />
         </label>
         <label class="full">
           <span>{$i18n("settings.llmProviders.fields.model")}</span>

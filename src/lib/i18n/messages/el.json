@@ -1001,6 +1001,7 @@
   "upload.error.fileTooLarge": "Το αρχείο υπερβαίνει το όριο μεταφόρτωσης του διακομιστή.",
   "upload.error.httpFailed": "Η μεταφόρτωση απέτυχε με HTTP {status}.",
   "upload.error.knowledgeArchiveFailed": "Αποτυχία μεταφόρτωσης στο αρχείο γνώσεων.",
+  "upload.error.originDenied": "Ο προορισμός μεταφόρτωσης δεν επιτρέπεται (το origin δεν είναι στην allowlist).",
   "upload.error.urlUnresolved": "Δεν ήταν δυνατή η επίλυση του URL μεταφόρτωσης ως προς το URL διακομιστή.",
   "vaultSecretPrompt.cancel": "Ακύρωση",
   "vaultSecretPrompt.hide": "Απόκρυψη",

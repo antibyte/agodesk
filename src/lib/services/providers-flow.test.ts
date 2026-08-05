@@ -128,11 +128,7 @@ test("buildConfigProviderOauthCompletePayload parses code and state from redirec
 });
 
 test("buildConfigProviderOauthCompleteMessage falls back to redirect_url", () => {
-  const message = buildConfigProviderOauthCompleteMessage(
-    "sess-1",
-    "gemini",
-    "not-a-valid-url",
-  );
+  const message = buildConfigProviderOauthCompleteMessage("sess-1", "gemini", "not-a-valid-url");
   assert.deepEqual(message.payload, {
     session_id: "sess-1",
     provider_id: "gemini",

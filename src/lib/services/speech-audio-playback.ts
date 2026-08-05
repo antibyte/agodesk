@@ -127,7 +127,8 @@ export class SpeechAudioPlayback {
     if (!this.active) {
       this.active = true;
     }
-    const rate = Number.isFinite(sampleRate) && sampleRate > 0 ? sampleRate : DEFAULT_OUTPUT_SAMPLE_RATE;
+    const rate =
+      Number.isFinite(sampleRate) && sampleRate > 0 ? sampleRate : DEFAULT_OUTPUT_SAMPLE_RATE;
     this.queue.push({ samples, rate });
     await this.drainQueue();
   }

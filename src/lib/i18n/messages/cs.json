@@ -1001,6 +1001,7 @@
   "upload.error.fileTooLarge": "Soubor překračuje limit nahrávání serveru.",
   "upload.error.httpFailed": "Nahrání selhalo s HTTP {status}.",
   "upload.error.knowledgeArchiveFailed": "Nahrání do archivu znalostí selhalo.",
+  "upload.error.originDenied": "Cíl nahrání není povolen (origin není na allowlistu).",
   "upload.error.urlUnresolved": "URL nahrání se nepodařilo vyřešit vůči URL serveru.",
   "vaultSecretPrompt.cancel": "Zrušit",
   "vaultSecretPrompt.hide": "Skrýt",

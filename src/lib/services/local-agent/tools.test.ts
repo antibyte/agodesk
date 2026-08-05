@@ -51,9 +51,7 @@ test("configured file + shell access reveals those tools", () => {
     shellAccess: {
       ...DEFAULT_SETTINGS.shellAccess,
       enabled: true,
-      allowedCwds: [
-        { cwdId: "c1", label: "Home", canonicalPath: "/home", pathDisplay: "/home" },
-      ],
+      allowedCwds: [{ cwdId: "c1", label: "Home", canonicalPath: "/home", pathDisplay: "/home" }],
     },
   };
   const available = availableDiscoverableTools(settings).map((tool) => tool.name);

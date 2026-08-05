@@ -576,7 +576,9 @@ export class GeminiLiveSession {
         return;
       } catch (error) {
         const message =
-          error instanceof Error ? error.message : getTranslateFn()("geminiLive.error.connectFailed");
+          error instanceof Error
+            ? error.message
+            : getTranslateFn()("geminiLive.error.connectFailed");
         errors.push(`[${apiVersion}] ${message}`);
         this.cleanupConnection();
 
@@ -652,7 +654,11 @@ export class GeminiLiveSession {
         this.resolveSetup = null;
         this.rejectSetup = null;
         reject(
-          new Error(getTranslateFn()("geminiLive.error.setupTimeout", { model: normalizeModelId(this.speech.modelId) })),
+          new Error(
+            getTranslateFn()("geminiLive.error.setupTimeout", {
+              model: normalizeModelId(this.speech.modelId),
+            }),
+          ),
         );
       }, SETUP_TIMEOUT_MS);
 
@@ -701,7 +707,9 @@ export class GeminiLiveSession {
           (event.code === 1000
             ? getTranslateFn()("geminiLive.error.serverClosedNoSetup")
             : getTranslateFn()("geminiLive.error.websocketCode", { code: event.code }));
-        this.rejectSetup?.(new Error(getTranslateFn()("geminiLive.error.disconnected", { apiVersion, detail })));
+        this.rejectSetup?.(
+          new Error(getTranslateFn()("geminiLive.error.disconnected", { apiVersion, detail })),
+        );
       }
 
       if (this.ws === ws) {

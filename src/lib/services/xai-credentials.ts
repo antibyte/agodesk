@@ -41,7 +41,13 @@ export async function listXaiTtsVoices(): Promise<GrokVoiceOption[]> {
     return [];
   }
   const raw = await invoke<
-    Array<{ voiceId?: string; voice_id?: string; name?: string; language?: string | null; custom?: boolean }>
+    Array<{
+      voiceId?: string;
+      voice_id?: string;
+      name?: string;
+      language?: string | null;
+      custom?: boolean;
+    }>
   >("list_xai_tts_voices");
   return (raw ?? [])
     .map((entry) => {

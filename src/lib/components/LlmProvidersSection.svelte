@@ -69,9 +69,7 @@
   let busy = $state(false);
   let sectionFeedback = $state("");
   let sectionFeedbackTone = $state<"success" | "error" | "">("");
-  let providerFeedback = $state<
-    Record<string, { message: string; tone: "success" | "error" }>
-  >({});
+  let providerFeedback = $state<Record<string, { message: string; tone: "success" | "error" }>>({});
 
   let oauthOpen = $state(false);
   let oauthBusy = $state(false);
@@ -108,11 +106,7 @@
     void cleanupOauth();
   });
 
-  function setFeedback(
-    message: string,
-    tone: "success" | "error" | "",
-    providerId?: string,
-  ): void {
+  function setFeedback(message: string, tone: "success" | "error" | "", providerId?: string): void {
     if (providerId && tone) {
       providerFeedback = {
         ...providerFeedback,
@@ -156,12 +150,11 @@
       editingProvider = await fetchConfigProviderDetail(wsSend, sessionId, provider.id);
       try {
         const catalog = get(providersState).catalog;
-        const listEntry =
-          findCatalogEntryForProvider(catalog, editingProvider) ?? {
-            id: editingProvider.type || editingProvider.id,
-            name: editingProvider.name,
-            aura_provider_type: editingProvider.type,
-          };
+        const listEntry = findCatalogEntryForProvider(catalog, editingProvider) ?? {
+          id: editingProvider.type || editingProvider.id,
+          name: editingProvider.name,
+          aura_provider_type: editingProvider.type,
+        };
         const catalogId = listEntry.id || editingProvider.type || editingProvider.id;
         const detail = await fetchConfigProviderCatalogDetail(wsSend, sessionId, catalogId);
         selectedCatalogEntry = mergeCatalogEntries(listEntry, detail.providers[0] ?? null);
@@ -325,11 +318,7 @@
         editingProvider = null;
       }
       setFeedback($i18n("settings.llmProviders.feedback.deleted"), "success", provider.id);
-      showActionToast(
-        $i18n("settings.llmProviders.feedback.deleted"),
-        "success",
-        provider.name,
-      );
+      showActionToast($i18n("settings.llmProviders.feedback.deleted"), "success", provider.name);
     } catch (error) {
       setFeedback(error instanceof Error ? error.message : String(error), "error");
     } finally {
@@ -407,8 +396,7 @@
 
       const catalogEntry =
         findCatalogEntryForProvider(get(providersState).catalog, provider) ??
-        (selectedCatalogEntry?.id === providerId ||
-        selectedCatalogEntry?.id === provider?.type
+        (selectedCatalogEntry?.id === providerId || selectedCatalogEntry?.id === provider?.type
           ? selectedCatalogEntry
           : null);
       const oauthSetup = catalogEntry?.oauth_setup ?? selectedCatalogEntry?.oauth_setup;
@@ -600,121 +588,127 @@
       {/if}
       <ul class="provider-list">
         {#each $providersState.providers as provider, index (`${provider.id}:${index}`)}
-            {@const expanded = isProviderExpanded(provider.id)}
-            {@const missingFields = providerEffectiveMissingFields(provider)}
-            {@const hasWarnings = providerListHasWarnings(provider)}
-            {@const cardFeedback = providerFeedback[provider.id]}
-            <li class="provider-card" class:expanded>
-              <button
-                type="button"
-                class="provider-toggle"
-                aria-expanded={expanded}
-                onclick={() => toggleProviderExpanded(provider.id)}
-              >
-                <span class="provider-chevron" aria-hidden="true">{expanded ? "▾" : "▸"}</span>
-                <span class="provider-toggle-main">
-                  <span class="provider-toggle-name">{provider.name || provider.id}</span>
-                  <span class="provider-toggle-meta">
-                    <span class="ui-chip compact" data-tone="idle">{provider.type}</span>
-                    {#if provider.model}
-                      <span class="provider-model-preview" title={provider.model}>{provider.model}</span>
-                    {/if}
-                    {#if provider.auth_type}
-                      <span class="ui-chip compact" data-tone="connected">{provider.auth_type}</span>
-                    {/if}
-                  </span>
+          {@const expanded = isProviderExpanded(provider.id)}
+          {@const missingFields = providerEffectiveMissingFields(provider)}
+          {@const hasWarnings = providerListHasWarnings(provider)}
+          {@const cardFeedback = providerFeedback[provider.id]}
+          <li class="provider-card" class:expanded>
+            <button
+              type="button"
+              class="provider-toggle"
+              aria-expanded={expanded}
+              onclick={() => toggleProviderExpanded(provider.id)}
+            >
+              <span class="provider-chevron" aria-hidden="true">{expanded ? "▾" : "▸"}</span>
+              <span class="provider-toggle-main">
+                <span class="provider-toggle-name">{provider.name || provider.id}</span>
+                <span class="provider-toggle-meta">
+                  <span class="ui-chip compact" data-tone="idle">{provider.type}</span>
+                  {#if provider.model}
+                    <span class="provider-model-preview" title={provider.model}
+                      >{provider.model}</span
+                    >
+                  {/if}
+                  {#if provider.auth_type}
+                    <span class="ui-chip compact" data-tone="connected">{provider.auth_type}</span>
+                  {/if}
                 </span>
-                {#if hasWarnings}
-                  <span class="ui-chip compact" data-tone="warning">
-                    {$i18n("settings.llmProviders.needsAttention")}
-                  </span>
-                {/if}
-              </button>
+              </span>
+              {#if hasWarnings}
+                <span class="ui-chip compact" data-tone="warning">
+                  {$i18n("settings.llmProviders.needsAttention")}
+                </span>
+              {/if}
+            </button>
 
-              {#if expanded}
-                <div class="provider-details">
-                  <div class="provider-summary">
-                    {#if provider.base_url}
-                      <p class="provider-detail-line">
-                        <span class="detail-label">{$i18n("settings.llmProviders.fields.baseUrl")}</span>
-                        <span class="detail-value">{provider.base_url}</span>
-                      </p>
-                    {/if}
-                    {#if provider.model}
-                      <p class="provider-detail-line">
-                        <span class="detail-label">{$i18n("settings.llmProviders.fields.model")}</span>
-                        <span class="detail-value">{provider.model}</span>
-                      </p>
-                    {/if}
-                    <p class="provider-meta">
-                      {#each providerOauthStatusChips(provider, oauthChipLabels()) as chip (chip.label)}
-                        <span class="ui-chip compact" data-tone={chip.tone}>{chip.label}</span>
-                      {/each}
-                      {#each providerCapabilityChips(provider) as cap (cap)}
-                        <span class="ui-chip compact" data-tone="idle">{cap}</span>
+            {#if expanded}
+              <div class="provider-details">
+                <div class="provider-summary">
+                  {#if provider.base_url}
+                    <p class="provider-detail-line">
+                      <span class="detail-label"
+                        >{$i18n("settings.llmProviders.fields.baseUrl")}</span
+                      >
+                      <span class="detail-value">{provider.base_url}</span>
+                    </p>
+                  {/if}
+                  {#if provider.model}
+                    <p class="provider-detail-line">
+                      <span class="detail-label">{$i18n("settings.llmProviders.fields.model")}</span
+                      >
+                      <span class="detail-value">{provider.model}</span>
+                    </p>
+                  {/if}
+                  <p class="provider-meta">
+                    {#each providerOauthStatusChips(provider, oauthChipLabels()) as chip (chip.label)}
+                      <span class="ui-chip compact" data-tone={chip.tone}>{chip.label}</span>
+                    {/each}
+                    {#each providerCapabilityChips(provider) as cap (cap)}
+                      <span class="ui-chip compact" data-tone="idle">{cap}</span>
+                    {/each}
+                  </p>
+                  {#if provider.references && provider.references.length > 0}
+                    <p class="provider-refs">
+                      <span class="refs-label">{$i18n("settings.llmProviders.references")}:</span>
+                      {#each provider.references as ref (ref.path + ref.role)}
+                        <span class="ui-chip compact" data-tone="warning">
+                          {providerReferenceRoleLabel(ref.role)}
+                        </span>
                       {/each}
                     </p>
-                    {#if provider.references && provider.references.length > 0}
-                      <p class="provider-refs">
-                        <span class="refs-label">{$i18n("settings.llmProviders.references")}:</span>
-                        {#each provider.references as ref (ref.path + ref.role)}
-                          <span class="ui-chip compact" data-tone="warning">
-                            {providerReferenceRoleLabel(ref.role)}
-                          </span>
-                        {/each}
-                      </p>
-                    {/if}
-                    {#if missingFields.length > 0}
-                      <p class="provider-missing">
-                        <span class="refs-label">{$i18n("settings.llmProviders.missingFields")}:</span>
-                        {#each missingFields as field (field)}
-                          <span class="ui-chip compact" data-tone="error">{field}</span>
-                        {/each}
-                      </p>
-                    {/if}
-                  </div>
-                  <div class="provider-actions">
-                    {#if canWrite}
-                      <button
-                        type="button"
-                        class="ui-btn ui-btn-secondary compact"
-                        disabled={busy || $providersState.testLoadingProviderId === provider.id}
-                        onclick={() => void handleTest(provider)}
+                  {/if}
+                  {#if missingFields.length > 0}
+                    <p class="provider-missing">
+                      <span class="refs-label">{$i18n("settings.llmProviders.missingFields")}:</span
                       >
-                        {$i18n("settings.llmProviders.test")}
-                      </button>
-                    {/if}
-                    <button
-                      type="button"
-                      class="ui-btn ui-btn-secondary compact"
-                      disabled={busy}
-                      onclick={() => void openEditEditor(provider)}
-                    >
-                      {$i18n("settings.llmProviders.edit")}
-                    </button>
-                    {#if canWrite}
-                      <button
-                        type="button"
-                        class="ui-btn ui-btn-secondary ui-btn-danger compact"
-                        disabled={busy}
-                        onclick={() => void handleDelete(provider)}
-                      >
-                        {$i18n("settings.llmProviders.delete")}
-                      </button>
-                    {/if}
-                  </div>
-                  {#if cardFeedback}
-                    <p
-                      class="provider-feedback"
-                      data-tone={cardFeedback.tone}
-                      role={cardFeedback.tone === "error" ? "alert" : "status"}
-                    >
-                      {cardFeedback.message}
+                      {#each missingFields as field (field)}
+                        <span class="ui-chip compact" data-tone="error">{field}</span>
+                      {/each}
                     </p>
                   {/if}
                 </div>
-              {/if}
-            </li>
+                <div class="provider-actions">
+                  {#if canWrite}
+                    <button
+                      type="button"
+                      class="ui-btn ui-btn-secondary compact"
+                      disabled={busy || $providersState.testLoadingProviderId === provider.id}
+                      onclick={() => void handleTest(provider)}
+                    >
+                      {$i18n("settings.llmProviders.test")}
+                    </button>
+                  {/if}
+                  <button
+                    type="button"
+                    class="ui-btn ui-btn-secondary compact"
+                    disabled={busy}
+                    onclick={() => void openEditEditor(provider)}
+                  >
+                    {$i18n("settings.llmProviders.edit")}
+                  </button>
+                  {#if canWrite}
+                    <button
+                      type="button"
+                      class="ui-btn ui-btn-secondary ui-btn-danger compact"
+                      disabled={busy}
+                      onclick={() => void handleDelete(provider)}
+                    >
+                      {$i18n("settings.llmProviders.delete")}
+                    </button>
+                  {/if}
+                </div>
+                {#if cardFeedback}
+                  <p
+                    class="provider-feedback"
+                    data-tone={cardFeedback.tone}
+                    role={cardFeedback.tone === "error" ? "alert" : "status"}
+                  >
+                    {cardFeedback.message}
+                  </p>
+                {/if}
+              </div>
+            {/if}
+          </li>
         {/each}
       </ul>
       {#if sectionFeedback}

@@ -45,60 +45,55 @@
     use:focusTrap
     aria-labelledby="oauth-progress-title"
   >
-      <h2 id="oauth-progress-title">{$i18n("settings.llmProviders.oauth.title")}</h2>
+    <h2 id="oauth-progress-title">{$i18n("settings.llmProviders.oauth.title")}</h2>
 
-      {#if errorMessage}
-        <p class="oauth-error" role="alert">{errorMessage}</p>
-        <div class="oauth-recovery">
-          <p>{$i18n("settings.llmProviders.oauth.recoveryTitle")}</p>
-          <ol>
-            <li>{$i18n("settings.llmProviders.oauth.recoveryStep1")}</li>
-            <li>{$i18n("settings.llmProviders.oauth.recoveryStep2")}</li>
-            <li>{$i18n("settings.llmProviders.oauth.recoveryStep3")}</li>
-          </ol>
-        </div>
-      {:else}
-        <p class="oauth-intro">
-          {$i18n("settings.llmProviders.oauth.waiting", { name: providerName || "Provider" })}
-        </p>
-
-        {#if busy}
-          <div class="oauth-spinner" aria-hidden="true"></div>
-        {/if}
-        <p class="oauth-status">{$i18n("settings.llmProviders.oauth.browserHint")}</p>
-
-        {#if manualPasteEnabled}
-          <label class="oauth-manual">
-            <span>{$i18n("settings.llmProviders.oauth.manualLabel")}</span>
-            <input
-              type="url"
-              bind:value={manualRedirectUrl}
-              placeholder={$i18n("settings.llmProviders.oauth.manualPlaceholder")}
-              disabled={busy}
-            />
-          </label>
-          <button
-            type="button"
-            class="ui-btn"
-            disabled={busy || !manualRedirectUrl.trim()}
-            onclick={() => onManualPaste?.(manualRedirectUrl.trim())}
-          >
-            {$i18n("settings.llmProviders.oauth.manualSubmit")}
-          </button>
-        {/if}
-      {/if}
-
-      <div class="oauth-actions">
-        <button
-          bind:this={firstBtn}
-          type="button"
-          class="ui-btn ghost"
-          onclick={() => onCancel?.()}
-        >
-          {$i18n("certModal.cancel")}
-        </button>
+    {#if errorMessage}
+      <p class="oauth-error" role="alert">{errorMessage}</p>
+      <div class="oauth-recovery">
+        <p>{$i18n("settings.llmProviders.oauth.recoveryTitle")}</p>
+        <ol>
+          <li>{$i18n("settings.llmProviders.oauth.recoveryStep1")}</li>
+          <li>{$i18n("settings.llmProviders.oauth.recoveryStep2")}</li>
+          <li>{$i18n("settings.llmProviders.oauth.recoveryStep3")}</li>
+        </ol>
       </div>
-    </dialog>
+    {:else}
+      <p class="oauth-intro">
+        {$i18n("settings.llmProviders.oauth.waiting", { name: providerName || "Provider" })}
+      </p>
+
+      {#if busy}
+        <div class="oauth-spinner" aria-hidden="true"></div>
+      {/if}
+      <p class="oauth-status">{$i18n("settings.llmProviders.oauth.browserHint")}</p>
+
+      {#if manualPasteEnabled}
+        <label class="oauth-manual">
+          <span>{$i18n("settings.llmProviders.oauth.manualLabel")}</span>
+          <input
+            type="url"
+            bind:value={manualRedirectUrl}
+            placeholder={$i18n("settings.llmProviders.oauth.manualPlaceholder")}
+            disabled={busy}
+          />
+        </label>
+        <button
+          type="button"
+          class="ui-btn"
+          disabled={busy || !manualRedirectUrl.trim()}
+          onclick={() => onManualPaste?.(manualRedirectUrl.trim())}
+        >
+          {$i18n("settings.llmProviders.oauth.manualSubmit")}
+        </button>
+      {/if}
+    {/if}
+
+    <div class="oauth-actions">
+      <button bind:this={firstBtn} type="button" class="ui-btn ghost" onclick={() => onCancel?.()}>
+        {$i18n("certModal.cancel")}
+      </button>
+    </div>
+  </dialog>
 {/if}
 
 <style>

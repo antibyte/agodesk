@@ -22,10 +22,7 @@ export function shouldUseGrokTtsForChat(
  * Speak text via unary Grok TTS API (POST /v1/tts) using the same voice_id as Voice Agent.
  * Used when the live Grok session is not recording/connected.
  */
-export async function speakWithGrokTts(
-  text: string,
-  speech: SpeechSettings,
-): Promise<boolean> {
+export async function speakWithGrokTts(text: string, speech: SpeechSettings): Promise<boolean> {
   if (!shouldUseGrokTtsForChat(speech) || !isDesktopShell()) {
     return false;
   }
@@ -36,9 +33,7 @@ export async function speakWithGrokTts(
   }
 
   const voiceId = normalizeGrokVoiceName(speech.voiceName);
-  const language =
-    toGrokLanguageHint(speech.language) ??
-    (speech.language.trim() || "de");
+  const language = toGrokLanguageHint(speech.language) ?? (speech.language.trim() || "de");
 
   try {
     const result = await invoke<{ audioBase64: string; contentType: string }>(
@@ -52,9 +47,7 @@ export async function speakWithGrokTts(
     if (!result?.audioBase64) {
       return false;
     }
-    const mime =
-      result.contentType?.split(";")[0]?.trim() ||
-      "audio/mpeg";
+    const mime = result.contentType?.split(";")[0]?.trim() || "audio/mpeg";
     await playback.enqueueBase64Audio(result.audioBase64, mime);
     return true;
   } catch (error) {

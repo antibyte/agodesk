@@ -29,9 +29,7 @@ export async function executeSpeechTool(
       }
 
       if (!context.canSendChat) {
-        context.onSystemNotice(
-          getTranslateFn()("speechTool.notice.unreachable", { message }),
-        );
+        context.onSystemNotice(getTranslateFn()("speechTool.notice.unreachable", { message }));
         return {
           success: false,
           error: getTranslateFn()("speechTool.error.chatUnavailable"),
@@ -44,7 +42,8 @@ export async function executeSpeechTool(
         context.onSystemNotice(getTranslateFn()("speechTool.notice.sent"));
         return { success: true, sent: true, message };
       } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : getTranslateFn()("speechTool.error.sendFailed");
+        const errorMessage =
+          error instanceof Error ? error.message : getTranslateFn()("speechTool.error.sendFailed");
         return { success: false, error: errorMessage, message };
       }
     }

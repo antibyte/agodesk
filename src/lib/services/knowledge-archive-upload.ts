@@ -6,6 +6,8 @@ import type { KnowledgeArchivePreparedDocument } from "../types/protocol";
 import { formatInvokeError } from "./errors";
 import { getPinnedFingerprint, getPinnedFingerprintForHttpUrl } from "./tls";
 import { sessionState } from "../stores/session";
+import { settings } from "../stores/settings";
+import { assertUploadOriginAllowed } from "./upload-origin";
 
 function isTauriRuntime(): boolean {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
@@ -59,6 +61,8 @@ async function uploadViaTauri(
   file: File,
 ): Promise<void> {
   const uploadUrl = resolveUploadUrl(serverUrl, document.upload_url);
+  const allowedOrigins = get(settings).assetFetchAllowedOrigins ?? [];
+  assertUploadOriginAllowed(serverUrl, uploadUrl, allowedOrigins);
   const pinnedFingerprint = await resolvePinnedFingerprint(uploadUrl, serverUrl);
   const bytes = new Uint8Array(await file.arrayBuffer());
   const { deviceId, sessionId } = get(sessionState);
@@ -75,6 +79,7 @@ async function uploadViaTauri(
     ...(pinnedFingerprint ? { pinnedFingerprint } : {}),
     ...(deviceId ? { deviceId } : {}),
     ...(sessionId ? { sessionId } : {}),
+    ...(allowedOrigins.length > 0 ? { allowedOrigins } : {}),
   });
 }
 
@@ -84,6 +89,8 @@ async function uploadViaFetch(
   file: File,
 ): Promise<void> {
   const uploadUrl = resolveUploadUrl(serverUrl, document.upload_url);
+  const allowedOrigins = get(settings).assetFetchAllowedOrigins ?? [];
+  assertUploadOriginAllowed(serverUrl, uploadUrl, allowedOrigins);
   const form = new FormData();
   form.append(document.upload_field, file, file.name);
   const response = await fetch(uploadUrl, {
@@ -112,6 +119,8 @@ export async function uploadKnowledgeArchiveFile(
       await uploadViaFetch(serverUrl, document, file);
     }
   } catch (error) {
-    throw new Error(formatInvokeError(error, getTranslateFn()("upload.error.knowledgeArchiveFailed")));
+    throw new Error(
+      formatInvokeError(error, getTranslateFn()("upload.error.knowledgeArchiveFailed")),
+    );
   }
 }

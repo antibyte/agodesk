@@ -33,9 +33,7 @@ async function revealAndToggleSpeech(): Promise<void> {
   await toggleHandler?.();
 }
 
-export async function applySpeechHotkey(
-  hotkey: string,
-): Promise<{ ok: boolean; error?: string }> {
+export async function applySpeechHotkey(hotkey: string): Promise<{ ok: boolean; error?: string }> {
   if (!isDesktopShell()) {
     return { ok: true };
   }

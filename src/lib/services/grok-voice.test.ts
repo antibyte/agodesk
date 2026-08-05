@@ -26,10 +26,7 @@ describe("grok-voice helpers", () => {
   it("normalizes model ids and builds WS URL", () => {
     assert.equal(normalizeGrokVoiceModelId(""), "grok-voice-latest");
     assert.equal(normalizeGrokVoiceModelId("grok-voice"), "grok-voice-latest");
-    assert.equal(
-      normalizeGrokVoiceModelId("grok-voice-think-fast-1"),
-      "grok-voice-think-fast-1.0",
-    );
+    assert.equal(normalizeGrokVoiceModelId("grok-voice-think-fast-1"), "grok-voice-think-fast-1.0");
     assert.match(
       buildGrokVoiceWsUrl("grok-voice-latest"),
       /^wss:\/\/api\.x\.ai\/v1\/realtime\?model=grok-voice-latest$/,
@@ -78,9 +75,8 @@ describe("grok-voice helpers", () => {
     assert.equal(audio.input.format.rate, 16000);
     assert.equal(audio.output.format.rate, 24000);
     assert.equal(audio.input.transcription?.language_hint, "de");
-    const keyterms = (
-      audio.input as { transcription?: { keyterms?: string[] } }
-    ).transcription?.keyterms;
+    const keyterms = (audio.input as { transcription?: { keyterms?: string[] } }).transcription
+      ?.keyterms;
     assert.ok(Array.isArray(keyterms));
     assert.ok(keyterms?.includes("AuraGo"));
 
@@ -172,9 +168,7 @@ describe("grok-voice helpers", () => {
       args: { message: "test" },
     });
 
-    const err = parseGrokEvent(
-      JSON.stringify({ type: "error", error: { message: "boom" } }),
-    )!;
+    const err = parseGrokEvent(JSON.stringify({ type: "error", error: { message: "boom" } }))!;
     assert.equal(extractGrokErrorMessage(err), "boom");
   });
 });

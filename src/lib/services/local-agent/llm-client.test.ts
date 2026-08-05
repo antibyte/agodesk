@@ -171,7 +171,9 @@ test("ollama step rejects when no model is configured", async () => {
       send: noopSend,
       sessionId: "s",
       requestId: "r",
-      settings: ollamaSettings({ ollamaProvider: { baseUrl: "http://localhost:11434", model: "" } }),
+      settings: ollamaSettings({
+        ollamaProvider: { baseUrl: "http://localhost:11434", model: "" },
+      }),
       messages: [{ role: "user", content: "hi" }],
       tools: [],
     }),

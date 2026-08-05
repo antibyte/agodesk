@@ -15,23 +15,24 @@ export function parseMistralRealtimeEvent(raw: unknown): ParsedRealtimeEvent {
     typeof record.text === "string"
       ? record.text
       : typeof (record as { delta?: unknown }).delta === "string"
-        ? ((record as { delta: string }).delta)
+        ? (record as { delta: string }).delta
         : undefined;
   let errorMessage: string | undefined;
   if (type === "error") {
     const err = record.error;
     if (typeof err === "string") errorMessage = err;
-    else if (err && typeof err === "object" && typeof (err as { message?: unknown }).message === "string") {
+    else if (
+      err &&
+      typeof err === "object" &&
+      typeof (err as { message?: unknown }).message === "string"
+    ) {
       errorMessage = (err as { message: string }).message;
     }
   }
   return { type, text, errorMessage, raw };
 }
 
-export function accumulateRealtimeTranscript(
-  prev: string,
-  event: ParsedRealtimeEvent,
-): string {
+export function accumulateRealtimeTranscript(prev: string, event: ParsedRealtimeEvent): string {
   if (event.type === "transcription.text.delta" && event.text) {
     return prev + event.text;
   }

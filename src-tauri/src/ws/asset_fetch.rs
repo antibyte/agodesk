@@ -574,6 +574,7 @@ pub fn upload_chat_attachment_impl(
     body: &[u8],
     upload_field: &str,
     pinned_fingerprint_override: Option<&str>,
+    allowed_origins: &[String],
 ) -> Result<UploadedAttachment, String> {
     if body.is_empty() {
         return Err("Upload body is empty.".to_string());
@@ -583,6 +584,7 @@ pub fn upload_chat_attachment_impl(
     }
 
     let asset = resolve_server_asset_url(server_url, upload_url)?;
+    ensure_asset_origin_allowed(&asset, server_url, allowed_origins)?;
     let resolved_upload_url = asset.as_str();
     let host = asset
         .host_str()
@@ -983,5 +985,36 @@ mod tests {
         )
         .unwrap_err();
         assert!(err.contains("ASSET_ORIGIN_DENIED"));
+    }
+
+    #[test]
+    fn upload_origin_policy_denies_foreign_absolute_upload_url() {
+        let upload = resolve_server_asset_url(
+            "wss://aurago.local:8443/api/agodesk/ws",
+            "http://127.0.0.1:9/evil-upload",
+        )
+        .unwrap();
+        let err = ensure_asset_origin_allowed(
+            &upload,
+            "wss://aurago.local:8443/api/agodesk/ws",
+            &[],
+        )
+        .unwrap_err();
+        assert!(err.contains("ASSET_ORIGIN_DENIED"));
+    }
+
+    #[test]
+    fn upload_origin_policy_allows_relative_path_on_server_origin() {
+        let upload = resolve_server_asset_url(
+            "wss://aurago.local:8443/api/agodesk/ws",
+            "/api/agodesk/media/upload/att-1",
+        )
+        .unwrap();
+        assert!(ensure_asset_origin_allowed(
+            &upload,
+            "wss://aurago.local:8443/api/agodesk/ws",
+            &[],
+        )
+        .is_ok());
     }
 }

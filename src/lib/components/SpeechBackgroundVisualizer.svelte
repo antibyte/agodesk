@@ -21,7 +21,14 @@
   let resizeObserver: ResizeObserver | undefined;
   let fadeStopTimer: ReturnType<typeof setTimeout> | undefined;
 
-  function readThemeColors(): { accent: string; aurora1: string; aurora2: string; aurora3: string; danger: string; bg: string } {
+  function readThemeColors(): {
+    accent: string;
+    aurora1: string;
+    aurora2: string;
+    aurora3: string;
+    danger: string;
+    bg: string;
+  } {
     const style = getComputedStyle(document.documentElement);
     return {
       accent: style.getPropertyValue("--color-accent").trim() || "#8b5cf6",

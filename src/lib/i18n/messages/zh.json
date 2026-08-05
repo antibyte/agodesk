@@ -1001,6 +1001,7 @@
   "upload.error.fileTooLarge": "文件超出服务器上传限制。",
   "upload.error.httpFailed": "上传失败，HTTP {status}。",
   "upload.error.knowledgeArchiveFailed": "知识库上传失败。",
+  "upload.error.originDenied": "不允许该上传目标（源不在允许列表中）。",
   "upload.error.urlUnresolved": "无法相对服务器 URL 解析上传 URL。",
   "vaultSecretPrompt.cancel": "取消",
   "vaultSecretPrompt.hide": "隐藏",

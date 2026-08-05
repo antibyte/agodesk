@@ -69,9 +69,7 @@ async function handleRequest(id: string, bodyText: string): Promise<void> {
   const localAgent = get(settings).localAgent;
   try {
     if (!session.sessionId) {
-      throw new Error(
-        "Keine AuraGo-Session. Verbinde dich zuerst, bevor du den Page-Agent nutzt.",
-      );
+      throw new Error("Keine AuraGo-Session. Verbinde dich zuerst, bevor du den Page-Agent nutzt.");
     }
     const request = parseOpenAiChatRequest(bodyText);
     // Match local-agent's llm-client: omit `model` so AuraGo uses the provider's

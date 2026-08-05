@@ -148,7 +148,7 @@
     <button
       type="button"
       class="ui-btn ui-btn-secondary"
-      disabled={disabled}
+      {disabled}
       onclick={recording ? stopRecording : startRecording}
     >
       {recording ? t("recording") : t("record")}
@@ -161,7 +161,7 @@
     >
       {t("disable")}
     </button>
-    <button type="button" class="ui-btn ui-btn-secondary" disabled={disabled} onclick={handleResetDefault}>
+    <button type="button" class="ui-btn ui-btn-secondary" {disabled} onclick={handleResetDefault}>
       {t("reset")}
     </button>
   </div>

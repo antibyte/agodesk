@@ -273,7 +273,10 @@ export function applyLayoutMapToHotkey(
     return trimmed;
   }
 
-  const parts = trimmed.split("+").map((part) => part.trim()).filter(Boolean);
+  const parts = trimmed
+    .split("+")
+    .map((part) => part.trim())
+    .filter(Boolean);
   if (parts.length < 2) {
     return trimmed;
   }

@@ -2,6 +2,7 @@ dist
 node_modules
 src-tauri/target
 src-tauri/vendor
+src/lib/services/page-agent/vendor/
 package-lock.json
 mcps/
 assets/vad/

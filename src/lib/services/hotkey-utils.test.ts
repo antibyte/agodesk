@@ -1,9 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {
-  applyLayoutMapToHotkey,
-  keyboardEventToHotkey,
-} from "./hotkey-utils.ts";
+import { applyLayoutMapToHotkey, keyboardEventToHotkey } from "./hotkey-utils.ts";
 
 test("keyboardEventToHotkey nutzt Tastenbeschriftung (QWERTZ Y auf KeyZ)", () => {
   const event = {

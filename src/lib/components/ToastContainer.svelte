@@ -54,7 +54,9 @@
     pointer-events: auto;
     border-left: 4px solid transparent;
     padding-left: var(--space-3) !important;
-    transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+    transition:
+      transform var(--transition-fast),
+      box-shadow var(--transition-fast);
   }
 
   .toast-item[data-tone="success"] {

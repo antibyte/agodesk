@@ -1,4 +1,3 @@
-
 export interface ServerPreset {
   id: string;
   labelKey: string;

@@ -54,15 +54,14 @@ function createLocalJobStore() {
     patch(jobId: string, patch: Partial<LocalJob>): void {
       update((state) => ({
         jobs: state.jobs.map((job) =>
-          job.job_id === jobId
-            ? { ...job, ...patch, updated_at: new Date().toISOString() }
-            : job,
+          job.job_id === jobId ? { ...job, ...patch, updated_at: new Date().toISOString() } : job,
         ),
       }));
     },
     listRunning(): LocalJob[] {
-      return get({ subscribe }).jobs.filter((job) =>
-        job.status === "queued" || job.status === "running" || job.status === "waiting_input",
+      return get({ subscribe }).jobs.filter(
+        (job) =>
+          job.status === "queued" || job.status === "running" || job.status === "waiting_input",
       );
     },
     reset(): void {

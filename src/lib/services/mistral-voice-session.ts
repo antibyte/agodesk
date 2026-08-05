@@ -344,9 +344,7 @@ export class MistralVoiceSession implements ActiveSpeechSession {
 
       if (this.realtime) {
         if (!this.partialAcc.trim()) {
-          this.callbacks.onPartialTranscript?.(
-            getTranslateFn()("speechFlow.processingUtterance"),
-          );
+          this.callbacks.onPartialTranscript?.(getTranslateFn()("speechFlow.processingUtterance"));
         }
         try {
           const donePromise = this.waitForTranscriptionDone();
@@ -355,11 +353,7 @@ export class MistralVoiceSession implements ActiveSpeechSession {
           text = await donePromise;
         } catch (error) {
           console.warn("Mistral realtime transcription failed, falling back to batch:", error);
-          text = await transcribeMistralUtterance(
-            pcmBase64,
-            this.speech,
-            UTTERANCE_SAMPLE_RATE,
-          );
+          text = await transcribeMistralUtterance(pcmBase64, this.speech, UTTERANCE_SAMPLE_RATE);
         }
       } else {
         this.callbacks.onPartialTranscript?.(getTranslateFn()("speechFlow.processingUtterance"));

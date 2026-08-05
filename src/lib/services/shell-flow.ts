@@ -190,7 +190,9 @@ export async function handleIncomingShellCommand(
         wsSend,
         command,
         negotiated ? "SHELL_ACCESS_DISABLED" : "SHELL_ACCESS_DENIED",
-        negotiated ? getTranslateFn()("shellFlow.error.disabled") : getTranslateFn()("shellFlow.error.notNegotiated"),
+        negotiated
+          ? getTranslateFn()("shellFlow.error.disabled")
+          : getTranslateFn()("shellFlow.error.notNegotiated"),
         context,
       );
       return;
@@ -222,7 +224,9 @@ export async function handleIncomingShellCommand(
         wsSend,
         command,
         negotiated ? "SHELL_ACCESS_DISABLED" : "SHELL_ACCESS_DENIED",
-        negotiated ? getTranslateFn()("shellFlow.error.disabled") : getTranslateFn()("shellFlow.error.notNegotiated"),
+        negotiated
+          ? getTranslateFn()("shellFlow.error.disabled")
+          : getTranslateFn()("shellFlow.error.notNegotiated"),
         context,
       );
       return;

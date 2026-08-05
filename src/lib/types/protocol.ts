@@ -1601,9 +1601,7 @@ export function normalizeKnowledgeArchiveLimits(raw: unknown): KnowledgeArchiveL
   }
   const record = raw as Record<string, unknown>;
   const maxFileBytes = readOptionalFiniteNumber(record.max_file_bytes ?? record.maxFileBytes);
-  const maxFiles = readOptionalFiniteNumber(
-    record.max_files_per_batch ?? record.maxFilesPerBatch,
-  );
+  const maxFiles = readOptionalFiniteNumber(record.max_files_per_batch ?? record.maxFilesPerBatch);
   const prefixesRaw = record.allowed_mime_prefixes ?? record.allowedMimePrefixes;
   const allowedMimePrefixes = Array.isArray(prefixesRaw)
     ? prefixesRaw.filter((entry): entry is string => typeof entry === "string" && entry.length > 0)
@@ -3003,12 +3001,7 @@ export const DEFAULT_OPENPETS_SETTINGS: OpenPetsSettings = {
  * ASR+TTS via Silero-endpointed utterances), hybrid local ASR + online TTS, or
  * fully offline.
  */
-export type SpeechProvider =
-  | "gemini_live"
-  | "grok_voice"
-  | "mistral_voice"
-  | "hybrid"
-  | "offline";
+export type SpeechProvider = "gemini_live" | "grok_voice" | "mistral_voice" | "hybrid" | "offline";
 
 export const SPEECH_PROVIDERS: readonly SpeechProvider[] = [
   "gemini_live",
@@ -3023,8 +3016,7 @@ export const DEFAULT_MISTRAL_ASR_MODEL = "voxtral-mini-latest";
 /** Voxtral TTS model for the Mistral Voice provider. */
 export const DEFAULT_MISTRAL_TTS_MODEL = "voxtral-mini-tts-2603";
 /** Voxtral realtime ASR model for Phase-2 Mistral Voice. */
-export const DEFAULT_MISTRAL_REALTIME_ASR_MODEL =
-  "voxtral-mini-transcribe-realtime-2602";
+export const DEFAULT_MISTRAL_REALTIME_ASR_MODEL = "voxtral-mini-transcribe-realtime-2602";
 /** Target streaming delay (ms) for Phase-2 Mistral Voice. */
 export const DEFAULT_MISTRAL_STREAMING_DELAY_MS = 480;
 
@@ -3304,7 +3296,7 @@ export interface AppSettings {
   /** Screenshots und Remote-Eingaben über desktop.command erlauben. */
   desktopControlEnabled: boolean;
   /**
-   * Extra HTTP(S)-Origins für `fetch_server_asset` neben der Server-Origin.
+   * Extra HTTP(S)-Origins für `fetch_server_asset` und Uploads neben der Server-Origin.
    * Ein Eintrag pro Origin, z. B. `https://cdn.example.com`.
    */
   assetFetchAllowedOrigins: string[];

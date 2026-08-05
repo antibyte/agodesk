@@ -50,7 +50,14 @@
     mergeGrokVoiceOptions,
     type GrokVoiceOption,
   } from "../types/grok-voice";
-  import { APP_LOCALES, LOCALE_LABELS, applyLocaleSetting, getTranslateFn, i18n, type UiLocaleSetting } from "../i18n";
+  import {
+    APP_LOCALES,
+    LOCALE_LABELS,
+    applyLocaleSetting,
+    getTranslateFn,
+    i18n,
+    type UiLocaleSetting,
+  } from "../i18n";
   import type { MessageKey } from "../i18n/types";
   import { loadDeviceId } from "../services/credentials";
   import {
@@ -73,7 +80,11 @@
     testMistralApiKey,
     type MistralVoiceOption,
   } from "../services/mistral-credentials";
-  import { testGeminiConnection, testGrokConnection, testLocalSpeechTts } from "../services/speech-flow";
+  import {
+    testGeminiConnection,
+    testGrokConnection,
+    testLocalSpeechTts,
+  } from "../services/speech-flow";
   import { testMistralSpeechTts } from "../services/mistral-tts";
   import { applyTheme, applyUiTheme } from "../services/theme";
   import LlmProvidersSection from "./LlmProvidersSection.svelte";
@@ -117,7 +128,11 @@
   } from "../services/file-access";
   import { buildShellCwdFromFolder, cloneShellAccessSettings } from "../services/shell-access";
   import { canonicalizeFolderPath, pickFolderPath } from "../services/file-commands";
-  import { GEMINI_API_KEY_URL, XAI_API_KEY_URL, openExternalUrl } from "../services/open-external-url";
+  import {
+    GEMINI_API_KEY_URL,
+    XAI_API_KEY_URL,
+    openExternalUrl,
+  } from "../services/open-external-url";
   import { SERVER_PRESETS } from "../services/settings-presets";
   import { normalizeServerUrl } from "../services/server-url";
   import { previewUiSoundTheme } from "../services/ui-sounds";
@@ -133,10 +148,7 @@
   import WindowControls from "./WindowControls.svelte";
   import SettingsHealthSummary from "./SettingsHealthSummary.svelte";
   import HotkeyField from "./HotkeyField.svelte";
-  import {
-    DEFAULT_SPEECH_HOTKEY,
-    analyzeSpeechHotkey,
-  } from "../services/speech-hotkey";
+  import { DEFAULT_SPEECH_HOTKEY, analyzeSpeechHotkey } from "../services/speech-hotkey";
   import { analyzeShowWindowHotkey } from "../services/show-window-hotkey";
   import { isDesktopShell } from "../services/window-controls";
   import { onMount } from "svelte";
@@ -372,11 +384,7 @@
           "settings.section.llmProviders.label",
           "settings.section.llmProviders.hint",
         ],
-        [
-          "localAgent",
-          "settings.section.localAgent.label",
-          "settings.section.localAgent.hint",
-        ],
+        ["localAgent", "settings.section.localAgent.label", "settings.section.localAgent.hint"],
         ["about", "settings.section.about.label", "settings.section.about.hint"],
       ] as const
     ).map(([id, labelKey, hintKey]) => ({
@@ -416,7 +424,9 @@
   const isGeminiSpeechSelected = $derived(isGeminiSpeechProvider(draftSpeech.provider));
   const isGrokSpeechSelected = $derived(isGrokSpeechProvider(draftSpeech.provider));
   const isMistralSpeechSelected = $derived(isMistralSpeechProvider(draftSpeech.provider));
-  const isCloudRealtimeSpeechSelected = $derived(speechProviderIsCloudRealtime(draftSpeech.provider));
+  const isCloudRealtimeSpeechSelected = $derived(
+    speechProviderIsCloudRealtime(draftSpeech.provider),
+  );
   const grokVoiceSelectOptions = $derived(
     mergeGrokVoiceOptions(grokVoiceCatalog, draftSpeech.voiceName),
   );
@@ -1019,11 +1029,7 @@
       xaiApiKeyMessageTone = "success";
     } catch (error) {
       const detail =
-        error instanceof Error
-          ? error.message
-          : typeof error === "string"
-            ? error
-            : "";
+        error instanceof Error ? error.message : typeof error === "string" ? error : "";
       const lower = detail.toLowerCase();
       if (lower.includes("429") || lower.includes("rate-limit") || lower.includes("too many")) {
         xaiApiKeyMessage = detail.trim() || $i18n("settings.speech.xaiApiKey.error.rateLimited");
@@ -1054,13 +1060,8 @@
       xaiApiKeyMessageTone = "success";
     } catch (error) {
       const detail =
-        error instanceof Error
-          ? error.message
-          : typeof error === "string"
-            ? error
-            : "";
-      xaiApiKeyMessage =
-        detail.trim() || $i18n("settings.speech.xaiApiKey.error.testFailed");
+        error instanceof Error ? error.message : typeof error === "string" ? error : "";
+      xaiApiKeyMessage = detail.trim() || $i18n("settings.speech.xaiApiKey.error.testFailed");
       xaiApiKeyMessageTone = "error";
     } finally {
       xaiApiKeyBusy = false;
@@ -1543,8 +1544,7 @@
     mistralTtsTestMessage = $i18n("settings.speech.mistralTtsTest.testing");
     try {
       const sample =
-        ttsTestSampleText.trim() ||
-        $i18n("settings.speech.mistralTtsTest.defaultPhrase");
+        ttsTestSampleText.trim() || $i18n("settings.speech.mistralTtsTest.defaultPhrase");
       const result = await testMistralSpeechTts(draftSpeech, sample);
       if (result.ok) {
         mistralTtsTestTone = "success";
@@ -2231,7 +2231,9 @@
 
               {#if draftPageAgentEnabled}
                 <label class="field">
-                  <span class="field-label">{$i18n("settings.desktop.pageAgent.startUrl.label")}</span>
+                  <span class="field-label"
+                    >{$i18n("settings.desktop.pageAgent.startUrl.label")}</span
+                  >
                   <input
                     type="text"
                     class="ui-input"
@@ -2686,7 +2688,9 @@
                       {@const speechAnalysis = analyzeSpeechHotkey(draftSpeechHotkey)}
                       {@const windowAnalysis = analyzeShowWindowHotkey(draftShowWindowHotkey)}
                       {#if speechAnalysis.normalized && speechAnalysis.normalized === windowAnalysis.normalized}
-                        <p class="help warning">{$i18n("settings.speech.hotkey.conflictWarning")}</p>
+                        <p class="help warning">
+                          {$i18n("settings.speech.hotkey.conflictWarning")}
+                        </p>
                       {/if}
                     {/if}
                   </div>
@@ -2790,9 +2794,7 @@
                   <span>{$i18n("settings.speech.agentMode")}</span>
                 </label>
                 <p class="help">
-                  {$i18n(
-                    `settings.speech.modeExclusionHelp.${draftSpeech.provider}` as MessageKey,
-                  )}
+                  {$i18n(`settings.speech.modeExclusionHelp.${draftSpeech.provider}` as MessageKey)}
                 </p>
                 <p class="help">
                   {$i18n(`settings.speech.agentModeHelp.${draftSpeech.provider}` as MessageKey)}
@@ -2955,13 +2957,17 @@
 
                 {#if isOfflineSpeechSelected}
                   <label class="field">
-                    <span class="field-label">{$i18n("settings.speech.offlineTtsBackend.label")}</span>
+                    <span class="field-label"
+                      >{$i18n("settings.speech.offlineTtsBackend.label")}</span
+                    >
                     <select
                       bind:value={draftSpeech.offlineTtsBackend}
                       onchange={markDirty}
                       disabled={!draftSpeech.enabled}
                     >
-                      <option value="piper">{$i18n("settings.speech.hybridTtsBackend.piper")}</option>
+                      <option value="piper"
+                        >{$i18n("settings.speech.hybridTtsBackend.piper")}</option
+                      >
                       <option value="supertonic"
                         >{$i18n("settings.speech.hybridTtsBackend.supertonic")}</option
                       >
@@ -2971,7 +2977,8 @@
 
                 {#if isSupertonicSelected}
                   <label class="field">
-                    <span class="field-label">{$i18n("settings.speech.supertonicVoice.label")}</span>
+                    <span class="field-label">{$i18n("settings.speech.supertonicVoice.label")}</span
+                    >
                     <select
                       bind:value={draftSpeech.supertonicVoice}
                       onchange={markDirty}
@@ -2992,10 +2999,7 @@
                       <p class="help">
                         {$i18n("settings.speech.supertonicStatus.downloading")}
                       </p>
-                      <progress
-                        class="asr-progress"
-                        value={supertonicDownloadProgress}
-                        max="100"
+                      <progress class="asr-progress" value={supertonicDownloadProgress} max="100"
                       ></progress>
                       <span class="asr-progress-label"
                         >{Math.round(supertonicDownloadProgress)}%</span
@@ -3039,7 +3043,8 @@
 
                 {#if usesPiperTts}
                   <label class="field">
-                    <span class="field-label">{$i18n("settings.speech.offlineTtsVoice.label")}</span>
+                    <span class="field-label">{$i18n("settings.speech.offlineTtsVoice.label")}</span
+                    >
                     <select
                       value={draftSpeech.offlineTtsVoice}
                       onchange={(event) =>
@@ -3060,7 +3065,8 @@
                           {$i18n("settings.speech.ttsStatus.downloading")}
                         {/if}
                       </p>
-                      <progress class="asr-progress" value={ttsDownloadProgress} max="100"></progress>
+                      <progress class="asr-progress" value={ttsDownloadProgress} max="100"
+                      ></progress>
                       <span class="asr-progress-label">{Math.round(ttsDownloadProgress)}%</span>
                     </div>
                   {:else if ttsDownloadError}
@@ -3423,7 +3429,9 @@
                 </dl>
 
                 <label class="field">
-                  <span class="field-label">{$i18n("settings.speech.mistralApiKey.fieldLabel")}</span>
+                  <span class="field-label"
+                    >{$i18n("settings.speech.mistralApiKey.fieldLabel")}</span
+                  >
                   <input
                     type="password"
                     bind:value={mistralApiKeyInput}
@@ -3452,7 +3460,9 @@
 
                 {#if draftSpeech.mistralRealtimeEnabled}
                   <label class="field">
-                    <span class="field-label">{$i18n("settings.speech.mistralRealtime.delayLabel")}</span>
+                    <span class="field-label"
+                      >{$i18n("settings.speech.mistralRealtime.delayLabel")}</span
+                    >
                     <select
                       value={String(draftSpeech.mistralTargetStreamingDelayMs)}
                       onchange={(event) => {
@@ -3493,7 +3503,9 @@
                       </option>
                     {/each}
                     {#if draftSpeech.mistralVoiceId && !mistralVoiceCatalog.some((v) => v.id === draftSpeech.mistralVoiceId)}
-                      <option value={draftSpeech.mistralVoiceId}>{draftSpeech.mistralVoiceId}</option>
+                      <option value={draftSpeech.mistralVoiceId}
+                        >{draftSpeech.mistralVoiceId}</option
+                      >
                     {/if}
                   </select>
                 </label>
@@ -3525,7 +3537,9 @@
                   </button>
                 </div>
                 {#if mistralTtsTestMessage}
-                  <p class="help" class:warn={mistralTtsTestTone === "error"}>{mistralTtsTestMessage}</p>
+                  <p class="help" class:warn={mistralTtsTestTone === "error"}>
+                    {mistralTtsTestMessage}
+                  </p>
                 {/if}
 
                 {#if mistralApiKeyMessage}
@@ -3650,7 +3664,9 @@
                       bind:value={draftLocalAgentAuragoProviderId}
                       onchange={() => (dirty = true)}
                     >
-                      <option value="">{$i18n("settings.localAgent.auragoProvider.placeholder")}</option>
+                      <option value=""
+                        >{$i18n("settings.localAgent.auragoProvider.placeholder")}</option
+                      >
                       {#each $providersState.providers as provider (provider.id)}
                         <option value={provider.id}>{provider.name} ({provider.model})</option>
                       {/each}

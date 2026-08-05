@@ -41,10 +41,7 @@ import { normalizeSpeechHotkey } from "./speech-hotkey";
 import { resolveOnboardingInSettings, clearLegacyOnboardingFlag } from "./onboarding";
 import { get } from "svelte/store";
 import { settings } from "../stores/settings";
-import {
-  defaultLocalAsrModelForAppLocale,
-  LOCAL_ASR_MODEL_OPTIONS,
-} from "./local-asr-model";
+import { defaultLocalAsrModelForAppLocale, LOCAL_ASR_MODEL_OPTIONS } from "./local-asr-model";
 import {
   applySpeechLocaleDefaults,
   defaultEdgeTtsVoiceForSpeechLanguage,
@@ -138,7 +135,8 @@ function normalizeSpeechSettings(
         ? saved.voiceName.trim()
         : DEFAULT_SPEECH_SETTINGS.voiceName,
     localAsrModel: (() => {
-      const model = typeof saved.localAsrModel === "string" ? (saved.localAsrModel as string) : undefined;
+      const model =
+        typeof saved.localAsrModel === "string" ? (saved.localAsrModel as string) : undefined;
       if (model === "omnilingual_ctc_int8") {
         return "sense_voice_int8";
       }
@@ -405,7 +403,8 @@ function normalizeLocalAgentSettings(
       : DEFAULT_LOCAL_AGENT_SETTINGS.maxSteps;
 
   return {
-    enabled: typeof saved.enabled === "boolean" ? saved.enabled : DEFAULT_LOCAL_AGENT_SETTINGS.enabled,
+    enabled:
+      typeof saved.enabled === "boolean" ? saved.enabled : DEFAULT_LOCAL_AGENT_SETTINGS.enabled,
     providerSource,
     ...(auragoProviderId ? { auragoProviderId } : {}),
     ...(localProvider ? { localProvider } : {}),

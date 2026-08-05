@@ -5,7 +5,9 @@ import { resolvePersonaAssetUrl } from "../types/protocol";
 import { formatInvokeError } from "./errors";
 import { getPinnedFingerprint, getPinnedFingerprintForHttpUrl } from "./tls";
 import { sessionState } from "../stores/session";
+import { settings } from "../stores/settings";
 import type { ChatAttachmentPreparedPayload } from "../types/protocol";
+import { assertUploadOriginAllowed } from "./upload-origin";
 
 export interface UploadedChatAttachmentResponse {
   attachment_id: string;
@@ -115,6 +117,8 @@ async function uploadViaTauri(
   file: File,
 ): Promise<unknown> {
   const uploadUrl = resolveUploadUrl(serverUrl, prepared.upload_url);
+  const allowedOrigins = get(settings).assetFetchAllowedOrigins ?? [];
+  assertUploadOriginAllowed(serverUrl, uploadUrl, allowedOrigins);
   const pinnedFingerprint = await resolvePinnedFingerprint(uploadUrl, serverUrl);
   const bytes = new Uint8Array(await file.arrayBuffer());
   const { deviceId, sessionId } = get(sessionState);
@@ -129,6 +133,7 @@ async function uploadViaTauri(
     ...(pinnedFingerprint ? { pinnedFingerprint } : {}),
     ...(deviceId ? { deviceId } : {}),
     ...(sessionId ? { sessionId } : {}),
+    ...(allowedOrigins.length > 0 ? { allowedOrigins } : {}),
   });
 }
 
@@ -138,6 +143,8 @@ async function uploadViaFetch(
   file: File,
 ): Promise<unknown> {
   const uploadUrl = resolveUploadUrl(serverUrl, prepared.upload_url);
+  const allowedOrigins = get(settings).assetFetchAllowedOrigins ?? [];
+  assertUploadOriginAllowed(serverUrl, uploadUrl, allowedOrigins);
   const form = new FormData();
   form.append(prepared.upload_field, file, file.name);
   const response = await fetch(uploadUrl, {

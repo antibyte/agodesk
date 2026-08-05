@@ -114,20 +114,11 @@
   } from "../services/chat-ws-inbound";
   import { connectChatWebSocket, createWebSocketService } from "../services/chat-ws-connect";
   import { isChatError } from "../services/websocket";
-  import {
-    invokeShellSessionList,
-    invokeShellSessionStop,
-  } from "../services/shell-commands";
+  import { invokeShellSessionList, invokeShellSessionStop } from "../services/shell-commands";
   import { emitLocalActivity } from "../services/agent-activity-inbound";
   import { chatPlanState, isChatPlanPanelVisible } from "../stores/chat-plan";
-  import {
-    activityTimelineState,
-    isActivityTimelineVisible,
-  } from "../stores/activity-timeline";
-  import {
-    artifactInspectorState,
-    isArtifactInspectorVisible,
-  } from "../stores/artifact-inspector";
+  import { activityTimelineState, isActivityTimelineVisible } from "../stores/activity-timeline";
+  import { artifactInspectorState, isArtifactInspectorVisible } from "../stores/artifact-inspector";
   import { agentMoodState } from "../stores/agent-mood";
   import { activeSkillState } from "../stores/active-skill";
   import type {
@@ -208,9 +199,7 @@
       chatConversationReady,
   );
 
-  const stopVisible = $derived(
-    $chatConversationState.requestInFlight || localAgentTurnActive(),
-  );
+  const stopVisible = $derived($chatConversationState.requestInFlight || localAgentTurnActive());
 
   const historyEnabled = $derived(hasAdvertisedChatSessions($sessionState.advertisedCapabilities));
 
@@ -1161,51 +1150,51 @@
   {#if settingsOpen}
     {#if SettingsViewLazy}
       <div class="settings-shell view-transition-enter">
-      <SettingsViewLazy
-        initialSection={settingsInitialSection}
-        serverUrl={$settings.serverUrl}
-        theme={$settings.theme}
-        uiTheme={$settings.uiTheme}
-        locale={$settings.locale}
-        speech={$settings.speech}
-        uiSounds={$settings.uiSounds}
-        minimizeToTray={$settings.minimizeToTray}
-        showWindowHotkey={$settings.showWindowHotkey}
-        speechHotkey={$settings.speechHotkey}
-        desktopControlEnabled={$settings.desktopControlEnabled}
-        assetFetchAllowedOrigins={$settings.assetFetchAllowedOrigins}
-        browserControlEnabled={$settings.browserControlEnabled}
-        pageAgentEnabled={$settings.pageAgentEnabled}
-        pageAgentStartUrl={$settings.pageAgentStartUrl}
-        fileAccess={$settings.fileAccess}
-        shellAccess={$settings.shellAccess}
-        chatTtsMode={$settings.chatTtsMode}
-        openPets={$settings.openPets}
-        reduceMotion={$settings.reduceMotion}
-        speechVisualizerEnabled={$settings.speechVisualizerEnabled}
-        localAgent={$settings.localAgent}
-        connectionStatus={$connectionStatus}
-        sessionStatus={$sessionState.status}
-        sessionId={$sessionState.sessionId}
-        sessionError={$sessionState.errorMessage}
-        advertisedCapabilities={$sessionState.advertisedCapabilities}
-        remoteControlActive={$sessionState.remoteControlActive}
-        {appVersion}
-        onBack={() => {
-          settingsOpen = false;
-          settingsInitialSection = undefined;
-        }}
-        onSave={async (next: SettingsSavePayload) => {
-          await handleSaveSettings({ ...get(settings), ...next });
-        }}
-        onReconnect={() => void connect($settings.serverUrl)}
-        onRetryPairing={() => void handleRetryPairing()}
-        onUnpair={() => void handleUnpair()}
-        onOpenTlsTrust={() => {
-          certModalOpen = true;
-        }}
-        wsSend={(message: WsMessage) => wsService.send(message)}
-      />
+        <SettingsViewLazy
+          initialSection={settingsInitialSection}
+          serverUrl={$settings.serverUrl}
+          theme={$settings.theme}
+          uiTheme={$settings.uiTheme}
+          locale={$settings.locale}
+          speech={$settings.speech}
+          uiSounds={$settings.uiSounds}
+          minimizeToTray={$settings.minimizeToTray}
+          showWindowHotkey={$settings.showWindowHotkey}
+          speechHotkey={$settings.speechHotkey}
+          desktopControlEnabled={$settings.desktopControlEnabled}
+          assetFetchAllowedOrigins={$settings.assetFetchAllowedOrigins}
+          browserControlEnabled={$settings.browserControlEnabled}
+          pageAgentEnabled={$settings.pageAgentEnabled}
+          pageAgentStartUrl={$settings.pageAgentStartUrl}
+          fileAccess={$settings.fileAccess}
+          shellAccess={$settings.shellAccess}
+          chatTtsMode={$settings.chatTtsMode}
+          openPets={$settings.openPets}
+          reduceMotion={$settings.reduceMotion}
+          speechVisualizerEnabled={$settings.speechVisualizerEnabled}
+          localAgent={$settings.localAgent}
+          connectionStatus={$connectionStatus}
+          sessionStatus={$sessionState.status}
+          sessionId={$sessionState.sessionId}
+          sessionError={$sessionState.errorMessage}
+          advertisedCapabilities={$sessionState.advertisedCapabilities}
+          remoteControlActive={$sessionState.remoteControlActive}
+          {appVersion}
+          onBack={() => {
+            settingsOpen = false;
+            settingsInitialSection = undefined;
+          }}
+          onSave={async (next: SettingsSavePayload) => {
+            await handleSaveSettings({ ...get(settings), ...next });
+          }}
+          onReconnect={() => void connect($settings.serverUrl)}
+          onRetryPairing={() => void handleRetryPairing()}
+          onUnpair={() => void handleUnpair()}
+          onOpenTlsTrust={() => {
+            certModalOpen = true;
+          }}
+          wsSend={(message: WsMessage) => wsService.send(message)}
+        />
       </div>
     {:else}
       <div class="settings-loading view-transition-enter" aria-busy="true">
@@ -1255,7 +1244,7 @@
           onToggleIntegrations={handleToggleIntegrations}
           onToggleWarnings={handleToggleWarnings}
           companionTone={companionPresence.tone}
-          companionState={companionState}
+          {companionState}
           speechActive={$speechState.isActive}
           requestInFlight={pending || streamingActive || $chatConversationState.requestInFlight}
         />
@@ -1406,7 +1395,8 @@
   {/if}
 
   <VaultSecretPromptModal
-    onSubmit={(secret: string) => void submitVaultSecret((m: WsMessage) => wsService.send(m), secret)}
+    onSubmit={(secret: string) =>
+      void submitVaultSecret((m: WsMessage) => wsService.send(m), secret)}
     onCancel={() => void cancelVaultSecret((m: WsMessage) => wsService.send(m))}
   />
 

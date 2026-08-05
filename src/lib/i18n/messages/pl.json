@@ -1001,6 +1001,7 @@
   "upload.error.fileTooLarge": "Plik przekracza limit przesyłania serwera.",
   "upload.error.httpFailed": "Przesyłanie nie powiodło się (HTTP {status}).",
   "upload.error.knowledgeArchiveFailed": "Przesyłanie do archiwum wiedzy nie powiodło się.",
+  "upload.error.originDenied": "Cel przesyłania jest niedozwolony (origin poza listą).",
   "upload.error.urlUnresolved": "Nie udało się rozwiązać URL przesyłania względem URL serwera.",
   "vaultSecretPrompt.cancel": "Anuluj",
   "vaultSecretPrompt.hide": "Ukryj",

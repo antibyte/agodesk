@@ -127,7 +127,9 @@ export function providerCapabilityChips(provider: ConfigProvider): string[] {
   return chips;
 }
 
-export function catalogModelOptions(models: ConfigProviderCatalogModel[]): { id: string; label: string }[] {
+export function catalogModelOptions(
+  models: ConfigProviderCatalogModel[],
+): { id: string; label: string }[] {
   return models.map((model) => ({
     id: model.id,
     label: model.name && model.name !== model.id ? `${model.name} (${model.id})` : model.id,
@@ -140,7 +142,9 @@ function catalogProviderKeys(entry: ConfigProviderCatalogEntry): string[] {
     .map((value) => value.trim().toLowerCase());
 }
 
-export function resolveCatalogBaseUrl(entry: ConfigProviderCatalogEntry | null | undefined): string {
+export function resolveCatalogBaseUrl(
+  entry: ConfigProviderCatalogEntry | null | undefined,
+): string {
   if (!entry) {
     return "";
   }
@@ -233,7 +237,9 @@ function catalogEntryHasOauthSignal(entry: ConfigProviderCatalogEntry | null | u
   return Boolean(setup.auth_url?.trim() && setup.token_url?.trim());
 }
 
-export function catalogEntryUsesOauth(entry: ConfigProviderCatalogEntry | null | undefined): boolean {
+export function catalogEntryUsesOauth(
+  entry: ConfigProviderCatalogEntry | null | undefined,
+): boolean {
   if (!entry) {
     return false;
   }
@@ -255,12 +261,12 @@ export function catalogEntrySupportsApiKey(
   return true;
 }
 
-function catalogEntrySupportsApiKeyAlongsideDualAuth(
-  entry: ConfigProviderCatalogEntry,
-): boolean {
+function catalogEntrySupportsApiKeyAlongsideDualAuth(entry: ConfigProviderCatalogEntry): boolean {
   // Dual-auth providers (e.g. OpenAI: auth_type=api_key + oauth_setup) explicitly
   // support API keys even though OAuth is also available.
-  return entry.auth_type === "api_key" || Boolean(entry.oauth_provider) || Boolean(entry.oauth_setup);
+  return (
+    entry.auth_type === "api_key" || Boolean(entry.oauth_provider) || Boolean(entry.oauth_setup)
+  );
 }
 
 export function resolveCatalogAuthType(

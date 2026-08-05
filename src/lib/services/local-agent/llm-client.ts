@@ -1,8 +1,5 @@
 import { DEFAULT_OLLAMA_BASE_URL, type LocalAgentSettings } from "../../types/protocol";
-import type {
-  LocalAgentLlmMessage,
-  LocalAgentLlmToolCall,
-} from "../../types/local-agent-protocol";
+import type { LocalAgentLlmMessage, LocalAgentLlmToolCall } from "../../types/local-agent-protocol";
 import { sendLocalAgentLlm, type LocalAgentSend } from "./remote-bridge";
 import { getTranslateFn } from "../../i18n/store";
 
@@ -59,9 +56,7 @@ async function runAuragoProxyStep(options: RunLlmStepOptions): Promise<LlmStepRe
           : [],
     });
     throw new Error(
-      detail
-        ? `AuraGo LLM-Proxy: ${detail}`
-        : "AuraGo LLM-Proxy lieferte kein Ergebnis.",
+      detail ? `AuraGo LLM-Proxy: ${detail}` : "AuraGo LLM-Proxy lieferte kein Ergebnis.",
     );
   }
   return {

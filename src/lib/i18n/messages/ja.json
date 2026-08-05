@@ -1001,6 +1001,7 @@
   "upload.error.fileTooLarge": "ファイルがサーバーのアップロード制限を超えています。",
   "upload.error.httpFailed": "アップロードが HTTP {status} で失敗しました。",
   "upload.error.knowledgeArchiveFailed": "ナレッジアーカイブへのアップロードに失敗しました。",
+  "upload.error.originDenied": "アップロード先は許可されていません（オリジンが許可リストにありません）。",
   "upload.error.urlUnresolved": "アップロード URL をサーバー URL に対して解決できませんでした。",
   "vaultSecretPrompt.cancel": "キャンセル",
   "vaultSecretPrompt.hide": "非表示",

@@ -17,12 +17,7 @@ import {
 } from "./remote-bridge";
 import { runLlmStep, type LlmMessage, type LlmToolCall } from "./llm-client";
 import { buildLocalAgentSystemPrompt } from "./prompt";
-import {
-  KERNEL_TOOLS,
-  availableDiscoverableTools,
-  getToolSpec,
-  toToolDeclaration,
-} from "./tools";
+import { KERNEL_TOOLS, availableDiscoverableTools, getToolSpec, toToolDeclaration } from "./tools";
 import { dispatchLocalDesktopOperation } from "./dispatch";
 import { emitLocalActivity } from "../agent-activity-inbound";
 import type { AppSettings, DesktopOperation } from "../../types/protocol";
@@ -247,14 +242,14 @@ interface ToolCallContext {
   transcript: LocalAgentTranscriptEntry[];
 }
 
-async function executeToolCall(
-  call: LlmToolCall,
-  ctx: ToolCallContext,
-): Promise<ToolCallOutcome> {
+async function executeToolCall(call: LlmToolCall, ctx: ToolCallContext): Promise<ToolCallOutcome> {
   const spec = getToolSpec(call.name);
   if (!spec) {
     return {
-      result: { success: false, error: getTranslateFn()("localAgent.error.unknownTool", { name: call.name }) },
+      result: {
+        success: false,
+        error: getTranslateFn()("localAgent.error.unknownTool", { name: call.name }),
+      },
       trace: { tool: call.name, status: "error", error_code: "UNKNOWN_TOOL" },
     };
   }
@@ -275,13 +270,19 @@ async function executeToolCall(
     const target = getToolSpec(name);
     if (!target || target.category !== "local") {
       return {
-        result: { success: false, error: getTranslateFn()("localAgent.error.unknownLocalTool", { name }) },
+        result: {
+          success: false,
+          error: getTranslateFn()("localAgent.error.unknownLocalTool", { name }),
+        },
         trace: { tool: call.name, target: name, status: "error", error_code: "UNKNOWN_TOOL" },
       };
     }
     if (!(target.isAvailable?.(ctx.appSettings) ?? true)) {
       return {
-        result: { success: false, error: getTranslateFn()("localAgent.error.toolNotAllowed", { name }) },
+        result: {
+          success: false,
+          error: getTranslateFn()("localAgent.error.toolNotAllowed", { name }),
+        },
         trace: { tool: call.name, target: name, status: "error", error_code: "TOOL_UNAVAILABLE" },
       };
     }
@@ -359,7 +360,10 @@ async function executeToolCall(
     }
     if (!spec.operation) {
       return {
-        result: { success: false, error: getTranslateFn()("localAgent.error.toolNoOperation", { name: call.name }) },
+        result: {
+          success: false,
+          error: getTranslateFn()("localAgent.error.toolNoOperation", { name: call.name }),
+        },
         trace: { tool: call.name, status: "error", error_code: "TOOL_MISCONFIGURED" },
       };
     }
@@ -367,7 +371,10 @@ async function executeToolCall(
   }
 
   return {
-    result: { success: false, error: getTranslateFn()("localAgent.error.unknownCategory", { name: call.name }) },
+    result: {
+      success: false,
+      error: getTranslateFn()("localAgent.error.unknownCategory", { name: call.name }),
+    },
     trace: { tool: call.name, status: "error", error_code: "UNKNOWN_TOOL" },
   };
 }
@@ -387,7 +394,10 @@ async function executeRemoteTool(
     return {
       result: result.success
         ? { success: true, result: result.result }
-        : { success: false, error: result.error_message || getTranslateFn()("localAgent.error.remoteToolFailed") },
+        : {
+            success: false,
+            error: result.error_message || getTranslateFn()("localAgent.error.remoteToolFailed"),
+          },
       trace: {
         tool: call.name,
         status: result.success ? "success" : "error",
@@ -447,7 +457,11 @@ async function executeLocalTool(
     trace: {
       tool: call.name,
       ...(target ? { target } : {}),
-      status: dispatch.success ? "success" : dispatch.waiting_approval ? "waiting_approval" : "error",
+      status: dispatch.success
+        ? "success"
+        : dispatch.waiting_approval
+          ? "waiting_approval"
+          : "error",
       ...(dispatch.error_code ? { error_code: dispatch.error_code } : {}),
     },
   };
@@ -460,7 +474,9 @@ function extractTarget(args: Record<string, unknown>): string | undefined {
   return value ? value.slice(0, 120) : undefined;
 }
 
-function mapActivityKind(operation: DesktopOperation): "shell" | "file_read" | "file_edit" | "desktop" {
+function mapActivityKind(
+  operation: DesktopOperation,
+): "shell" | "file_read" | "file_edit" | "desktop" {
   if (operation.startsWith("shell")) {
     return "shell";
   }

@@ -43,9 +43,7 @@ export async function deliverSpeechTranscript(
   }
 
   context.onComposerDraft(trimmed);
-  context.onSystemNotice(
-    getTranslateFn()("speechDelivery.notice.recognized", { text: trimmed }),
-  );
+  context.onSystemNotice(getTranslateFn()("speechDelivery.notice.recognized", { text: trimmed }));
   return { mode: "composer" };
 }
 
