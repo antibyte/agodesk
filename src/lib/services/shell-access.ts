@@ -7,6 +7,7 @@ import type {
 } from "../types/protocol";
 import { shellAccessIsConfigured } from "../types/protocol";
 import { buildPathDisplay } from "./file-access";
+import { getTranslateFn } from "../i18n/store";
 
 export interface ResolvedShellCwd {
   cwdId: string;
@@ -115,7 +116,7 @@ export async function resolveShellWorkingDirectory(
     return {
       ok: false,
       code: "SHELL_ACCESS_DISABLED",
-      message: "Remote shell is disabled in agodesk settings.",
+      message: getTranslateFn()("shellAccess.error.disabled"),
     };
   }
 
@@ -126,7 +127,7 @@ export async function resolveShellWorkingDirectory(
       return {
         ok: false,
         code: "SHELL_ACCESS_DENIED",
-        message: "Unknown shell working directory.",
+        message: getTranslateFn()("shellAccess.error.unknownCwd"),
       };
     }
     const canonical = await canonicalizeExistingPath(match.canonicalPath);
@@ -134,7 +135,7 @@ export async function resolveShellWorkingDirectory(
       return {
         ok: false,
         code: "SHELL_ACCESS_DENIED",
-        message: "Configured working directory is unavailable.",
+        message: getTranslateFn()("shellAccess.error.cwdUnavailable"),
       };
     }
     return {
@@ -154,7 +155,7 @@ export async function resolveShellWorkingDirectory(
       return {
         ok: false,
         code: "SHELL_ACCESS_DENIED",
-        message: "Requested working directory is invalid or unavailable.",
+        message: getTranslateFn()("shellAccess.error.cwdInvalid"),
       };
     }
     for (const entry of allowed) {
@@ -177,7 +178,7 @@ export async function resolveShellWorkingDirectory(
     return {
       ok: false,
       code: "SHELL_ACCESS_DENIED",
-      message: "Requested working directory is outside allowed roots.",
+      message: getTranslateFn()("shellAccess.error.cwdOutsideRoots"),
     };
   }
 
@@ -190,7 +191,7 @@ export async function resolveShellWorkingDirectory(
     return {
       ok: false,
       code: "SHELL_ACCESS_DISABLED",
-      message: "No shell working directories configured.",
+      message: getTranslateFn()("shellAccess.error.noCwds"),
     };
   }
 
@@ -199,7 +200,7 @@ export async function resolveShellWorkingDirectory(
     return {
       ok: false,
       code: "SHELL_ACCESS_DENIED",
-      message: "Default working directory is unavailable.",
+      message: getTranslateFn()("shellAccess.error.defaultCwdUnavailable"),
     };
   }
 
@@ -223,7 +224,7 @@ export async function validateShellExecRequest(
     return {
       ok: false,
       code: "SHELL_ACCESS_DISABLED",
-      message: "Remote shell is disabled in agodesk settings.",
+      message: getTranslateFn()("shellAccess.error.disabled"),
     };
   }
 
@@ -231,7 +232,7 @@ export async function validateShellExecRequest(
     return {
       ok: false,
       code: "SHELL_ACCESS_DENIED",
-      message: "remote.shell.exec was not negotiated for this session.",
+      message: getTranslateFn()("shellAccess.error.notNegotiated"),
     };
   }
 
@@ -240,7 +241,7 @@ export async function validateShellExecRequest(
     return {
       ok: false,
       code: "SHELL_COMMAND_REJECTED",
-      message: "Shell command must be a non-empty string.",
+      message: getTranslateFn()("shellAccess.error.emptyCommand"),
     };
   }
 
@@ -248,7 +249,7 @@ export async function validateShellExecRequest(
     return {
       ok: false,
       code: "SHELL_COMMAND_REJECTED",
-      message: "Shell command exceeds max_command_chars.",
+      message: getTranslateFn()("shellAccess.error.commandTooLong"),
     };
   }
 
@@ -256,7 +257,7 @@ export async function validateShellExecRequest(
     return {
       ok: false,
       code: "SHELL_COMMAND_REJECTED",
-      message: "Shell command rejected by local policy.",
+      message: getTranslateFn()("shellAccess.error.policyRejected"),
     };
   }
 
@@ -264,7 +265,7 @@ export async function validateShellExecRequest(
     return {
       ok: false,
       code: "SHELL_SPAWN_FAILED",
-      message: "Selected shell is not allowed by local settings.",
+      message: getTranslateFn()("shellAccess.error.shellNotAllowed"),
     };
   }
 

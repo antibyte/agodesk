@@ -175,6 +175,6 @@ test("ollama step rejects when no model is configured", async () => {
       messages: [{ role: "user", content: "hi" }],
       tools: [],
     }),
-    /Ollama-Modell/,
+    /Ollama[- ]?(model|Modell)/i,
   );
 });

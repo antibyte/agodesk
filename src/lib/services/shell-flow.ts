@@ -26,6 +26,7 @@ import { auditShellAccess, validateShellExecRequest } from "./shell-access";
 import { emitLocalActivity } from "./agent-activity-inbound";
 import { appendActivityJournal } from "./activity-journal";
 import { createLocalJob, localJobState } from "../stores/local-jobs";
+import { getTranslateFn } from "../i18n/store";
 
 function activityIdsForCommand(commandId: string) {
   return {
@@ -189,7 +190,7 @@ export async function handleIncomingShellCommand(
         wsSend,
         command,
         negotiated ? "SHELL_ACCESS_DISABLED" : "SHELL_ACCESS_DENIED",
-        negotiated ? "Remote shell is disabled." : "Shell session capability not negotiated.",
+        negotiated ? getTranslateFn()("shellFlow.error.disabled") : getTranslateFn()("shellFlow.error.notNegotiated"),
         context,
       );
       return;
@@ -211,7 +212,7 @@ export async function handleIncomingShellCommand(
         wsSend,
         command,
         "SHELL_COMMAND_REJECTED",
-        "shell_session_id is required",
+        getTranslateFn()("shellFlow.error.sessionIdRequired"),
         context,
       );
       return;
@@ -221,7 +222,7 @@ export async function handleIncomingShellCommand(
         wsSend,
         command,
         negotiated ? "SHELL_ACCESS_DISABLED" : "SHELL_ACCESS_DENIED",
-        negotiated ? "Remote shell is disabled." : "Shell session capability not negotiated.",
+        negotiated ? getTranslateFn()("shellFlow.error.disabled") : getTranslateFn()("shellFlow.error.notNegotiated"),
         context,
       );
       return;

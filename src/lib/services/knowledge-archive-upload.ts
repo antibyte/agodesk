@@ -1,3 +1,4 @@
+import { getTranslateFn } from "../i18n/store";
 import { get } from "svelte/store";
 
 import { resolvePersonaAssetUrl } from "../types/protocol";
@@ -24,7 +25,7 @@ function resolveUploadUrl(serverUrl: string, uploadUrl: string): string {
   ) {
     return trimmed;
   }
-  throw new Error("Upload URL could not be resolved against the server URL.");
+  throw new Error(getTranslateFn()("upload.error.urlUnresolved"));
 }
 
 function httpOriginForUrl(url: string): string {
@@ -90,7 +91,7 @@ async function uploadViaFetch(
     body: form,
   });
   if (!response.ok) {
-    throw new Error(`Upload failed with HTTP ${response.status}.`);
+    throw new Error(getTranslateFn()("upload.error.httpFailed", { status: response.status }));
   }
 }
 
@@ -101,7 +102,7 @@ export async function uploadKnowledgeArchiveFile(
   file: File,
 ): Promise<void> {
   if (file.size > document.max_bytes) {
-    throw new Error("File exceeds server upload limit.");
+    throw new Error(getTranslateFn()("upload.error.fileTooLarge"));
   }
 
   try {
@@ -111,6 +112,6 @@ export async function uploadKnowledgeArchiveFile(
       await uploadViaFetch(serverUrl, document, file);
     }
   } catch (error) {
-    throw new Error(formatInvokeError(error, "Knowledge archive upload failed"));
+    throw new Error(formatInvokeError(error, getTranslateFn()("upload.error.knowledgeArchiveFailed")));
   }
 }

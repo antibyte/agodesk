@@ -26,6 +26,7 @@ import {
 import { dispatchLocalDesktopOperation } from "./dispatch";
 import { emitLocalActivity } from "../agent-activity-inbound";
 import type { AppSettings, DesktopOperation } from "../../types/protocol";
+import { getTranslateFn } from "../../i18n/store";
 
 export interface RunLocalAgentTurnOptions {
   send: LocalAgentSend;
@@ -59,7 +60,7 @@ export function cancelLocalAgentTurn(): void {
     return;
   }
   cancelRequested = true;
-  rejectAllLocalAgentWaiters(new Error("Local agent turn cancelled."));
+  rejectAllLocalAgentWaiters(new Error(getTranslateFn()("localAgent.error.turnCancelled")));
 }
 
 interface ToolCallOutcome {
@@ -160,7 +161,7 @@ export async function runLocalAgentTurn(
       if (willHandoff) {
         // Show wait hint immediately (same LLM step as ask_aurago), before AuraGo runs.
         const waitHint =
-          stepResult.content.trim() || "Einen Moment, ich kümmere mich darum…";
+          stepResult.content.trim() || getTranslateFn()("localAgent.error.thinkingPlaceholder");
         assistantText = waitHint;
         transcript.push({ role: "assistant", content: waitHint });
         options.onAssistantMessage(waitHint);
@@ -209,7 +210,7 @@ export async function runLocalAgentTurn(
       transcript.push({ role: "assistant", content: assistantText });
       options.onAssistantMessage(assistantText);
     } else if (status === "failed") {
-      options.onSystemNotice?.(assistantText || "Lokaler Agent-Fehler.");
+      options.onSystemNotice?.(assistantText || getTranslateFn()("localAgent.error.generic"));
     }
   }
 
@@ -253,7 +254,7 @@ async function executeToolCall(
   const spec = getToolSpec(call.name);
   if (!spec) {
     return {
-      result: { success: false, error: `Unbekanntes Tool: ${call.name}` },
+      result: { success: false, error: getTranslateFn()("localAgent.error.unknownTool", { name: call.name }) },
       trace: { tool: call.name, status: "error", error_code: "UNKNOWN_TOOL" },
     };
   }
@@ -274,13 +275,13 @@ async function executeToolCall(
     const target = getToolSpec(name);
     if (!target || target.category !== "local") {
       return {
-        result: { success: false, error: `Kein lokales Tool namens ${name}.` },
+        result: { success: false, error: getTranslateFn()("localAgent.error.unknownLocalTool", { name }) },
         trace: { tool: call.name, target: name, status: "error", error_code: "UNKNOWN_TOOL" },
       };
     }
     if (!(target.isAvailable?.(ctx.appSettings) ?? true)) {
       return {
-        result: { success: false, error: `${name} ist nicht freigegeben (Einstellungen prüfen).` },
+        result: { success: false, error: getTranslateFn()("localAgent.error.toolNotAllowed", { name }) },
         trace: { tool: call.name, target: name, status: "error", error_code: "TOOL_UNAVAILABLE" },
       };
     }
@@ -334,7 +335,7 @@ async function executeToolCall(
       return {
         result: {
           success: false,
-          error: `Tool „${call.name}“ ist noch nicht freigeschaltet. Zuerst describe_tool aufrufen.`,
+          error: getTranslateFn()("localAgent.error.toolNotRevealed", { name: call.name }),
         },
         trace: {
           tool: call.name,
@@ -347,7 +348,7 @@ async function executeToolCall(
       return {
         result: {
           success: false,
-          error: `${call.name} ist nicht freigegeben (Einstellungen prüfen).`,
+          error: getTranslateFn()("localAgent.error.toolNotAllowed", { name: call.name }),
         },
         trace: {
           tool: call.name,
@@ -358,7 +359,7 @@ async function executeToolCall(
     }
     if (!spec.operation) {
       return {
-        result: { success: false, error: `Tool „${call.name}“ hat keine lokale Operation.` },
+        result: { success: false, error: getTranslateFn()("localAgent.error.toolNoOperation", { name: call.name }) },
         trace: { tool: call.name, status: "error", error_code: "TOOL_MISCONFIGURED" },
       };
     }
@@ -366,7 +367,7 @@ async function executeToolCall(
   }
 
   return {
-    result: { success: false, error: `Unbekannte Tool-Kategorie für ${call.name}.` },
+    result: { success: false, error: getTranslateFn()("localAgent.error.unknownCategory", { name: call.name }) },
     trace: { tool: call.name, status: "error", error_code: "UNKNOWN_TOOL" },
   };
 }
@@ -386,7 +387,7 @@ async function executeRemoteTool(
     return {
       result: result.success
         ? { success: true, result: result.result }
-        : { success: false, error: result.error_message || "Remote-Tool fehlgeschlagen." },
+        : { success: false, error: result.error_message || getTranslateFn()("localAgent.error.remoteToolFailed") },
       trace: {
         tool: call.name,
         status: result.success ? "success" : "error",
@@ -440,7 +441,7 @@ async function executeLocalTool(
       ? { success: true, data: dispatch.data }
       : {
           success: false,
-          error: dispatch.error_message || "Lokales Tool fehlgeschlagen.",
+          error: dispatch.error_message || getTranslateFn()("localAgent.error.localToolFailed"),
           ...(dispatch.waiting_approval ? { waiting_approval: true } : {}),
         },
     trace: {

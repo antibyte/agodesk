@@ -7,6 +7,7 @@ import {
   type GeminiFunctionCall,
   type GeminiFunctionResponse,
 } from "./speech-tools";
+import { getTranslateFn } from "../i18n/store";
 import {
   buildGeminiLiveWsUrl,
   isNativeAudioLiveModel,
@@ -564,7 +565,7 @@ export class GeminiLiveSession {
   async connect(options?: { apiKey?: string }): Promise<void> {
     const apiKey = options?.apiKey?.trim();
     if (!apiKey) {
-      throw new Error("Gemini API-Key fehlt.");
+      throw new Error(getTranslateFn()("geminiLive.error.apiKeyMissing"));
     }
     const normalizedModel = normalizeModelId(this.speech.modelId);
     const errors: string[] = [];
@@ -575,7 +576,7 @@ export class GeminiLiveSession {
         return;
       } catch (error) {
         const message =
-          error instanceof Error ? error.message : "Gemini Live Verbindung fehlgeschlagen.";
+          error instanceof Error ? error.message : getTranslateFn()("geminiLive.error.connectFailed");
         errors.push(`[${apiVersion}] ${message}`);
         this.cleanupConnection();
 
@@ -587,7 +588,7 @@ export class GeminiLiveSession {
             const retryMessage =
               retryError instanceof Error
                 ? retryError.message
-                : "Gemini Live Verbindung fehlgeschlagen.";
+                : getTranslateFn()("geminiLive.error.connectFailed");
             errors.push(`[${apiVersion}, ohne Mood-Hint] ${retryMessage}`);
             this.cleanupConnection();
           }
@@ -651,7 +652,7 @@ export class GeminiLiveSession {
         this.resolveSetup = null;
         this.rejectSetup = null;
         reject(
-          new Error(`Setup-Timeout. Modell „${normalizeModelId(this.speech.modelId)}“ prüfen.`),
+          new Error(getTranslateFn()("geminiLive.error.setupTimeout", { model: normalizeModelId(this.speech.modelId) })),
         );
       }, SETUP_TIMEOUT_MS);
 
@@ -686,7 +687,7 @@ export class GeminiLiveSession {
       if (activeConnectionId !== this.connectionId) {
         return;
       }
-      this.rejectSetup?.(new Error("WebSocket-Fehler."));
+      this.rejectSetup?.(new Error(getTranslateFn()("geminiLive.error.websocket")));
     };
 
     ws.onclose = (event) => {
@@ -698,9 +699,9 @@ export class GeminiLiveSession {
         const detail =
           event.reason?.trim() ||
           (event.code === 1000
-            ? "Verbindung vom Server beendet (kein setupComplete)."
-            : `WebSocket Code ${event.code}.`);
-        this.rejectSetup?.(new Error(`Verbindung getrennt (${apiVersion}): ${detail}`));
+            ? getTranslateFn()("geminiLive.error.serverClosedNoSetup")
+            : getTranslateFn()("geminiLive.error.websocketCode", { code: event.code }));
+        this.rejectSetup?.(new Error(getTranslateFn()("geminiLive.error.disconnected", { apiVersion, detail })));
       }
 
       if (this.ws === ws) {
@@ -714,7 +715,7 @@ export class GeminiLiveSession {
 
     await new Promise<void>((resolve, reject) => {
       const timeout = window.setTimeout(() => {
-        reject(new Error("Verbindungstimeout beim Öffnen."));
+        reject(new Error(getTranslateFn()("geminiLive.error.connectTimeout")));
       }, SETUP_TIMEOUT_MS);
 
       ws.onopen = () => {
@@ -742,7 +743,7 @@ export class GeminiLiveSession {
             return;
           }
           window.clearTimeout(timeout);
-          reject(new Error("WebSocket-Fehler beim Verbinden."));
+          reject(new Error(getTranslateFn()("geminiLive.error.websocketConnect")));
         },
         { once: true },
       );

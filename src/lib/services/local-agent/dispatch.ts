@@ -1,6 +1,7 @@
 import { get } from "svelte/store";
 import { sessionState } from "../../stores/session";
 import { handleIncomingDesktopCommand } from "../desktop-flow";
+import { getTranslateFn } from "../../i18n/store";
 import type {
   DesktopCommandPayload,
   DesktopOperation,
@@ -52,7 +53,7 @@ export async function dispatchLocalDesktopOperation(
         success: false,
         waiting_approval: true,
         error_code: "LOCAL_AGENT_APPROVAL_TIMEOUT",
-        error_message: "Freigabe steht noch aus (Zeitüberschreitung).",
+        error_message: getTranslateFn()("localAgent.error.approvalTimeout"),
       });
     }, APPROVAL_WAIT_TIMEOUT_MS);
 

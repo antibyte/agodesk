@@ -30,6 +30,7 @@ import { listRemoteFiles, readRemoteFile, writeRemoteFile, patchRemoteFile } fro
 import { searchRemoteFiles, parseFileSearchContent, fileSearchErrorCode } from "./file-search-sync";
 import { fileAccessIsConfigured } from "./file-access";
 import { auditShellAccess, type ShellValidationSuccess } from "./shell-access";
+import { getTranslateFn } from "../i18n/store";
 import {
   invokeShellExec,
   invokeShellSessionInput,
@@ -922,7 +923,7 @@ export async function executeDesktopCommand(
           desktopFailure(
             result,
             "FILE_ACCESS_DISABLED",
-            "Dateizugriff ist in den agodesk-Einstellungen deaktiviert.",
+            getTranslateFn()("desktop.error.fileAccessDisabled"),
           );
           break;
         }

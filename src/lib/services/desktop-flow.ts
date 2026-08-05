@@ -16,6 +16,7 @@ import {
   requiresLocalDesktopApproval,
   requiresRemoteControlBanner,
 } from "../types/protocol";
+import { getTranslateFn } from "../i18n/store";
 import { settings } from "../stores/settings";
 import { sessionState } from "../stores/session";
 import { executeDesktopCommand, type DesktopResultSender } from "./desktop";
@@ -67,12 +68,14 @@ export async function handleIncomingDesktopCommand(
     deviceId: context.deviceId,
   };
 
+  const t = getTranslateFn();
+
   if (!command?.command_id || !command.operation) {
     await rejectCommand(
       context.wsSend,
       { command_id: message.id, operation: "desktop_screenshot" },
       "DESKTOP_COMMAND_INVALID",
-      "Ungueltiger desktop.command Payload.",
+      t("desktopFlow.error.invalidPayload"),
       desktopContext,
     );
     return;
@@ -83,7 +86,7 @@ export async function handleIncomingDesktopCommand(
       context.wsSend,
       command,
       "SESSION_NOT_ACCEPTED",
-      "Desktop-Befehle sind erst nach session.accepted erlaubt.",
+      t("desktopFlow.error.sessionNotAccepted"),
       desktopContext,
     );
     return;
@@ -98,7 +101,7 @@ export async function handleIncomingDesktopCommand(
       context.wsSend,
       command,
       "DESKTOP_CONTROL_DISABLED",
-      "Desktop-Steuerung ist in den agodesk-Einstellungen deaktiviert.",
+      t("desktopFlow.error.controlDisabled"),
       desktopContext,
     );
     return;
@@ -118,7 +121,7 @@ export async function handleIncomingDesktopCommand(
       context.wsSend,
       command,
       "DESKTOP_BROWSER_UNAVAILABLE",
-      "Browser-Automatisierung ist in den agodesk-Einstellungen deaktiviert.",
+      t("desktopFlow.error.browserDisabled"),
       desktopContext,
     );
     return;
@@ -160,12 +163,13 @@ export async function flushPendingInputCommands(
   }
 
   if (!approved) {
+    const t = getTranslateFn();
     for (const command of queue) {
       await rejectCommand(
         wsSend,
         command,
         "DESKTOP_INPUT_DENIED",
-        "Remote Control wurde vom Benutzer abgelehnt.",
+        t("desktopFlow.error.inputDenied"),
         desktopContext,
       );
     }

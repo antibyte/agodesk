@@ -1,3 +1,4 @@
+import { getTranslateFn } from "../i18n/store";
 import { get } from "svelte/store";
 
 import { resolvePersonaAssetUrl } from "../types/protocol";
@@ -80,7 +81,7 @@ function resolveUploadUrl(serverUrl: string, uploadUrl: string): string {
   ) {
     return trimmed;
   }
-  throw new Error("Upload URL could not be resolved against the server URL.");
+  throw new Error(getTranslateFn()("upload.error.urlUnresolved"));
 }
 
 function httpOriginForUrl(url: string): string {
@@ -144,7 +145,7 @@ async function uploadViaFetch(
     body: form,
   });
   if (!response.ok) {
-    throw new Error(`Upload failed with HTTP ${response.status}.`);
+    throw new Error(getTranslateFn()("upload.error.httpFailed", { status: response.status }));
   }
   const contentType = response.headers.get("content-type") ?? "";
   if (contentType.includes("application/json")) {
@@ -164,7 +165,7 @@ export async function uploadChatAttachmentFile(
   file: File,
 ): Promise<UploadedChatAttachmentResponse> {
   if (file.size > prepared.max_bytes) {
-    throw new Error("File exceeds server upload limit.");
+    throw new Error(getTranslateFn()("upload.error.fileTooLarge"));
   }
 
   try {

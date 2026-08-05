@@ -10,6 +10,7 @@ import {
 } from "../types/grok-voice";
 import type { SpeechAgentContext, SpeechStatus } from "../types/speech";
 import { SpeechAudioPlayback } from "./speech-audio-playback";
+import { getTranslateFn } from "../i18n/store";
 import {
   AURAGO_AGENT_NAME,
   buildAgentSystemInstruction,
@@ -424,12 +425,12 @@ export class GrokVoiceSession {
           ? error.message
           : typeof error === "string"
             ? error
-            : "Grok Voice Verbindung fehlgeschlagen.";
+            : getTranslateFn()("grokVoice.error.connectFailed");
       throw new Error(message);
     }
 
     if (activeConnectionId !== this.connectionId || this.closed) {
-      throw new Error("Grok Voice Session abgebrochen.");
+      throw new Error(getTranslateFn()("grokVoice.error.sessionAborted"));
     }
 
     await setupWait;
@@ -452,7 +453,7 @@ export class GrokVoiceSession {
       return;
     }
     if (!this.transportOpen || !this.setupDone || this.closed) {
-      throw new Error("Grok Voice Session ist nicht bereit für Vorlesen.");
+      throw new Error(getTranslateFn()("grokVoice.error.notReadyForSpeak"));
     }
     if (!this.speech.voiceResponses) {
       return;

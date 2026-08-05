@@ -9,6 +9,7 @@ import {
   normalizeKnowledgeArchiveStatusPayload,
 } from "../types/protocol";
 import { uploadKnowledgeArchiveFile } from "./knowledge-archive-upload";
+import { getTranslateFn } from "../i18n/store";
 
 const PREPARE_TIMEOUT_MS = 30_000;
 const STATUS_TIMEOUT_MS = 180_000;
@@ -185,7 +186,7 @@ export async function addFilesToKnowledgeArchive(
           filename: document.filename,
           document_id: document.document_id,
           state: "failed",
-          error: "No matching local file for prepared document.",
+          error: getTranslateFn()("knowledgeArchive.error.noMatchingFile"),
         });
         return;
       }

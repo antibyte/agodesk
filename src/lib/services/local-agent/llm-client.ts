@@ -4,6 +4,7 @@ import type {
   LocalAgentLlmToolCall,
 } from "../../types/local-agent-protocol";
 import { sendLocalAgentLlm, type LocalAgentSend } from "./remote-bridge";
+import { getTranslateFn } from "../../i18n/store";
 
 export type LlmMessage = LocalAgentLlmMessage;
 export type LlmToolCall = LocalAgentLlmToolCall;
@@ -82,7 +83,7 @@ interface OpenAiChoiceMessage {
 async function runLocalProviderStep(options: RunLlmStepOptions): Promise<LlmStepResult> {
   const provider = options.settings.localProvider;
   if (!provider || !provider.baseUrl.trim() || !provider.model.trim()) {
-    throw new Error("Lokaler Provider ist nicht vollständig konfiguriert.");
+    throw new Error(getTranslateFn()("localAgent.error.providerIncomplete"));
   }
 
   const endpoint = `${provider.baseUrl.trim().replace(/\/+$/, "")}/chat/completions`;
@@ -90,14 +91,14 @@ async function runLocalProviderStep(options: RunLlmStepOptions): Promise<LlmStep
     endpoint,
     model: provider.model.trim(),
     apiKey: provider.apiKey.trim(),
-    label: "Lokaler Provider",
+    label: getTranslateFn()("localAgent.label.localProvider"),
   });
 }
 
 async function runOllamaStep(options: RunLlmStepOptions): Promise<LlmStepResult> {
   const provider = options.settings.ollamaProvider;
   if (!provider || !provider.model.trim()) {
-    throw new Error("Ollama-Modell ist nicht konfiguriert.");
+    throw new Error(getTranslateFn()("localAgent.error.ollamaModelMissing"));
   }
 
   const base = (provider.baseUrl.trim() || DEFAULT_OLLAMA_BASE_URL).replace(/\/+$/, "");

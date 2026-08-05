@@ -486,6 +486,7 @@
     animation:
       chaos-float 7s cubic-bezier(0.4, 0, 0.2, 1) infinite,
       chaos-glyph-glitch 4.5s steps(1, end) infinite;
+    will-change: transform, opacity, filter;
   }
 
   .chaos-glyph svg {
@@ -493,58 +494,165 @@
     height: 100%;
     display: block;
     overflow: visible;
+    position: relative;
+    z-index: 1;
   }
 
+  /* Neon accel trail (pseudo behind the glyph) */
+  .chaos-glyph-2::before,
+  .chaos-glyph-2::after,
+  .chaos-glyph-6::before,
+  .chaos-glyph-6::after,
+  .chaos-glyph-4::after,
+  .chaos-glyph-8::after {
+    content: "";
+    position: absolute;
+    left: 20%;
+    top: 35%;
+    width: 70%;
+    height: 30%;
+    border-radius: 999px;
+    pointer-events: none;
+    z-index: 0;
+    opacity: 0;
+    transform-origin: right center;
+    mix-blend-mode: screen;
+    filter: blur(2.5px);
+  }
+
+  .chaos-glyph-2::before,
+  .chaos-glyph-6::before {
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(255, 43, 214, 0.15) 25%,
+      rgba(34, 240, 255, 0.85) 70%,
+      rgba(184, 255, 60, 0.95) 100%
+    );
+    animation: chaos-trail-streak 8.5s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  }
+
+  .chaos-glyph-2::after,
+  .chaos-glyph-6::after {
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(192, 38, 255, 0.1) 30%,
+      rgba(255, 43, 214, 0.75) 75%,
+      rgba(255, 176, 32, 0.9) 100%
+    );
+    animation: chaos-trail-streak-alt 8.5s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  }
+
+  .chaos-glyph-4::after,
+  .chaos-glyph-8::after {
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(34, 240, 255, 0.2) 35%,
+      rgba(192, 38, 255, 0.85) 80%,
+      #fff 100%
+    );
+    animation: chaos-trail-flash 9.2s steps(1, end) infinite;
+  }
+
+  /* 1 + 5: breath-scale flight */
   .chaos-glyph-1 {
     top: 10%;
     left: 6%;
-    animation-duration: 6.2s, 3.8s;
-  }
-  .chaos-glyph-2 {
-    top: 64%;
-    left: 12%;
-    animation-duration: 8.5s, 5.2s;
-    animation-delay: -2.2s, -1s;
-  }
-  .chaos-glyph-3 {
-    top: 20%;
-    right: 9%;
-    animation-duration: 7.1s, 4.1s;
-    animation-delay: -4s, -0.5s;
-  }
-  .chaos-glyph-4 {
-    bottom: 12%;
-    right: 14%;
-    animation-duration: 9.2s, 5.6s;
-    animation-delay: -1.4s, -2s;
+    animation:
+      chaos-float-breathe 6.2s cubic-bezier(0.4, 0, 0.2, 1) infinite,
+      chaos-glyph-glitch 3.8s steps(1, end) infinite;
   }
   .chaos-glyph-5 {
     top: 42%;
     left: 44%;
-    animation-duration: 6.8s, 3.4s;
-    animation-delay: -6s, -1.6s;
     opacity: 0.55;
+    animation:
+      chaos-float-breathe 6.8s cubic-bezier(0.4, 0, 0.2, 1) infinite,
+      chaos-glyph-glitch 3.4s steps(1, end) infinite;
+    animation-delay: -6s, -1.6s;
+  }
+
+  /* 2 + 6: accel trail */
+  .chaos-glyph-2 {
+    top: 64%;
+    left: 12%;
+    animation:
+      chaos-float-dash 8.5s cubic-bezier(0.45, 0.05, 0.2, 1) infinite,
+      chaos-glyph-glitch 5.2s steps(1, end) infinite;
+    animation-delay: -2.2s, -1s;
+  }
+  .chaos-glyph-2::before {
+    animation-duration: 8.5s;
+    animation-delay: -2.2s;
+  }
+  .chaos-glyph-2::after {
+    animation-duration: 8.5s;
+    animation-delay: -2.2s;
   }
   .chaos-glyph-6 {
     top: 7%;
     right: 26%;
-    animation-duration: 10s, 4.8s;
-    animation-delay: -3s, -0.8s;
     opacity: 0.62;
+    animation:
+      chaos-float-dash 10s cubic-bezier(0.45, 0.05, 0.2, 1) infinite,
+      chaos-glyph-glitch 4.8s steps(1, end) infinite;
+    animation-delay: -3s, -0.8s;
+  }
+  .chaos-glyph-6::before {
+    animation-duration: 10s;
+    animation-delay: -3s;
+  }
+  .chaos-glyph-6::after {
+    animation-duration: 10s;
+    animation-delay: -3s;
+  }
+
+  /* 3 + 7: phase cloak */
+  .chaos-glyph-3 {
+    top: 20%;
+    right: 9%;
+    animation:
+      chaos-float 7.1s cubic-bezier(0.4, 0, 0.2, 1) infinite,
+      chaos-glyph-phase 4.1s steps(1, end) infinite;
+    animation-delay: -4s, -0.5s;
   }
   .chaos-glyph-7 {
     bottom: 28%;
     left: 32%;
-    animation-duration: 7.6s, 3.9s;
-    animation-delay: -2.8s, -1.2s;
     opacity: 0.58;
+    animation:
+      chaos-float 7.6s cubic-bezier(0.4, 0, 0.2, 1) infinite,
+      chaos-glyph-phase 3.9s steps(1, end) infinite;
+    animation-delay: -2.8s, -1.2s;
+  }
+
+  /* 4 + 8: warp mix (scale pops + trail flashes) */
+  .chaos-glyph-4 {
+    bottom: 12%;
+    right: 14%;
+    animation:
+      chaos-float-warp 9.2s cubic-bezier(0.4, 0, 0.2, 1) infinite,
+      chaos-glyph-glitch 5.6s steps(1, end) infinite;
+    animation-delay: -1.4s, -2s;
+  }
+  .chaos-glyph-4::after {
+    animation-duration: 9.2s;
+    animation-delay: -1.4s;
   }
   .chaos-glyph-8 {
     top: 34%;
     right: 38%;
-    animation-duration: 8.8s, 5s;
-    animation-delay: -5s, -2.4s;
     opacity: 0.5;
+    animation:
+      chaos-float-warp 8.8s cubic-bezier(0.4, 0, 0.2, 1) infinite,
+      chaos-glyph-glitch 5s steps(1, end) infinite;
+    animation-delay: -5s, -2.4s;
+  }
+  .chaos-glyph-8::after {
+    animation-duration: 8.8s;
+    animation-delay: -5s;
   }
 
   /* ── Minimal (dunkel): Layer aus, kein Rauschen, nur feiner Lichtsaum ── */
@@ -1403,6 +1511,102 @@
     }
   }
 
+  /* Noticeable grow/shrink while flying */
+  @keyframes chaos-float-breathe {
+    0% {
+      transform: translate3d(0, 0, 0) rotate(-14deg) scale(1) skewX(0deg);
+    }
+    10% {
+      transform: translate3d(10px, -18px, 0) rotate(8deg) scale(1.28) skewX(-2deg);
+    }
+    22% {
+      transform: translate3d(-8px, -28px, 0) rotate(16deg) scale(0.72) skewX(2deg);
+    }
+    38% {
+      transform: translate3d(-22px, -4px, 0) rotate(-20deg) scale(1.35) skewX(-3deg);
+    }
+    52% {
+      transform: translate3d(6px, 14px, 0) rotate(6deg) scale(0.78) skewX(2deg);
+    }
+    68% {
+      transform: translate3d(20px, -10px, 0) rotate(22deg) scale(1.3) skewX(-2deg);
+    }
+    84% {
+      transform: translate3d(-14px, 8px, 0) rotate(-12deg) scale(0.85) skewX(1deg);
+    }
+    100% {
+      transform: translate3d(0, 0, 0) rotate(-14deg) scale(1) skewX(0deg);
+    }
+  }
+
+  /* Faster dashes — accel moments for trail sync */
+  @keyframes chaos-float-dash {
+    0% {
+      transform: translate3d(0, 0, 0) rotate(-10deg) scale(1);
+    }
+    18% {
+      transform: translate3d(8px, -10px, 0) rotate(4deg) scale(1.05);
+    }
+    28% {
+      transform: translate3d(36px, -34px, 0) rotate(28deg) scale(1.18);
+    }
+    32% {
+      transform: translate3d(42px, -38px, 0) rotate(32deg) scale(1.22);
+    }
+    48% {
+      transform: translate3d(-6px, 4px, 0) rotate(-8deg) scale(0.95);
+    }
+    62% {
+      transform: translate3d(-30px, 22px, 0) rotate(-26deg) scale(1.15);
+    }
+    66% {
+      transform: translate3d(-36px, 26px, 0) rotate(-30deg) scale(1.2);
+    }
+    82% {
+      transform: translate3d(12px, -8px, 0) rotate(10deg) scale(1.02);
+    }
+    100% {
+      transform: translate3d(0, 0, 0) rotate(-10deg) scale(1);
+    }
+  }
+
+  /* Warp: sharp scale pops between flight beats */
+  @keyframes chaos-float-warp {
+    0% {
+      transform: translate3d(0, 0, 0) rotate(-12deg) scale(1) skewX(0deg);
+    }
+    14% {
+      transform: translate3d(12px, -16px, 0) rotate(10deg) scale(1.08) skewX(-1deg);
+    }
+    16% {
+      transform: translate3d(14px, -18px, 0) rotate(12deg) scale(1.38) skewX(-2deg);
+    }
+    20% {
+      transform: translate3d(18px, -20px, 0) rotate(14deg) scale(0.82) skewX(1deg);
+    }
+    40% {
+      transform: translate3d(-16px, 10px, 0) rotate(-18deg) scale(1.05) skewX(2deg);
+    }
+    48% {
+      transform: translate3d(-20px, 14px, 0) rotate(-22deg) scale(1.32) skewX(-1deg);
+    }
+    52% {
+      transform: translate3d(-10px, 8px, 0) rotate(-8deg) scale(0.75) skewX(2deg);
+    }
+    72% {
+      transform: translate3d(16px, -6px, 0) rotate(16deg) scale(1.1) skewX(-2deg);
+    }
+    78% {
+      transform: translate3d(22px, -12px, 0) rotate(20deg) scale(1.36) skewX(-3deg);
+    }
+    84% {
+      transform: translate3d(8px, -4px, 0) rotate(4deg) scale(0.88) skewX(1deg);
+    }
+    100% {
+      transform: translate3d(0, 0, 0) rotate(-12deg) scale(1) skewX(0deg);
+    }
+  }
+
   @keyframes chaos-glyph-glitch {
     0%,
     100% {
@@ -1432,6 +1636,153 @@
     78% {
       filter: drop-shadow(0 0 8px rgba(192, 38, 255, 0.4));
       opacity: 0.48;
+    }
+  }
+
+  /* Temporarily nearly invisible, then snap back with glitch */
+  @keyframes chaos-glyph-phase {
+    0%,
+    100% {
+      filter: drop-shadow(0 0 8px rgba(192, 38, 255, 0.45))
+        drop-shadow(0 0 16px rgba(34, 240, 255, 0.2));
+      opacity: 0.7;
+    }
+    22% {
+      filter: drop-shadow(-2px 0 0 rgba(34, 240, 255, 0.8))
+        drop-shadow(2px 0 0 rgba(255, 43, 214, 0.8));
+      opacity: 0.9;
+    }
+    28% {
+      filter: drop-shadow(0 0 4px rgba(34, 240, 255, 0.15));
+      opacity: 0.05;
+    }
+    36% {
+      filter: drop-shadow(0 0 4px rgba(34, 240, 255, 0.1));
+      opacity: 0.02;
+    }
+    38% {
+      filter: drop-shadow(4px 0 0 rgba(184, 255, 60, 0.85))
+        drop-shadow(-3px 0 0 rgba(255, 43, 214, 0.85));
+      opacity: 0.95;
+    }
+    55% {
+      filter: drop-shadow(0 0 12px rgba(192, 38, 255, 0.5));
+      opacity: 0.68;
+    }
+    68% {
+      filter: none;
+      opacity: 0.04;
+    }
+    76% {
+      filter: drop-shadow(0 0 18px rgba(34, 240, 255, 0.75))
+        drop-shadow(0 0 8px rgba(255, 176, 32, 0.55));
+      opacity: 0.88;
+    }
+  }
+
+  /* Trail stretches opposite to dash direction */
+  @keyframes chaos-trail-streak {
+    0%,
+    22%,
+    100% {
+      opacity: 0;
+      transform: translate3d(0, 0, 0) scaleX(0.4) scaleY(0.5) rotate(12deg);
+    }
+    26% {
+      opacity: 0.15;
+      transform: translate3d(-6px, 4px, 0) scaleX(0.9) scaleY(0.55) rotate(18deg);
+    }
+    30% {
+      opacity: 0.85;
+      transform: translate3d(-28px, 18px, 0) scaleX(2.4) scaleY(0.35) rotate(28deg);
+    }
+    36% {
+      opacity: 0.25;
+      transform: translate3d(-40px, 26px, 0) scaleX(2.8) scaleY(0.25) rotate(32deg);
+    }
+    40%,
+    58% {
+      opacity: 0;
+      transform: translate3d(0, 0, 0) scaleX(0.35) scaleY(0.45) rotate(-8deg);
+    }
+    62% {
+      opacity: 0.8;
+      transform: translate3d(24px, -14px, 0) scaleX(2.2) scaleY(0.32) rotate(-24deg);
+    }
+    68% {
+      opacity: 0.2;
+      transform: translate3d(34px, -20px, 0) scaleX(2.6) scaleY(0.22) rotate(-28deg);
+    }
+    74% {
+      opacity: 0;
+      transform: translate3d(0, 0, 0) scaleX(0.4) scaleY(0.5) rotate(0deg);
+    }
+  }
+
+  @keyframes chaos-trail-streak-alt {
+    0%,
+    24%,
+    100% {
+      opacity: 0;
+      transform: translate3d(0, 0, 0) scaleX(0.35) scaleY(0.4) rotate(20deg);
+    }
+    29% {
+      opacity: 0.7;
+      transform: translate3d(-22px, 14px, 0) scaleX(1.9) scaleY(0.28) rotate(30deg);
+    }
+    35% {
+      opacity: 0.1;
+      transform: translate3d(-34px, 22px, 0) scaleX(2.3) scaleY(0.2) rotate(34deg);
+    }
+    60%,
+    64% {
+      opacity: 0;
+    }
+    65% {
+      opacity: 0.65;
+      transform: translate3d(20px, -12px, 0) scaleX(1.8) scaleY(0.3) rotate(-26deg);
+    }
+    72% {
+      opacity: 0;
+      transform: translate3d(30px, -18px, 0) scaleX(2.1) scaleY(0.18) rotate(-30deg);
+    }
+  }
+
+  @keyframes chaos-trail-flash {
+    0%,
+    14%,
+    20%,
+    46%,
+    54%,
+    76%,
+    86%,
+    100% {
+      opacity: 0;
+      transform: translate3d(0, 0, 0) scaleX(0.3) scaleY(0.4) rotate(0deg);
+    }
+    16% {
+      opacity: 0.9;
+      transform: translate3d(-16px, 10px, 0) scaleX(2) scaleY(0.35) rotate(14deg);
+    }
+    18% {
+      opacity: 0.15;
+      transform: translate3d(-26px, 16px, 0) scaleX(2.4) scaleY(0.2) rotate(16deg);
+    }
+    48% {
+      opacity: 0.85;
+      transform: translate3d(14px, -8px, 0) scaleX(1.9) scaleY(0.32) rotate(-18deg);
+    }
+    51% {
+      opacity: 0.1;
+      transform: translate3d(24px, -14px, 0) scaleX(2.3) scaleY(0.18) rotate(-20deg);
+    }
+    78% {
+      opacity: 0.95;
+      transform: translate3d(-12px, 6px, 0) scaleX(2.1) scaleY(0.3) rotate(10deg);
+    }
+    82% {
+      opacity: 0;
+      transform: translate3d(-22px, 12px, 0) scaleX(2.5) scaleY(0.15) rotate(12deg);
     }
   }
 
@@ -1481,6 +1832,8 @@
 
   /* ── Reduce-Motion-Kill-Switch respektieren ── */
   :global(:root[data-reduce-motion="true"]) .chaos-glyph,
+  :global(:root[data-reduce-motion="true"]) .chaos-glyph::before,
+  :global(:root[data-reduce-motion="true"]) .chaos-glyph::after,
   :global(:root[data-reduce-motion="true"]) .chaos-orb,
   :global(:root[data-reduce-motion="true"]) .chaos-shard,
   :global(:root[data-reduce-motion="true"]) .aurora-layer,
@@ -1494,6 +1847,10 @@
   :global(:root[data-reduce-motion="true"]) .papyrus-brass-inlay {
     animation: none !important;
   }
+  :global(:root[data-reduce-motion="true"]) .chaos-glyph::before,
+  :global(:root[data-reduce-motion="true"]) .chaos-glyph::after {
+    opacity: 0 !important;
+  }
   :global(:root[data-reduce-motion="true"]) .cyber-sheen {
     opacity: 0 !important;
   }
@@ -1504,6 +1861,8 @@
   @media (prefers-reduced-motion: reduce) {
     .aurora-layer,
     .chaos-glyph,
+    .chaos-glyph::before,
+    .chaos-glyph::after,
     .chaos-orb,
     .chaos-shard,
     .cyber-grid,
@@ -1515,6 +1874,10 @@
     .papyrus-dust,
     .papyrus-brass-inlay {
       animation: none;
+    }
+    .chaos-glyph::before,
+    .chaos-glyph::after {
+      opacity: 0;
     }
     .cyber-sheen {
       opacity: 0;

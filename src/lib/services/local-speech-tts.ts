@@ -206,7 +206,7 @@ export async function testLocalSpeechTts(
 ): Promise<LocalSpeechTtsTestResult> {
   const trimmed = text.trim();
   if (!trimmed) {
-    return { ok: false, error: "Test text is empty." };
+    return { ok: false, error: getTranslateFn()("localSpeechTts.error.emptyText") };
   }
 
   const playback = new SpeechAudioPlayback();

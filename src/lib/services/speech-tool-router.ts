@@ -25,7 +25,7 @@ export async function executeSpeechTool(
     case "send_message_to_aurago": {
       const message = String(call.args.message ?? "").trim();
       if (!message) {
-        return { success: false, error: "message ist erforderlich." };
+        return { success: false, error: getTranslateFn()("speechTool.error.messageRequired") };
       }
 
       if (!context.canSendChat) {
@@ -44,7 +44,7 @@ export async function executeSpeechTool(
         context.onSystemNotice(getTranslateFn()("speechTool.notice.sent"));
         return { success: true, sent: true, message };
       } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : "Senden fehlgeschlagen.";
+        const errorMessage = error instanceof Error ? error.message : getTranslateFn()("speechTool.error.sendFailed");
         return { success: false, error: errorMessage, message };
       }
     }
@@ -79,7 +79,7 @@ export async function executeSpeechTool(
     default:
       return {
         success: false,
-        error: `Unbekanntes Tool: ${call.name}`,
+        error: getTranslateFn()("speechTool.error.unknownTool", { name: call.name }),
       };
   }
 }
