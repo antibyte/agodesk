@@ -1,0 +1,17 @@
+# cargo-audit config (loaded when running `cargo audit` from src-tauri/)
+#
+# Revisit ignored advisories when upstream releases land:
+# - plist >= version that depends on quick-xml >= 0.41
+# - xcb >= version that depends on quick-xml >= 0.41
+
+[advisories]
+ignore = [
+  # RUSTSEC-2026-0194 / 0195: quick-xml DoS (quadratic attrs / unbounded NsReader).
+  # Transitive only:
+  #   quick-xml 0.39.4 ← plist ← tauri (trusted local Info.plist)
+  #   quick-xml 0.30.0 ← xcb (build) ← active-win-pos-rs / xcap (Linux)
+  # No direct untrusted-XML parsing in agodesk. Patched quick-xml >= 0.41 is
+  # incompatible with current plist (^0.39) and xcb (^0.30) constraints.
+  "RUSTSEC-2026-0194",
+  "RUSTSEC-2026-0195",
+]
