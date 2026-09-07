@@ -49,6 +49,9 @@ function createSpeechStore() {
     clearVadError(): void {
       update((state) => ({ ...state, vadError: "" }));
     },
+    clearInboxErrors(): void {
+      update((state) => ({ ...state, errorMessage: "", vadError: "" }));
+    },
     reset(): void {
       set({ ...INITIAL_SPEECH_STATE });
     },

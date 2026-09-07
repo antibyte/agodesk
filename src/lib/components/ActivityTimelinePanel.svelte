@@ -5,6 +5,7 @@
 
   interface Props {
     visible?: boolean;
+    embedded?: boolean;
     activities?: AgentActivityPayload[];
     compact?: boolean;
     onDismiss?: () => void;
@@ -13,6 +14,7 @@
 
   let {
     visible = false,
+    embedded = false,
     activities = [],
     compact = false,
     onDismiss,
@@ -84,6 +86,7 @@
     class="activity-panel banner-glass"
     class:is-collapsed={collapsed}
     class:is-compact={compact}
+    class:is-embedded={embedded}
     data-tone="info"
     aria-live="polite"
     aria-label={$i18n("activityTimeline.title")}
@@ -106,15 +109,17 @@
         >
           {collapsed ? $i18n("activityTimeline.expand") : $i18n("activityTimeline.collapse")}
         </button>
-        <button
-          type="button"
-          class="ui-btn ui-btn-ghost activity-dismiss"
-          aria-label={$i18n("activityTimeline.dismiss.ariaLabel")}
-          title={$i18n("activityTimeline.dismiss")}
-          onclick={() => onDismiss?.()}
-        >
-          ×
-        </button>
+        {#if !embedded}
+          <button
+            type="button"
+            class="ui-btn ui-btn-ghost activity-dismiss"
+            aria-label={$i18n("activityTimeline.dismiss.ariaLabel")}
+            title={$i18n("activityTimeline.dismiss")}
+            onclick={() => onDismiss?.()}
+          >
+            ×
+          </button>
+        {/if}
       </div>
     </header>
 
@@ -192,6 +197,16 @@
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
+  }
+
+  .activity-panel.is-embedded {
+    position: static;
+    top: auto;
+    right: auto;
+    width: 100%;
+    max-width: none;
+    z-index: auto;
+    margin: 0;
   }
 
   .activity-panel.is-collapsed {

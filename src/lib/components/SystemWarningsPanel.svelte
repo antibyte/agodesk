@@ -2,28 +2,78 @@
   import { i18n } from "../i18n";
   import type { MessageKey } from "../i18n/types";
   import ChatMessageBody from "./ChatMessageBody.svelte";
-  import type { SystemWarning } from "../types/protocol";
+  import UpdateBanner from "./UpdateBanner.svelte";
+  import ChatPlanFloatingPanel from "./ChatPlanFloatingPanel.svelte";
+  import ActivityTimelinePanel from "./ActivityTimelinePanel.svelte";
+  import type {
+    AgentActivityPayload,
+    AgoDeskPlan,
+    SystemWarning,
+  } from "../types/protocol";
+  import type { InboxItem } from "../services/chrome-placement";
+  import type { UpdateStatus } from "../services/update-flow";
   import { formatMessageTime } from "../services/chat-format";
   import { focusTrap } from "../actions/focusTrap";
   import Icon from "./Icon.svelte";
 
   interface Props {
     visible?: boolean;
+    items?: InboxItem[];
     warnings?: SystemWarning[];
     unacknowledged?: number;
+    updateVisible?: boolean;
+    updateVersion?: string;
+    updateNotes?: string;
+    updateStatus?: UpdateStatus;
+    updateProgress?: number;
+    onInstallUpdate?: () => void;
+    onDismissUpdate?: () => void;
+    speechError?: string;
+    onDismissSpeechError?: () => void;
+    plan?: AgoDeskPlan | null;
+    planRequestId?: string;
+    planVisible?: boolean;
+    activities?: AgentActivityPayload[];
+    activityVisible?: boolean;
+    onStopShell?: (activity: AgentActivityPayload) => void;
+    onDismissActivity?: () => void;
     onClose?: () => void;
     onAcknowledge?: (id: string) => void;
     onAcknowledgeAll?: () => void;
+    onDismissPlan?: () => void;
   }
 
   let {
     visible = false,
+    items = [],
     warnings = [],
     unacknowledged = 0,
+    updateVisible = false,
+    updateVersion = "",
+    updateNotes = "",
+    updateStatus = "available",
+    updateProgress = 0,
+    onInstallUpdate,
+    onDismissUpdate,
+    speechError = "",
+    onDismissSpeechError,
+    plan = null,
+    planRequestId = undefined,
+    planVisible = false,
+    activities = [],
+    activityVisible = false,
+    onStopShell,
+    onDismissActivity,
     onClose,
     onAcknowledge,
     onAcknowledgeAll,
+    onDismissPlan,
   }: Props = $props();
+
+  const hasUpdate = $derived(items.some((item) => item.kind === "update"));
+  const hasSpeech = $derived(items.some((item) => item.kind === "speech"));
+  const hasPlan = $derived(items.some((item) => item.kind === "plan"));
+  const hasActivity = $derived(items.some((item) => item.kind === "activity"));
 
   function severityLabel(severity: string): string {
     if (severity === "info" || severity === "warning" || severity === "error") {
@@ -36,12 +86,12 @@
 {#if visible}
   <aside
     class="warnings-panel glass-panel panel-slide-in"
-    aria-label={$i18n("warnings.title")}
+    aria-label={$i18n("inbox.title")}
     use:focusTrap
   >
     <header class="panel-header">
       <div>
-        <h2>{$i18n("warnings.title")}</h2>
+        <h2>{$i18n("inbox.title")}</h2>
         {#if unacknowledged > 0}
           <p class="badge-line">
             <span class="unack-count">{unacknowledged}</span>
@@ -70,41 +120,96 @@
       </div>
     </header>
 
-    {#if warnings.length === 0}
+    {#if items.length === 0}
       <p class="empty">{$i18n("warnings.empty")}</p>
     {:else}
-      <ul class="warning-list">
-        {#each warnings as warning (warning.id)}
-          <li class="warning-item" data-severity={warning.severity} data-ack={warning.acknowledged}>
-            <div class="warning-head">
-              <span class="severity">{severityLabel(warning.severity)}</span>
-              {#if warning.category}
-                <span class="category">{warning.category}</span>
-              {/if}
-              {#if warning.timestamp}
-                <time datetime={warning.timestamp}>{formatMessageTime(warning.timestamp)}</time>
-              {/if}
-            </div>
-            <h3>{warning.title}</h3>
-            {#if warning.description}
-              <div class="description">
-                <ChatMessageBody text={warning.description} tone="assistant" />
-              </div>
-            {/if}
-            {#if !warning.acknowledged}
-              <button
-                type="button"
-                class="ui-btn ui-btn-secondary ui-btn-sm"
-                onclick={() => onAcknowledge?.(warning.id)}
-              >
-                {$i18n("warnings.acknowledge")}
-              </button>
-            {:else}
-              <span class="ack-label">{$i18n("warnings.acknowledged")}</span>
-            {/if}
-          </li>
-        {/each}
-      </ul>
+      <div class="inbox-body">
+        {#if warnings.length > 0}
+          <ul class="warning-list">
+            {#each warnings as warning (warning.id)}
+              <li class="warning-item" data-severity={warning.severity} data-ack={warning.acknowledged}>
+                <div class="warning-head">
+                  <span class="severity">{severityLabel(warning.severity)}</span>
+                  {#if warning.category}
+                    <span class="category">{warning.category}</span>
+                  {/if}
+                  {#if warning.timestamp}
+                    <time datetime={warning.timestamp}>{formatMessageTime(warning.timestamp)}</time>
+                  {/if}
+                </div>
+                <h3>{warning.title}</h3>
+                {#if warning.description}
+                  <div class="description">
+                    <ChatMessageBody text={warning.description} tone="assistant" />
+                  </div>
+                {/if}
+                {#if !warning.acknowledged}
+                  <button
+                    type="button"
+                    class="ui-btn ui-btn-secondary ui-btn-sm"
+                    onclick={() => onAcknowledge?.(warning.id)}
+                  >
+                    {$i18n("warnings.acknowledge")}
+                  </button>
+                {:else}
+                  <span class="ack-label">{$i18n("warnings.acknowledged")}</span>
+                {/if}
+              </li>
+            {/each}
+          </ul>
+        {/if}
+
+        {#if hasUpdate && updateVisible}
+          <div class="inbox-section">
+            <UpdateBanner
+              visible={true}
+              version={updateVersion}
+              notes={updateNotes}
+              status={updateStatus}
+              progress={updateProgress}
+              onInstall={onInstallUpdate}
+              onDismiss={onDismissUpdate}
+            />
+          </div>
+        {/if}
+
+        {#if hasSpeech && speechError}
+          <div class="inbox-section speech-error-row">
+            <p class="speech-error-text">{speechError}</p>
+            <button
+              type="button"
+              class="ui-btn ui-btn-secondary ui-btn-sm"
+              onclick={() => onDismissSpeechError?.()}
+            >
+              {$i18n("common.close")}
+            </button>
+          </div>
+        {/if}
+
+        {#if hasPlan && planVisible}
+          <div class="inbox-section">
+            <ChatPlanFloatingPanel
+              visible={true}
+              embedded
+              {plan}
+              requestId={planRequestId}
+              onDismiss={onDismissPlan}
+            />
+          </div>
+        {/if}
+
+        {#if hasActivity && activityVisible}
+          <div class="inbox-section">
+            <ActivityTimelinePanel
+              visible={true}
+              embedded
+              {activities}
+              onDismiss={onDismissActivity}
+              {onStopShell}
+            />
+          </div>
+        {/if}
+      </div>
     {/if}
   </aside>
 {/if}
@@ -159,6 +264,35 @@
     margin: 0;
     color: var(--color-muted);
     font-size: 0.8125rem;
+  }
+
+  .inbox-body {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+  }
+
+  .inbox-section :global(.update-banner) {
+    margin: 0;
+  }
+
+  .speech-error-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--space-2);
+    border: 1px solid color-mix(in srgb, var(--color-danger) 35%, var(--color-border-subtle));
+    border-radius: var(--radius-lg);
+    padding: var(--space-3);
+    background: color-mix(in srgb, var(--glass-surface) 70%, transparent);
+  }
+
+  .speech-error-text {
+    margin: 0;
+    font-size: 0.8125rem;
+    line-height: 1.45;
+    flex: 1;
+    min-width: 0;
   }
 
   .warning-list {

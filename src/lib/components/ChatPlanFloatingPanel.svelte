@@ -4,12 +4,19 @@
 
   interface Props {
     visible?: boolean;
+    embedded?: boolean;
     plan?: AgoDeskPlan | null;
     requestId?: string;
     onDismiss?: () => void;
   }
 
-  let { visible = false, plan = null, requestId = undefined, onDismiss }: Props = $props();
+  let {
+    visible = false,
+    embedded = false,
+    plan = null,
+    requestId = undefined,
+    onDismiss,
+  }: Props = $props();
 
   let collapsed = $state(false);
 
@@ -86,6 +93,7 @@
     class="plan-panel banner-glass"
     data-tone="info"
     class:is-collapsed={collapsed}
+    class:is-embedded={embedded}
     aria-live="polite"
     aria-label={$i18n("chatPlan.title")}
   >
@@ -107,15 +115,17 @@
         >
           {collapsed ? $i18n("chatPlan.expand") : $i18n("chatPlan.collapse")}
         </button>
-        <button
-          type="button"
-          class="ui-btn ui-btn-ghost plan-dismiss"
-          aria-label={$i18n("chatPlan.dismiss.ariaLabel")}
-          title={$i18n("chatPlan.dismiss")}
-          onclick={() => onDismiss?.()}
-        >
-          ×
-        </button>
+        {#if !embedded}
+          <button
+            type="button"
+            class="ui-btn ui-btn-ghost plan-dismiss"
+            aria-label={$i18n("chatPlan.dismiss.ariaLabel")}
+            title={$i18n("chatPlan.dismiss")}
+            onclick={() => onDismiss?.()}
+          >
+            ×
+          </button>
+        {/if}
       </div>
     </header>
 
@@ -189,6 +199,16 @@
     border-radius: var(--radius-lg);
     padding: var(--space-3) var(--space-4);
     box-shadow: var(--shadow-md);
+  }
+
+  .plan-panel.is-embedded {
+    position: static;
+    top: auto;
+    right: auto;
+    width: 100%;
+    max-width: none;
+    z-index: auto;
+    margin: 0;
   }
 
   .plan-panel.is-collapsed {

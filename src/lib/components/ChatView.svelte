@@ -32,8 +32,14 @@
     checkForUpdates,
     dismissUpdate,
     installUpdate,
+    isUpdateBannerVisible,
+    updateState,
   } from "../services/update-flow";
-  import { selectApproval } from "../services/chrome-placement";
+  import {
+    countInboxBadge,
+    deriveInboxItems,
+    selectApproval,
+  } from "../services/chrome-placement";
   import { loadSettings, saveSettings, markOnboardingCompleted } from "../services/settings";
   import { applyOpenPetsSettings } from "../services/openpets-flow";
   import { openPetsContext } from "../stores/openpets-context";
@@ -100,6 +106,8 @@
   } from "../services/shell-flow";
   import { controlPermissionStatus, setInputApproval } from "../services/desktop";
   import { playUiSound } from "../services/ui-sounds";
+  import { invokeShellSessionList, invokeShellSessionStop } from "../services/shell-commands";
+  import { emitLocalActivity } from "../services/agent-activity-inbound";
   import {
     createChatWsInboundContext,
     createSystemMessageAppender,
@@ -107,8 +115,11 @@
   } from "../services/chat-ws-inbound";
   import { connectChatWebSocket, createWebSocketService } from "../services/chat-ws-connect";
   import { isChatError } from "../services/websocket";
-  import { chatPlanState } from "../stores/chat-plan";
-  import { activityTimelineState } from "../stores/activity-timeline";
+  import { chatPlanState, isChatPlanPanelVisible } from "../stores/chat-plan";
+  import {
+    activityTimelineState,
+    isActivityTimelineVisible,
+  } from "../stores/activity-timeline";
   import { artifactInspectorState, isArtifactInspectorVisible } from "../stores/artifact-inspector";
   import { agentMoodState } from "../stores/agent-mood";
   import { activeSkillState } from "../stores/active-skill";
@@ -121,12 +132,14 @@
   import {
     canSendChat,
     AGODESK_CLIENT_VERSION,
+    hasAdvertisedAgentActivity,
     hasAdvertisedChatSessions,
     hasAdvertisedChatMediaEvents,
     hasAdvertisedChatMediaUpload,
     canUseChatAttachments,
     hasAdvertisedKnowledgeArchiveUpload,
     hasAdvertisedIntegrationsWebhosts,
+    hasAdvertisedPlanUpdates,
     hasAdvertisedRemoteDesktopCapture,
     hasAdvertisedSystemWarnings,
     isTlsFatalError,
@@ -153,6 +166,7 @@
   >(undefined);
   let pairingBusy = $state(false);
   let pairingFocusRequest = $state(0);
+  let planDismissed = $state(false);
   let remoteOperation = $state("");
   let certModalOpen = $state(false);
   let tlsErrorCode = $state<ClientErrorCode | null>(null);
@@ -258,6 +272,35 @@
       hasShellRequest: $shellApprovalState.request !== null,
       sessionStatus: $sessionState.status,
     }),
+  );
+
+  const inboxItems = $derived(
+    deriveInboxItems({
+      warnings: $chatMediaState.systemWarnings,
+      update: { status: $updateState.status, dismissed: $updateState.dismissed },
+      speechErrorMessage: $speechState.errorMessage,
+      vadError: $speechState.vadError,
+      plan: $chatPlanState.plan,
+      activities: $activityTimelineState.activities,
+      activityDismissed: $activityTimelineState.dismissed,
+    }),
+  );
+  const inboxBadge = $derived(countInboxBadge(inboxItems));
+
+  const updateBannerVisible = $derived(isUpdateBannerVisible($updateState));
+
+  const chatPlanVisible = $derived(
+    hasAdvertisedPlanUpdates($sessionState.advertisedCapabilities) &&
+      isChatPlanPanelVisible($chatPlanState.plan) &&
+      !planDismissed,
+  );
+
+  const activityTimelineVisible = $derived(
+    hasAdvertisedAgentActivity($sessionState.advertisedCapabilities) &&
+      isActivityTimelineVisible(
+        $activityTimelineState.activities,
+        $activityTimelineState.dismissed,
+      ),
   );
 
   const artifactInspectorVisible = $derived(isArtifactInspectorVisible($artifactInspectorState));
@@ -958,6 +1001,11 @@
   }
 
   $effect(() => {
+    void $chatPlanState.requestId;
+    planDismissed = false;
+  });
+
+  $effect(() => {
     const conn = $connectionStatus;
     const prev = prevConnection;
     if (prev === "connected" && conn !== "connected" && pending) {
@@ -1014,10 +1062,6 @@
     void stopSpeechSession();
     destroyThemeListener();
   });
-
-  // Task 6 wires update actions into the inbox.
-  void dismissUpdate;
-  void handleInstallUpdate;
 </script>
 
 <div class="app-shell">
@@ -1189,7 +1233,7 @@
           integrationsCount={$chatMediaState.integrationWebhosts.length}
           {warningsEnabled}
           warningsActive={$chatMediaState.warningsOpen}
-          warningsUnacknowledged={$chatMediaState.warningUnacknowledged}
+          warningsUnacknowledged={inboxBadge}
           onOpenSettings={() => openSettings()}
           onFocusPairing={handlePairDevice}
           onReconnect={() => void connect($settings.serverUrl)}
@@ -1223,8 +1267,52 @@
 
         <SystemWarningsPanel
           visible={warningsEnabled && $chatMediaState.warningsOpen}
+          items={inboxItems}
           warnings={$chatMediaState.systemWarnings}
           unacknowledged={$chatMediaState.warningUnacknowledged}
+          updateVisible={updateBannerVisible}
+          updateVersion={$updateState.version ?? ""}
+          updateNotes={$updateState.notes ?? ""}
+          updateStatus={$updateState.status}
+          updateProgress={$updateState.progress ?? 0}
+          onInstallUpdate={() => void handleInstallUpdate()}
+          onDismissUpdate={() => dismissUpdate()}
+          speechError={$speechState.errorMessage || $speechState.vadError}
+          onDismissSpeechError={() => speechState.clearInboxErrors()}
+          plan={$chatPlanState.plan}
+          planRequestId={$chatPlanState.requestId}
+          planVisible={chatPlanVisible}
+          activities={$activityTimelineState.activities}
+          activityVisible={activityTimelineVisible}
+          onDismissPlan={() => (planDismissed = true)}
+          onDismissActivity={() => activityTimelineState.dismiss()}
+          onStopShell={(activity) => {
+            void (async () => {
+              try {
+                const sessions = await invokeShellSessionList();
+                const match = sessions.find(
+                  (session) =>
+                    session.status === "running" &&
+                    (session.command === activity.title ||
+                      activity.summary?.includes(session.shell_session_id)),
+                );
+                const target = match ?? sessions.find((session) => session.status === "running");
+                if (target) {
+                  await invokeShellSessionStop({ shellSessionId: target.shell_session_id });
+                  emitLocalActivity({
+                    activity_id: activity.activity_id,
+                    kind: "shell",
+                    phase: "cancelled",
+                    title: activity.title,
+                    summary: target.shell_session_id,
+                    finished_at: new Date().toISOString(),
+                  });
+                }
+              } catch {
+                // ignore stop failures in UI path
+              }
+            })();
+          }}
           onClose={() => chatMediaState.setWarningsOpen(false)}
           onAcknowledge={(id) => void handleAcknowledgeWarning(id)}
           onAcknowledgeAll={() => void handleAcknowledgeAllWarnings()}
