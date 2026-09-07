@@ -6,13 +6,8 @@
   import StatusBar from "./StatusBar.svelte";
   import type { Component } from "svelte";
   import type { SettingsSavePayload } from "./SettingsView.svelte";
-  import PairingBanner from "./PairingBanner.svelte";
-  import RemoteControlBanner from "./RemoteControlBanner.svelte";
-  import ShellApprovalBanner from "./ShellApprovalBanner.svelte";
+  import ApprovalRail from "./ApprovalRail.svelte";
   import VaultSecretPromptModal from "./VaultSecretPromptModal.svelte";
-  import UpdateBanner from "./UpdateBanner.svelte";
-  import ChatPlanFloatingPanel from "./ChatPlanFloatingPanel.svelte";
-  import ActivityTimelinePanel from "./ActivityTimelinePanel.svelte";
   import ArtifactInspectorPanel from "./ArtifactInspectorPanel.svelte";
   import ChatHistoryPanel from "./ChatHistoryPanel.svelte";
   import IntegrationsPanel from "./IntegrationsPanel.svelte";
@@ -23,7 +18,6 @@
     isIntegrationPreviewOpen,
     openIntegrationPreview,
   } from "../services/integration-embed";
-  import SpeechBanner from "./SpeechBanner.svelte";
   import { chatMessages } from "../stores/chat";
   import { settings } from "../stores/settings";
   import { sessionState } from "../stores/session";
@@ -38,9 +32,8 @@
     checkForUpdates,
     dismissUpdate,
     installUpdate,
-    isUpdateBannerVisible,
-    updateState,
   } from "../services/update-flow";
+  import { selectApproval } from "../services/chrome-placement";
   import { loadSettings, saveSettings, markOnboardingCompleted } from "../services/settings";
   import { applyOpenPetsSettings } from "../services/openpets-flow";
   import { openPetsContext } from "../stores/openpets-context";
@@ -114,10 +107,8 @@
   } from "../services/chat-ws-inbound";
   import { connectChatWebSocket, createWebSocketService } from "../services/chat-ws-connect";
   import { isChatError } from "../services/websocket";
-  import { invokeShellSessionList, invokeShellSessionStop } from "../services/shell-commands";
-  import { emitLocalActivity } from "../services/agent-activity-inbound";
-  import { chatPlanState, isChatPlanPanelVisible } from "../stores/chat-plan";
-  import { activityTimelineState, isActivityTimelineVisible } from "../stores/activity-timeline";
+  import { chatPlanState } from "../stores/chat-plan";
+  import { activityTimelineState } from "../stores/activity-timeline";
   import { artifactInspectorState, isArtifactInspectorVisible } from "../stores/artifact-inspector";
   import { agentMoodState } from "../stores/agent-mood";
   import { activeSkillState } from "../stores/active-skill";
@@ -136,8 +127,6 @@
     canUseChatAttachments,
     hasAdvertisedKnowledgeArchiveUpload,
     hasAdvertisedIntegrationsWebhosts,
-    hasAdvertisedPlanUpdates,
-    hasAdvertisedAgentActivity,
     hasAdvertisedRemoteDesktopCapture,
     hasAdvertisedSystemWarnings,
     isTlsFatalError,
@@ -164,7 +153,6 @@
   >(undefined);
   let pairingBusy = $state(false);
   let pairingFocusRequest = $state(0);
-  let planDismissed = $state(false);
   let remoteOperation = $state("");
   let certModalOpen = $state(false);
   let tlsErrorCode = $state<ClientErrorCode | null>(null);
@@ -260,29 +248,16 @@
 
   const speechAllowed = $derived($settings.speech.enabled);
 
-  const remoteBannerVisible = $derived(
-    $settings.desktopControlEnabled &&
-      ($sessionState.remoteControlPending || $sessionState.remoteControlActive),
-  );
-
-  const shellBannerVisible = $derived(
-    $shellApprovalState.pending && $shellApprovalState.request !== null,
-  );
-
-  const updateBannerVisible = $derived(isUpdateBannerVisible($updateState));
-
-  const chatPlanVisible = $derived(
-    hasAdvertisedPlanUpdates($sessionState.advertisedCapabilities) &&
-      isChatPlanPanelVisible($chatPlanState.plan) &&
-      !planDismissed,
-  );
-
-  const activityTimelineVisible = $derived(
-    hasAdvertisedAgentActivity($sessionState.advertisedCapabilities) &&
-      isActivityTimelineVisible(
-        $activityTimelineState.activities,
-        $activityTimelineState.dismissed,
-      ),
+  const approvalKind = $derived(
+    selectApproval({
+      certModalOpen,
+      desktopControlEnabled: $settings.desktopControlEnabled,
+      remoteControlPending: $sessionState.remoteControlPending,
+      remoteControlActive: $sessionState.remoteControlActive,
+      shellPending: $shellApprovalState.pending,
+      hasShellRequest: $shellApprovalState.request !== null,
+      sessionStatus: $sessionState.status,
+    }),
   );
 
   const artifactInspectorVisible = $derived(isArtifactInspectorVisible($artifactInspectorState));
@@ -291,15 +266,6 @@
     $chatConversationState.historyOpen ||
       $chatMediaState.integrationsOpen ||
       $chatMediaState.warningsOpen,
-  );
-
-  const bannerStackCompact = $derived(
-    remoteBannerVisible ||
-      shellBannerVisible ||
-      $sessionState.status === "awaiting_pairing" ||
-      $sessionState.status === "error" ||
-      $sessionState.status === "pairing" ||
-      chatPlanVisible,
   );
 
   const inputHint = $derived.by(() => {
@@ -1008,11 +974,6 @@
     prevConnection = conn;
   });
 
-  $effect(() => {
-    void $chatPlanState.requestId;
-    planDismissed = false;
-  });
-
   // Centralized Escape handling (priority: cert > embed > panels > settings)
   $effect(() => {
     const handleKey = (e: KeyboardEvent) => {
@@ -1057,6 +1018,10 @@
     void stopSpeechSession();
     destroyThemeListener();
   });
+
+  // Task 6 wires update actions into the inbox.
+  void dismissUpdate;
+  void handleInstallUpdate;
 </script>
 
 <div class="app-shell">
@@ -1116,35 +1081,28 @@
     }}
   />
 
-  <RemoteControlBanner
-    visible={remoteBannerVisible}
-    pending={$sessionState.remoteControlPending}
-    active={$sessionState.remoteControlActive}
-    operation={remoteOperation}
-    onApprove={() => void handleApproveRemote()}
-    onDeny={() => void handleDenyRemote()}
-    onStop={() => void handleStopRemote()}
-  />
-
-  <ShellApprovalBanner
-    visible={shellBannerVisible}
-    command={$shellApprovalState.request?.command ?? ""}
-    cwdLabel={$shellApprovalState.request?.cwdLabel ?? ""}
-    cwdDisplay={$shellApprovalState.request?.cwdDisplay ?? ""}
-    timeoutMs={$shellApprovalState.request?.timeoutMs ?? 0}
-    onApprove={() => void handleApproveShell()}
-    onDeny={() => void handleDenyShell()}
-    onStopSession={() => void handleStopSessionFromShell()}
-  />
-
-  <UpdateBanner
-    visible={updateBannerVisible}
-    version={$updateState.version ?? ""}
-    notes={$updateState.notes ?? ""}
-    status={$updateState.status}
-    progress={$updateState.progress ?? 0}
-    onInstall={() => void handleInstallUpdate()}
-    onDismiss={() => dismissUpdate()}
+  <ApprovalRail
+    kind={approvalKind}
+    compact={settingsOpen}
+    remotePending={$sessionState.remoteControlPending}
+    remoteActive={$sessionState.remoteControlActive}
+    remoteOperation={remoteOperation}
+    onApproveRemote={() => void handleApproveRemote()}
+    onDenyRemote={() => void handleDenyRemote()}
+    onStopRemote={() => void handleStopRemote()}
+    shellCommand={$shellApprovalState.request?.command ?? ""}
+    shellCwdLabel={$shellApprovalState.request?.cwdLabel ?? ""}
+    shellCwdDisplay={$shellApprovalState.request?.cwdDisplay ?? ""}
+    shellTimeoutMs={$shellApprovalState.request?.timeoutMs ?? 0}
+    onApproveShell={() => void handleApproveShell()}
+    onDenyShell={() => void handleDenyShell()}
+    onStopShellSession={() => void handleStopSessionFromShell()}
+    pairingBusy={pairingBusy}
+    pairingServerUrl={$settings.serverUrl}
+    pairingErrorMessage={$sessionState.errorMessage}
+    pairingFocusRequest={pairingFocusRequest}
+    onPair={(token) => void handlePair(token)}
+    onUnpair={() => void handleUnpair()}
   />
 
   {#if settingsOpen}
@@ -1275,46 +1233,6 @@
           onAcknowledgeAll={() => void handleAcknowledgeAllWarnings()}
         />
 
-        <ChatPlanFloatingPanel
-          visible={chatPlanVisible}
-          plan={$chatPlanState.plan}
-          requestId={$chatPlanState.requestId}
-          onDismiss={() => (planDismissed = true)}
-        />
-
-        <ActivityTimelinePanel
-          visible={activityTimelineVisible}
-          activities={$activityTimelineState.activities}
-          onDismiss={() => activityTimelineState.dismiss()}
-          onStopShell={(activity) => {
-            void (async () => {
-              try {
-                const sessions = await invokeShellSessionList();
-                const match = sessions.find(
-                  (session) =>
-                    session.status === "running" &&
-                    (session.command === activity.title ||
-                      activity.summary?.includes(session.shell_session_id)),
-                );
-                const target = match ?? sessions.find((session) => session.status === "running");
-                if (target) {
-                  await invokeShellSessionStop({ shellSessionId: target.shell_session_id });
-                  emitLocalActivity({
-                    activity_id: activity.activity_id,
-                    kind: "shell",
-                    phase: "cancelled",
-                    title: activity.title,
-                    summary: target.shell_session_id,
-                    finished_at: new Date().toISOString(),
-                  });
-                }
-              } catch {
-                // ignore stop failures in UI path
-              }
-            })();
-          }}
-        />
-
         <ArtifactInspectorPanel
           visible={artifactInspectorVisible}
           item={$artifactInspectorState.selected}
@@ -1324,39 +1242,6 @@
           onTabChange={(tab) => artifactInspectorState.setTab(tab)}
         />
       </div>
-
-      <PairingBanner
-        visible={$sessionState.status === "awaiting_pairing" || $sessionState.status === "error"}
-        busy={pairingBusy}
-        compact={bannerStackCompact}
-        focusRequest={pairingFocusRequest}
-        serverUrl={$settings.serverUrl}
-        errorMessage={$sessionState.errorMessage}
-        onPair={(token) => void handlePair(token)}
-        onUnpair={() => void handleUnpair()}
-      />
-
-      {#if $sessionState.status === "pairing"}
-        <section
-          class="info-banner banner-glass"
-          class:compact={bannerStackCompact}
-          data-tone="info"
-        >
-          {getTranslateFn()("chatView.pairing.authenticating")}
-        </section>
-      {/if}
-
-      <SpeechBanner
-        partialTranscript={$speechState.partialTranscript}
-        errorMessage={$speechState.errorMessage}
-        autoSendToAuraGo={$settings.speech.autoSendToAuraGo}
-        agentMode={$settings.speech.agentMode}
-        speechActive={$speechState.isActive}
-        vadLoading={$speechState.vadLoading}
-        vadError={$speechState.vadError}
-        speechProvider={$speechState.isActive ? $speechState.provider : $settings.speech.provider}
-        compact={bannerStackCompact}
-      />
 
       <MessageList
         awaitingResponse={pending && !streamingActive}
@@ -1500,14 +1385,6 @@
     margin: 0;
     background: color-mix(in srgb, var(--color-backdrop) 35%, transparent);
     cursor: default;
-  }
-
-  .info-banner {
-    margin: 0;
-    border-radius: 0;
-    border-left: none;
-    border-right: none;
-    border-top: none;
   }
 
   @media (prefers-reduced-motion: reduce) {

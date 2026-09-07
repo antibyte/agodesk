@@ -179,3 +179,15 @@ test("Remote Shell Update Banner sind keine modalen Dialoge", () => {
     assert.equal(src.includes('role="dialog"'), false, name);
   }
 });
+
+test("ChatView haengt ApprovalRail ein und keine Stapel-Banner", () => {
+  const dir = path.dirname(fileURLToPath(import.meta.url));
+  const src = readFileSync(path.join(dir, "..", "components", "ChatView.svelte"), "utf8");
+  assert.equal(src.includes("<ApprovalRail"), true);
+  assert.equal(src.includes("<SpeechBanner"), false);
+  assert.equal(src.includes("<UpdateBanner"), false);
+  assert.equal(src.includes("<ChatPlanFloatingPanel"), false);
+  assert.equal(src.includes("<ActivityTimelinePanel"), false);
+  assert.equal(src.includes("bannerStackCompact"), false);
+  assert.equal(src.includes("info-banner"), false);
+});
