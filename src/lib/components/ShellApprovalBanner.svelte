@@ -1,6 +1,5 @@
 <script lang="ts">
   import { i18n } from "../i18n";
-  import { focusTrap } from "../actions/focusTrap";
 
   interface Props {
     visible?: boolean;
@@ -32,10 +31,8 @@
     class="shell-banner banner-glass"
     data-tone="warning"
     aria-live="assertive"
-    role="dialog"
-    aria-modal="true"
+    role="region"
     aria-labelledby="shell-approval-title"
-    use:focusTrap
   >
     <div>
       <strong id="shell-approval-title">{$i18n("shellApproval.title")}</strong>

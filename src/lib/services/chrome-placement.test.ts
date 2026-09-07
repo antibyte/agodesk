@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import path from "node:path";
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
@@ -161,4 +164,18 @@ test("deriveInboxItems Plan completed und Activity dismissed weglassen", () => {
     activityDismissed: true,
   });
   assert.equal(items.length, 0);
+});
+
+test("Remote Shell Update Banner sind keine modalen Dialoge", () => {
+  const dir = path.dirname(fileURLToPath(import.meta.url));
+  for (const name of [
+    "RemoteControlBanner.svelte",
+    "ShellApprovalBanner.svelte",
+    "UpdateBanner.svelte",
+  ]) {
+    const src = readFileSync(path.join(dir, "..", "components", name), "utf8");
+    assert.equal(src.includes('aria-modal="true"'), false, name);
+    assert.equal(src.includes("use:focusTrap"), false, name);
+    assert.equal(src.includes('role="dialog"'), false, name);
+  }
 });

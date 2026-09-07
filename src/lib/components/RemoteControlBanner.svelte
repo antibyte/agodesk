@@ -1,6 +1,5 @@
 <script lang="ts">
   import { i18n } from "../i18n";
-  import { focusTrap } from "../actions/focusTrap";
 
   interface Props {
     visible?: boolean;
@@ -59,10 +58,8 @@
     data-tone={active ? "success" : "warning"}
     class:is-active={active}
     aria-live="assertive"
-    role="dialog"
-    aria-modal="true"
+    role="region"
     aria-labelledby="remote-title"
-    use:focusTrap
   >
     <div>
       <strong id="remote-title">
