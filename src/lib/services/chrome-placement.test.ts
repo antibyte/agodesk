@@ -195,7 +195,11 @@ test("ChatView haengt ApprovalRail ein und keine Stapel-Banner", () => {
 test("StatusBar-Pille oeffnet keine Settings", () => {
   const dir = path.dirname(fileURLToPath(import.meta.url));
   const src = readFileSync(path.join(dir, "..", "components", "StatusBar.svelte"), "utf8");
-  const pillBlock = src.slice(src.indexOf("class=\"status-pill\""), src.indexOf("onToggleHistory"));
+  const start = src.indexOf('class="status-pill"');
+  assert.ok(start >= 0, "status-pill missing");
+  const end = src.indexOf("</button>", start);
+  assert.ok(end > start, "status-pill button not closed");
+  const pillBlock = src.slice(start, end);
   assert.equal(pillBlock.includes("onOpenSettings"), false);
   assert.equal(src.includes("onFocusPairing"), true);
 });
