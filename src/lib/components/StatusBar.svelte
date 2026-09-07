@@ -32,6 +32,7 @@
     speechActive?: boolean;
     requestInFlight?: boolean;
     onOpenSettings?: () => void;
+    onFocusPairing?: () => void;
     onReconnect?: () => void;
     onToggleTheme?: () => void;
     onToggleVoiceOutput?: () => void;
@@ -62,6 +63,7 @@
     speechActive = false,
     requestInFlight = false,
     onOpenSettings,
+    onFocusPairing,
     onReconnect,
     onToggleTheme,
     onToggleVoiceOutput,
@@ -188,9 +190,25 @@
     <button
       class="status-pill"
       type="button"
-      title={$i18n("statusBar.openSettings.title")}
-      aria-label={$i18n("statusBar.openSettings.title")}
-      onclick={() => onOpenSettings?.()}
+      title={connectionStatus === "disconnected" || connectionStatus === "error"
+        ? $i18n("statusBar.reconnect")
+        : sessionStatus === "awaiting_pairing" || sessionStatus === "error"
+          ? $i18n("pairing.title")
+          : $i18n(`connection.status.${connectionStatus}`)}
+      aria-label={connectionStatus === "disconnected" || connectionStatus === "error"
+        ? $i18n("statusBar.reconnect")
+        : sessionStatus === "awaiting_pairing" || sessionStatus === "error"
+          ? $i18n("pairing.title")
+          : $i18n(`connection.status.${connectionStatus}`)}
+      onclick={() => {
+        if (connectionStatus === "disconnected" || connectionStatus === "error") {
+          handleReconnect();
+          return;
+        }
+        if (sessionStatus === "awaiting_pairing" || sessionStatus === "error") {
+          onFocusPairing?.();
+        }
+      }}
     >
       <span
         class="companion-orb"

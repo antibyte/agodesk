@@ -534,11 +534,7 @@
   }
 
   function handlePairDevice(): void {
-    if ($sessionState.status === "awaiting_pairing") {
-      pairingFocusRequest += 1;
-      return;
-    }
-    openSettings("device");
+    pairingFocusRequest += 1;
   }
 
   async function handleToggleTheme(): Promise<void> {
@@ -1195,6 +1191,7 @@
           warningsActive={$chatMediaState.warningsOpen}
           warningsUnacknowledged={$chatMediaState.warningUnacknowledged}
           onOpenSettings={() => openSettings()}
+          onFocusPairing={handlePairDevice}
           onReconnect={() => void connect($settings.serverUrl)}
           onToggleTheme={() => void handleToggleTheme()}
           onToggleVoiceOutput={() => void handleToggleVoiceOutput()}
