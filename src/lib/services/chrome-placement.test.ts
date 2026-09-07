@@ -217,3 +217,12 @@ test("InputBox kann Live-Transkription zeigen", () => {
   assert.equal(src.includes("speechTranscript"), true);
   assert.equal(src.includes("inputBox.partialTranscript.ariaLabel"), true);
 });
+
+test("ChatView Glocke nicht nur hinter system.warnings", () => {
+  const dir = path.dirname(fileURLToPath(import.meta.url));
+  const src = readFileSync(path.join(dir, "..", "components", "ChatView.svelte"), "utf8");
+  assert.equal(src.includes("inboxAvailable"), true);
+  assert.equal(src.includes("warningsEnabled || inboxItems.length > 0"), true);
+  assert.equal(src.includes("warningsEnabled={inboxAvailable}"), true);
+  assert.equal(src.includes("visible={inboxAvailable && $chatMediaState.warningsOpen}"), true);
+});

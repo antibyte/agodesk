@@ -286,6 +286,7 @@
     }),
   );
   const inboxBadge = $derived(countInboxBadge(inboxItems));
+  const inboxAvailable = $derived(warningsEnabled || inboxItems.length > 0);
 
   const updateBannerVisible = $derived(isUpdateBannerVisible($updateState));
 
@@ -1231,7 +1232,7 @@
           {integrationsEnabled}
           integrationsActive={$chatMediaState.integrationsOpen}
           integrationsCount={$chatMediaState.integrationWebhosts.length}
-          {warningsEnabled}
+          warningsEnabled={inboxAvailable}
           warningsActive={$chatMediaState.warningsOpen}
           warningsUnacknowledged={inboxBadge}
           onOpenSettings={() => openSettings()}
@@ -1266,7 +1267,7 @@
         />
 
         <SystemWarningsPanel
-          visible={warningsEnabled && $chatMediaState.warningsOpen}
+          visible={inboxAvailable && $chatMediaState.warningsOpen}
           items={inboxItems}
           warnings={$chatMediaState.systemWarnings}
           unacknowledged={$chatMediaState.warningUnacknowledged}
