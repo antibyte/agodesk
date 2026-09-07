@@ -1,6 +1,6 @@
 # Chrome-Diät — Inbox plus eine Approval-Schiene
 
-Status: draft, awaiting user review · Date: 2026-09-08 · Basis: UI/UX-Audit Track 1, Ansatz A
+Status: approved · implemented · Date: 2026-09-08
 
 Der Chat ist die Hauptfläche. Statusleiste, eine Approval-Schiene und eine Hinweis-Inbox ersetzen den heutigen Banner-Stapel.
 
