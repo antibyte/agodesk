@@ -1,6 +1,14 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { isPairingNeeded, selectApproval, type ApprovalInput } from "./chrome-placement.ts";
+import {
+  countInboxBadge,
+  deriveInboxItems,
+  isPairingNeeded,
+  selectApproval,
+  type ApprovalInput,
+  type InboxInput,
+} from "./chrome-placement.ts";
+import type { AgentActivityPayload, AgoDeskPlan, SystemWarning } from "../types/protocol.ts";
 
 const idle: ApprovalInput = {
   certModalOpen: false,
@@ -80,4 +88,77 @@ test("selectApproval Pairing bei awaiting_pairing und error", () => {
   assert.equal(selectApproval({ ...idle, sessionStatus: "awaiting_pairing" }), "pairing");
   assert.equal(selectApproval({ ...idle, sessionStatus: "error" }), "pairing");
   assert.equal(selectApproval({ ...idle, sessionStatus: "pairing" }), null);
+});
+
+const warning = (id: string, acknowledged: boolean): SystemWarning => ({
+  id,
+  severity: "warning",
+  title: id,
+  acknowledged,
+});
+
+const activity = (phase: AgentActivityPayload["phase"]): AgentActivityPayload => ({
+  activity_id: "a1",
+  session_id: "s",
+  conversation_id: "c",
+  kind: "agent",
+  phase,
+  title: "work",
+});
+
+const emptyInbox: InboxInput = {
+  warnings: [],
+  update: { status: "idle", dismissed: false },
+  speechErrorMessage: "",
+  vadError: "",
+  plan: null,
+  activities: [],
+  activityDismissed: false,
+};
+
+test("deriveInboxItems zaehlt ungelesene Warning Update Speech, nicht Plan", () => {
+  const plan: AgoDeskPlan = { status: "in_progress", title: "Build" };
+  const items = deriveInboxItems({
+    ...emptyInbox,
+    warnings: [warning("w1", false), warning("w2", true)],
+    update: { status: "available", dismissed: false },
+    speechErrorMessage: "mic",
+    plan,
+    activities: [activity("started")],
+  });
+  assert.deepEqual(
+    items.map((item) => [item.id, item.kind, item.unread]),
+    [
+      ["w1", "warning", true],
+      ["w2", "warning", false],
+      ["update", "update", true],
+      ["speech-error", "speech", true],
+      ["plan", "plan", false],
+      ["activity", "activity", false],
+    ],
+  );
+  assert.equal(countInboxBadge(items), 3);
+});
+
+test("deriveInboxItems Update dismissed oder idle erzeugt kein Item", () => {
+  assert.equal(
+    deriveInboxItems({ ...emptyInbox, update: { status: "available", dismissed: true } }).length,
+    0,
+  );
+  assert.equal(deriveInboxItems({ ...emptyInbox, update: { status: "idle", dismissed: false } }).length, 0);
+});
+
+test("deriveInboxItems Speech aus errorMessage oder vadError", () => {
+  assert.equal(deriveInboxItems({ ...emptyInbox, vadError: "vad" })[0]?.id, "speech-error");
+  assert.equal(deriveInboxItems(emptyInbox).some((item) => item.kind === "speech"), false);
+});
+
+test("deriveInboxItems Plan completed und Activity dismissed weglassen", () => {
+  const items = deriveInboxItems({
+    ...emptyInbox,
+    plan: { status: "completed" },
+    activities: [activity("started")],
+    activityDismissed: true,
+  });
+  assert.equal(items.length, 0);
 });
