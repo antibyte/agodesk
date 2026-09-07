@@ -1345,6 +1345,8 @@
         disabled={!chatAllowed}
         hint={inputHint}
         bind:draft={composerDraft}
+        speechTranscript={$speechState.partialTranscript}
+        vadLoading={$speechState.vadLoading}
         speechStatus={$speechState.status}
         speechEnabled={speechAllowed}
         {stopVisible}

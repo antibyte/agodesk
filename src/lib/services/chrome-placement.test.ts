@@ -210,3 +210,10 @@ test("ChatView Empty-State Pairing oeffnet keine Device-Settings", () => {
   assert.equal(src.includes('openSettings("device")'), false);
   assert.equal(src.includes("onFocusPairing"), true);
 });
+
+test("InputBox kann Live-Transkription zeigen", () => {
+  const dir = path.dirname(fileURLToPath(import.meta.url));
+  const src = readFileSync(path.join(dir, "..", "components", "InputBox.svelte"), "utf8");
+  assert.equal(src.includes("speechTranscript"), true);
+  assert.equal(src.includes("inputBox.partialTranscript.ariaLabel"), true);
+});

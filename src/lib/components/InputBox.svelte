@@ -40,6 +40,10 @@
 
     pageAgentBusy?: boolean;
 
+    speechTranscript?: string;
+
+    vadLoading?: boolean;
+
     onSubmit?: (text: string, files?: File[]) => void;
 
     onAddToKnowledge?: (files: File[]) => void;
@@ -77,6 +81,10 @@
     pageAgentEnabled = false,
 
     pageAgentBusy = false,
+
+    speechTranscript = "",
+
+    vadLoading = false,
 
     onSubmit,
 
@@ -405,6 +413,17 @@
     <p class="attachment-error" role="alert">{attachmentError}</p>
   {/if}
 
+  {#if speechTranscript.trim() || vadLoading}
+    <p class="speech-transcript" role="status" aria-label={$i18n("inputBox.partialTranscript.ariaLabel")}>
+      {#if vadLoading && !speechTranscript.trim()}
+        {$i18n("speechBanner.vad.loading")}
+      {:else}
+        <span class="speech-transcript-label">{$i18n("speechBanner.recognizing.label")}</span>
+        {speechTranscript}
+      {/if}
+    </p>
+  {/if}
+
   <div class="composer">
     <div class="row">
       {#if attachmentsEnabled}
@@ -664,6 +683,20 @@
     color: var(--color-danger);
 
     padding-left: var(--space-1);
+  }
+
+  .speech-transcript {
+    margin: 0;
+    padding: 0 var(--space-1);
+    font-size: var(--font-size-sm);
+    color: var(--color-text-muted);
+    line-height: var(--line-height-normal);
+  }
+
+  .speech-transcript-label {
+    font-weight: 600;
+    margin-right: var(--space-2);
+    color: var(--color-text);
   }
 
   .composer {
