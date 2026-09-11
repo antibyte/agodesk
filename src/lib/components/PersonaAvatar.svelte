@@ -33,8 +33,11 @@
   );
   const showImage = $derived(Boolean(activeImageUrl) && !imageFailed);
   const imageKey = $derived(activeImageUrl);
+  const inlineImage = $derived(
+    activeImageUrl.startsWith("data:") || activeImageUrl.startsWith("blob:"),
+  );
 
-  $effect(() => {
+  $effect.pre(() => {
     void imageUrl;
     void fallbackImageUrl;
     imageFailed = false;
@@ -73,7 +76,7 @@
         alt=""
         loading="eager"
         decoding="async"
-        class:loaded={imageLoaded}
+        class:loaded={imageLoaded || inlineImage}
         style:object-fit={imageFit}
         onload={handleImageLoad}
         onerror={handleImageError}

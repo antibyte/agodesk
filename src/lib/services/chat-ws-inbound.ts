@@ -348,6 +348,12 @@ export async function handleChatWsMessage(
   }
 
   if (isPersonaAssets(message)) {
+    const { writePersonaDebug } = await import("./persona-debug");
+    void writePersonaDebug({
+      stage: "ws-persona-assets",
+      serverUrl: ctx.serverUrl,
+      payload: message.payload,
+    });
     await applyPersonaAssets(message.payload, ctx.serverUrl);
     return;
   }

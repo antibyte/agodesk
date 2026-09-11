@@ -21,6 +21,8 @@
   import { chatMessages } from "../stores/chat";
   import { settings } from "../stores/settings";
   import { sessionState } from "../stores/session";
+  import { personaState } from "../stores/persona";
+  import { refreshPersonaAssetsIfMissing } from "../services/persona-flow";
   import { connectionStatus } from "../stores/connection";
   import { speechState } from "../stores/speech";
   import { i18n } from "../i18n";
@@ -1000,6 +1002,15 @@
       buildSystemWarningAcknowledgeMessage($sessionState.sessionId, { all: true }),
     );
   }
+
+  $effect(() => {
+    const session = $sessionState;
+    if (session.status !== "accepted" && session.status !== "loopback") {
+      return;
+    }
+    refreshPersonaAssetsIfMissing(wsService, session.sessionId, $personaState);
+    void $personaState.persona;
+  });
 
   $effect(() => {
     void $chatPlanState.requestId;
