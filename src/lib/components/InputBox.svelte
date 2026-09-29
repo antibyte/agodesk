@@ -414,7 +414,11 @@
   {/if}
 
   {#if speechTranscript.trim() || vadLoading}
-    <p class="speech-transcript" role="status" aria-label={$i18n("inputBox.partialTranscript.ariaLabel")}>
+    <p
+      class="speech-transcript"
+      role="status"
+      aria-label={$i18n("inputBox.partialTranscript.ariaLabel")}
+    >
       {#if vadLoading && !speechTranscript.trim()}
         {$i18n("speechBanner.vad.loading")}
       {:else}
@@ -644,6 +648,7 @@
     font-size: 0.75rem;
 
     max-width: 100%;
+    animation: spring-in 320ms var(--ease-spring) both;
   }
 
   .pending-name {
@@ -768,6 +773,15 @@
     outline: none;
   }
 
+  textarea::placeholder {
+    color: var(--color-text-muted);
+    transition: opacity var(--transition-base);
+  }
+
+  textarea:focus::placeholder {
+    opacity: 0.55;
+  }
+
   textarea:disabled {
     opacity: 0.6;
 
@@ -816,8 +830,16 @@
       box-shadow var(--transition-fast);
   }
 
+  .send-btn :global(svg) {
+    transition: transform var(--transition-fast);
+  }
+
   .send-btn:not(:disabled):hover {
     transform: scale(1.04) translateY(-1px);
+  }
+
+  .send-btn:not(:disabled):hover :global(svg) {
+    transform: translate(1px, -1px);
   }
 
   .send-btn:not(:disabled):active {

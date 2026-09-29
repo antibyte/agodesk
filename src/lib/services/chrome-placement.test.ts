@@ -148,12 +148,18 @@ test("deriveInboxItems Update dismissed oder idle erzeugt kein Item", () => {
     deriveInboxItems({ ...emptyInbox, update: { status: "available", dismissed: true } }).length,
     0,
   );
-  assert.equal(deriveInboxItems({ ...emptyInbox, update: { status: "idle", dismissed: false } }).length, 0);
+  assert.equal(
+    deriveInboxItems({ ...emptyInbox, update: { status: "idle", dismissed: false } }).length,
+    0,
+  );
 });
 
 test("deriveInboxItems Speech aus errorMessage oder vadError", () => {
   assert.equal(deriveInboxItems({ ...emptyInbox, vadError: "vad" })[0]?.id, "speech-error");
-  assert.equal(deriveInboxItems(emptyInbox).some((item) => item.kind === "speech"), false);
+  assert.equal(
+    deriveInboxItems(emptyInbox).some((item) => item.kind === "speech"),
+    false,
+  );
 });
 
 test("deriveInboxItems Plan completed und Activity dismissed weglassen", () => {

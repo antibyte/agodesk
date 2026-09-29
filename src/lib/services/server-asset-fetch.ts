@@ -1,6 +1,6 @@
 import { get } from "svelte/store";
 
-import { getHttpOrigin } from "../types/protocol";
+import { getHttpOrigin, sanitizeServerMediaRef } from "../types/protocol";
 
 import { resolvePersonaAssetUrl } from "../types/protocol";
 
@@ -8,6 +8,12 @@ import { formatInvokeError } from "./errors";
 
 import { sessionState } from "../stores/session";
 import { settings } from "../stores/settings";
+import { chatMediaState } from "../stores/chat-media-state";
+import {
+  expandSignedMediaAcrossTrustedOrigins,
+  mergeTrustedAssetOrigins,
+  shouldReuseServerCertificatePin,
+} from "./trusted-asset-origins";
 
 import {
   buildAttachmentMediaPath,
@@ -47,7 +53,7 @@ function pathWithoutQuery(path: string): string {
 
 /** AuraGo signs `/api/agodesk/media/...` URLs with short-lived query tokens. */
 export function isSignedAgodeskMediaPath(path: string): boolean {
-  const trimmed = path.trim();
+  const trimmed = sanitizeServerMediaRef(path);
   if (!trimmed.includes("/api/agodesk/media/")) {
     return false;
   }
@@ -93,7 +99,7 @@ export function collectChatMediaAssetRefs(refs: ChatMediaAssetRefs): string[] {
 }
 
 export function buildMediaUrlCandidates(serverUrl: string, path: string): string[] {
-  const trimmed = path.trim();
+  const trimmed = sanitizeServerMediaRef(path);
   if (!trimmed) {
     return [];
   }
@@ -120,7 +126,7 @@ export function buildMediaUrlCandidates(serverUrl: string, path: string): string
 }
 
 export function buildChatMediaUrlCandidates(serverUrl: string, path: string): string[] {
-  const trimmed = path.trim();
+  const trimmed = sanitizeServerMediaRef(path);
   if (!trimmed) {
     return [];
   }
@@ -139,6 +145,16 @@ export function buildChatMediaUrlCandidates(serverUrl: string, path: string): st
 
   if (isSignedAgodeskMediaPath(trimmed)) {
     add(trimmed);
+    const resolved = ordered[0];
+    if (resolved) {
+      for (const variant of expandSignedMediaAcrossTrustedOrigins(
+        serverUrl,
+        resolved,
+        currentTrustedAssetOrigins(serverUrl),
+      )) {
+        add(variant);
+      }
+    }
     return ordered;
   }
 
@@ -222,15 +238,6 @@ export function resolveAuraGoChatMediaUrl(serverUrl: string, path: string): stri
   return candidates[0] ?? resolvePersonaAssetUrl(serverUrl, path);
 }
 
-function httpOriginForAssetUrl(assetUrl: string): string {
-  try {
-    const parsed = new URL(assetUrl);
-    return `${parsed.protocol}//${parsed.host}`;
-  } catch {
-    return "";
-  }
-}
-
 function readAssetFetchAuth(): { deviceId?: string; sessionId?: string } {
   const { deviceId, sessionId } = get(sessionState);
   return {
@@ -239,21 +246,25 @@ function readAssetFetchAuth(): { deviceId?: string; sessionId?: string } {
   };
 }
 
+function currentTrustedAssetOrigins(serverUrl: string): string[] {
+  return mergeTrustedAssetOrigins(
+    serverUrl,
+    get(settings).assetFetchAllowedOrigins ?? [],
+    get(chatMediaState).integrationWebhosts,
+  );
+}
+
 export async function fetchServerAssetDataUrl(
   serverUrl: string,
   assetUrl: string,
 ): Promise<FetchedServerAsset> {
   const assetOriginPin = await getPinnedFingerprintForHttpUrl(assetUrl).catch(() => null);
   let pinnedFingerprint = assetOriginPin;
-  if (!pinnedFingerprint) {
-    const assetOrigin = httpOriginForAssetUrl(assetUrl);
-    const serverOrigin = getHttpOrigin(serverUrl);
-    if (assetOrigin && assetOrigin === serverOrigin) {
-      pinnedFingerprint = await getPinnedFingerprint(serverUrl).catch(() => null);
-    }
+  if (!pinnedFingerprint && shouldReuseServerCertificatePin(serverUrl, assetUrl)) {
+    pinnedFingerprint = await getPinnedFingerprint(serverUrl).catch(() => null);
   }
   const auth = readAssetFetchAuth();
-  const allowedOrigins = get(settings).assetFetchAllowedOrigins ?? [];
+  const allowedOrigins = currentTrustedAssetOrigins(serverUrl);
   const { invoke } = await import("@tauri-apps/api/core");
   return invoke<FetchedServerAsset>("fetch_server_asset", {
     serverUrl,

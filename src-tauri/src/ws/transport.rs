@@ -20,6 +20,16 @@ use tokio_tungstenite::{
 use tokio::net::TcpStream;
 
 const RECONNECT_DELAYS_MS: [u64; 5] = [1000, 2000, 4000, 8000, 16000];
+#[derive(Default)]
+struct ReconnectBackoff { attempts: usize }
+impl ReconnectBackoff {
+    fn connected(&mut self) { self.attempts = 0; }
+    fn next_delay(&mut self) -> Option<u64> {
+        let delay = RECONNECT_DELAYS_MS.get(self.attempts).copied()?;
+        self.attempts += 1;
+        Some(delay)
+    }
+}
 /// AuraGo `agodeskMaxMessageBytes` (16 MiB). Keep client send cap in sync with the server.
 const AGODESK_MAX_MESSAGE_BYTES: usize = 16 * 1024 * 1024;
 /// Leave headroom for WebSocket framing and JSON envelope fields around `data_base64`.
@@ -266,7 +276,7 @@ pub async fn agodesk_connect(
     let mut outbound_rx = outbound_rx;
 
     let handle = tokio::spawn(async move {
-        let mut reconnect_attempt = 0usize;
+        let mut backoff = ReconnectBackoff::default();
         while !cancel.load(Ordering::SeqCst) {
             let pinned = pinned_fingerprint_for_url(&app_handle, &server_url).ok().flatten();
             let tls_mode = determine_tls_mode(&parsed, pinned.as_deref(), tls_mode_override.clone());
@@ -281,6 +291,7 @@ pub async fn agodesk_connect(
                 pinned.clone(),
                 &mut outbound_rx,
                 cancel.clone(),
+                &mut backoff,
             )
             .await
             {
@@ -290,7 +301,7 @@ pub async fn agodesk_connect(
                         break;
                     }
                     // Session was established; reset backoff for the next drop.
-                    reconnect_attempt = 0;
+                    backoff.connected();
                 }
                 Err((code, message)) => {
                     emit_error(
@@ -311,13 +322,10 @@ pub async fn agodesk_connect(
                 break;
             }
 
-            if reconnect_attempt >= RECONNECT_DELAYS_MS.len() {
+            let Some(delay) = backoff.next_delay() else {
                 emit_state(&app_handle, "disconnected");
                 break;
-            }
-
-            let delay = RECONNECT_DELAYS_MS[reconnect_attempt];
-            reconnect_attempt += 1;
+            };
             emit_state(&app_handle, "connecting");
             tokio::time::sleep(Duration::from_millis(delay)).await;
         }
@@ -337,6 +345,7 @@ async fn connect_and_run(
     pinned: Option<String>,
     outbound_rx: &mut mpsc::UnboundedReceiver<String>,
     cancel: Arc<AtomicBool>,
+    backoff: &mut ReconnectBackoff,
 ) -> Result<(), (ClientErrorCode, String)> {
     if tls_mode == &TlsMode::InsecureLoopbackDev && !parsed.is_loopback {
         return Err((
@@ -380,6 +389,7 @@ async fn connect_and_run(
             })?;
         }
 
+        backoff.connected();
         emit_state(app, "connected");
         return run_ws_loop(app, ws_stream, outbound_rx, cancel).await;
     }
@@ -398,6 +408,7 @@ async fn connect_and_run(
             format!("Expected HTTP 101 Switching Protocols, got {}.", response.status()),
         ));
     }
+    backoff.connected();
     emit_state(app, "connected");
     run_ws_loop(app, ws_stream, outbound_rx, cancel).await
 }
@@ -565,6 +576,18 @@ pub async fn agodesk_disconnect(state: State<'_, WsTransportState>) -> Result<()
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn successful_connections_reset_the_retry_budget() {
+        let mut backoff = super::ReconnectBackoff::default();
+        for _ in 0..20 {
+            assert_eq!(backoff.next_delay(), Some(1000));
+            backoff.connected();
+        }
+        for expected in super::RECONNECT_DELAYS_MS {
+            assert_eq!(backoff.next_delay(), Some(expected));
+        }
+        assert_eq!(backoff.next_delay(), None);
+    }
     use super::*;
 
     // A representative TLS handshake failure message as produced by native-tls/tungstenite.

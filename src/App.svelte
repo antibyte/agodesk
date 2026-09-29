@@ -414,6 +414,24 @@
     <span class="papyrus-rivet papyrus-rivet-bl"></span>
     <span class="papyrus-rivet papyrus-rivet-br"></span>
   </div>
+  <div class="gloss-extras" aria-hidden="true">
+    <span class="gloss-blob gloss-blob-1"></span>
+    <span class="gloss-blob gloss-blob-2"></span>
+    <span class="gloss-blob gloss-blob-3"></span>
+    <div class="gloss-highlight"></div>
+  </div>
+  <div class="radio-extras" aria-hidden="true">
+    <div class="radio-core"></div>
+    <div class="radio-trefoil"></div>
+    <span class="radio-particle radio-particle-1"></span>
+    <span class="radio-particle radio-particle-2"></span>
+    <span class="radio-particle radio-particle-3"></span>
+    <span class="radio-particle radio-particle-4"></span>
+    <span class="radio-particle radio-particle-5"></span>
+    <span class="radio-particle radio-particle-6"></span>
+    <span class="radio-particle radio-particle-7"></span>
+    <span class="radio-particle radio-particle-8"></span>
+  </div>
   <div class="edge-light" aria-hidden="true"></div>
 
   <UiSoundBridge />
@@ -2028,7 +2046,380 @@
     }
   }
 
+  /* ── Black Gloss: Lackschwarz, dunkle Reflexionen, organische Tropfen ── */
+  :global(:root[data-ui-theme="blackgloss"]) .app-window {
+    background: linear-gradient(180deg, #0a0a0d 0%, #050506 45%, #020203 100%);
+  }
+  :global(:root[data-ui-theme="blackgloss"]) .aurora-layer {
+    opacity: 0.35;
+    mix-blend-mode: screen;
+    filter: blur(80px);
+    animation-duration: 26s;
+  }
+  :global(:root[data-ui-theme="blackgloss"]) .aurora-layer-a {
+    background: radial-gradient(circle, rgba(255, 255, 255, 0.1), transparent 68%);
+  }
+  :global(:root[data-ui-theme="blackgloss"]) .aurora-layer-b {
+    background: radial-gradient(circle, rgba(200, 204, 214, 0.08), transparent 70%);
+  }
+  :global(:root[data-ui-theme="blackgloss"]) .aurora-layer-c {
+    background: radial-gradient(circle, rgba(255, 255, 255, 0.06), transparent 72%);
+  }
+  :global(:root[data-ui-theme="blackgloss"]) .app-window::after {
+    opacity: 0.025;
+  }
+  :global(:root[data-ui-theme="blackgloss"]) .theme-overlay {
+    opacity: 1;
+    background:
+      radial-gradient(ellipse 60% 40% at 18% 0%, rgba(255, 255, 255, 0.1), transparent 60%),
+      radial-gradient(ellipse 45% 30% at 88% 100%, rgba(255, 255, 255, 0.05), transparent 65%),
+      linear-gradient(180deg, rgba(255, 255, 255, 0.04) 0%, transparent 12%);
+    animation: gloss-overlay-drift 18s ease-in-out infinite alternate;
+  }
+  :global(:root[data-ui-theme="blackgloss"]) .gloss-extras {
+    display: block;
+  }
+
+  .gloss-extras {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    display: none;
+    overflow: hidden;
+  }
+
+  .gloss-blob {
+    position: absolute;
+    display: block;
+    opacity: 0.95;
+    background:
+      radial-gradient(
+        ellipse 55% 40% at 30% 22%,
+        rgba(255, 255, 255, 0.28) 0%,
+        rgba(255, 255, 255, 0.06) 35%,
+        transparent 60%
+      ),
+      radial-gradient(circle at 50% 50%, #1e1f25 0%, #0c0c10 55%, #050506 100%);
+    box-shadow:
+      inset 0 2px 0 rgba(255, 255, 255, 0.24),
+      inset 0 0 0 1px rgba(255, 255, 255, 0.06),
+      inset 0 -18px 40px rgba(0, 0, 0, 0.85),
+      0 30px 80px rgba(0, 0, 0, 0.8);
+    filter: blur(0.6px);
+    will-change: border-radius, transform;
+    animation:
+      gloss-blob-morph 22s ease-in-out infinite,
+      gloss-blob-float 30s ease-in-out infinite alternate;
+  }
+
+  .gloss-blob-1 {
+    width: min(48vw, 460px);
+    height: min(40vw, 380px);
+    top: -14%;
+    right: -12%;
+    border-radius: 58% 42% 46% 54% / 52% 44% 56% 48%;
+  }
+
+  .gloss-blob-2 {
+    width: min(40vw, 380px);
+    height: min(34vw, 320px);
+    bottom: -12%;
+    left: -10%;
+    border-radius: 44% 56% 58% 42% / 46% 54% 46% 54%;
+    animation-delay:
+      -8s,
+      -12s;
+    opacity: 0.75;
+  }
+
+  .gloss-blob-3 {
+    width: min(24vw, 220px);
+    height: min(22vw, 200px);
+    top: 54%;
+    right: 8%;
+    border-radius: 52% 48% 40% 60% / 60% 40% 60% 40%;
+    animation-delay:
+      -15s,
+      -5s;
+    opacity: 0.6;
+  }
+
+  .gloss-highlight {
+    position: absolute;
+    top: -30%;
+    bottom: -30%;
+    left: -40%;
+    width: 22%;
+    background: linear-gradient(
+      100deg,
+      transparent 0%,
+      rgba(255, 255, 255, 0.02) 42%,
+      rgba(255, 255, 255, 0.06) 50%,
+      rgba(255, 255, 255, 0.02) 58%,
+      transparent 100%
+    );
+    transform: skewX(-16deg);
+    animation: gloss-highlight-sweep 24s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  }
+
+  @keyframes gloss-blob-morph {
+    0%,
+    100% {
+      border-radius: 58% 42% 46% 54% / 52% 44% 56% 48%;
+    }
+    33% {
+      border-radius: 44% 56% 60% 40% / 58% 46% 54% 42%;
+    }
+    66% {
+      border-radius: 52% 48% 38% 62% / 44% 60% 40% 56%;
+    }
+  }
+
+  @keyframes gloss-blob-float {
+    from {
+      transform: translate3d(0, 0, 0) rotate(0deg) scale(1);
+    }
+    to {
+      transform: translate3d(-3%, 4%, 0) rotate(6deg) scale(1.05);
+    }
+  }
+
+  @keyframes gloss-overlay-drift {
+    from {
+      transform: translate3d(0, 0, 0);
+      opacity: 0.85;
+    }
+    to {
+      transform: translate3d(2%, 1.5%, 0);
+      opacity: 1;
+    }
+  }
+
+  @keyframes gloss-highlight-sweep {
+    0%,
+    70% {
+      left: -40%;
+      opacity: 0;
+    }
+    74% {
+      opacity: 1;
+    }
+    98% {
+      left: 140%;
+      opacity: 1;
+    }
+    100% {
+      left: 140%;
+      opacity: 0;
+    }
+  }
+
+  /* ── Radioactive: Reaktorkern, Trefoil, aufsteigende Isotope ── */
+  :global(:root[data-ui-theme="radioactive"]) .app-window {
+    background: radial-gradient(ellipse 90% 70% at 50% 110%, #0d1a04 0%, #060a03 55%, #030502 100%);
+  }
+  :global(:root[data-ui-theme="radioactive"]) .aurora-layer {
+    opacity: 0.5;
+    mix-blend-mode: screen;
+    filter: blur(70px);
+    animation-duration: 9s;
+  }
+  :global(:root[data-ui-theme="radioactive"]) .aurora-layer-a {
+    background: radial-gradient(circle, rgba(57, 255, 20, 0.4), transparent 66%);
+  }
+  :global(:root[data-ui-theme="radioactive"]) .aurora-layer-b {
+    background: radial-gradient(circle, rgba(182, 255, 0, 0.32), transparent 68%);
+  }
+  :global(:root[data-ui-theme="radioactive"]) .aurora-layer-c {
+    background: radial-gradient(circle, rgba(232, 255, 0, 0.26), transparent 70%);
+  }
+  :global(:root[data-ui-theme="radioactive"]) .theme-overlay {
+    opacity: 1;
+    background:
+      repeating-linear-gradient(
+        0deg,
+        transparent 0,
+        transparent 3px,
+        rgba(57, 255, 20, 0.035) 3px,
+        rgba(57, 255, 20, 0.035) 4px
+      ),
+      radial-gradient(ellipse 80% 60% at 50% 100%, rgba(182, 255, 0, 0.14), transparent 60%);
+  }
+  :global(:root[data-ui-theme="radioactive"]) .radio-extras {
+    display: block;
+  }
+
+  .radio-extras {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    display: none;
+    overflow: hidden;
+  }
+
+  .radio-core {
+    position: absolute;
+    left: 50%;
+    bottom: -22%;
+    width: min(70vw, 640px);
+    height: min(70vw, 640px);
+    transform: translateX(-50%);
+    border-radius: 50%;
+    background: radial-gradient(
+      circle,
+      rgba(232, 255, 0, 0.42) 0%,
+      rgba(182, 255, 0, 0.26) 22%,
+      rgba(57, 255, 20, 0.12) 45%,
+      transparent 70%
+    );
+    filter: blur(28px);
+    animation: radio-core-pulse 3.2s ease-in-out infinite;
+  }
+
+  .radio-trefoil {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: min(120vw, 1100px);
+    height: min(120vw, 1100px);
+    margin: calc(min(120vw, 1100px) / -2) 0 0 calc(min(120vw, 1100px) / -2);
+    border-radius: 50%;
+    opacity: 0.12;
+    background: conic-gradient(
+      from 0deg,
+      rgba(182, 255, 0, 0.9) 0deg 60deg,
+      transparent 60deg 120deg,
+      rgba(182, 255, 0, 0.9) 120deg 180deg,
+      transparent 180deg 240deg,
+      rgba(182, 255, 0, 0.9) 240deg 300deg,
+      transparent 300deg 360deg
+    );
+    mask-image: radial-gradient(circle, transparent 12%, #000 18%, #000 40%, transparent 62%);
+    -webkit-mask-image: radial-gradient(
+      circle,
+      transparent 12%,
+      #000 18%,
+      #000 40%,
+      transparent 62%
+    );
+    filter: blur(14px);
+    animation: radio-trefoil-spin 90s linear infinite;
+  }
+
+  .radio-particle {
+    position: absolute;
+    bottom: -4%;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #b6ff00;
+    box-shadow:
+      0 0 8px #b6ff00,
+      0 0 18px rgba(57, 255, 20, 0.7);
+    opacity: 0;
+    animation: radio-particle-rise 12s linear infinite;
+  }
+
+  .radio-particle-1 {
+    left: 8%;
+    animation-duration: 13s;
+    animation-delay: -2s;
+  }
+  .radio-particle-2 {
+    left: 21%;
+    width: 4px;
+    height: 4px;
+    animation-duration: 16s;
+    animation-delay: -9s;
+  }
+  .radio-particle-3 {
+    left: 34%;
+    animation-duration: 11s;
+    animation-delay: -5s;
+  }
+  .radio-particle-4 {
+    left: 47%;
+    width: 8px;
+    height: 8px;
+    animation-duration: 18s;
+    animation-delay: -12s;
+  }
+  .radio-particle-5 {
+    left: 60%;
+    animation-duration: 14s;
+    animation-delay: -7s;
+  }
+  .radio-particle-6 {
+    left: 72%;
+    width: 4px;
+    height: 4px;
+    animation-duration: 12s;
+    animation-delay: -3s;
+  }
+  .radio-particle-7 {
+    left: 84%;
+    animation-duration: 17s;
+    animation-delay: -14s;
+  }
+  .radio-particle-8 {
+    left: 93%;
+    width: 5px;
+    height: 5px;
+    animation-duration: 15s;
+    animation-delay: -10s;
+  }
+
+  @keyframes radio-core-pulse {
+    0%,
+    100% {
+      opacity: 0.7;
+      transform: translateX(-50%) scale(1);
+    }
+    50% {
+      opacity: 1;
+      transform: translateX(-50%) scale(1.08);
+    }
+  }
+
+  @keyframes radio-trefoil-spin {
+    from {
+      transform: rotate(0deg);
+    }
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  @keyframes radio-particle-rise {
+    0% {
+      transform: translate3d(0, 0, 0) scale(0.6);
+      opacity: 0;
+    }
+    8% {
+      opacity: 0.9;
+    }
+    50% {
+      transform: translate3d(14px, -55vh, 0) scale(1);
+      opacity: 0.8;
+    }
+    92% {
+      opacity: 0.3;
+    }
+    100% {
+      transform: translate3d(-10px, -108vh, 0) scale(0.5);
+      opacity: 0;
+    }
+  }
+
   /* ── Reduce-Motion-Kill-Switch respektieren ── */
+  :global(:root[data-reduce-motion="true"]) .gloss-blob,
+  :global(:root[data-reduce-motion="true"]) .gloss-highlight,
+  :global(:root[data-reduce-motion="true"]) .radio-core,
+  :global(:root[data-reduce-motion="true"]) .radio-trefoil,
+  :global(:root[data-reduce-motion="true"]) .radio-particle,
+  :global(:root[data-reduce-motion="true"][data-ui-theme="blackgloss"]) .theme-overlay,
   :global(:root[data-reduce-motion="true"]) .chaos-glyph,
   :global(:root[data-reduce-motion="true"]) .chaos-glyph::before,
   :global(:root[data-reduce-motion="true"]) .chaos-glyph::after,
@@ -2055,9 +2446,18 @@
   :global(:root[data-reduce-motion="true"][data-ui-theme="chaos"]) .theme-overlay {
     animation: none !important;
   }
+  :global(:root[data-reduce-motion="true"]) .gloss-highlight,
+  :global(:root[data-reduce-motion="true"]) .radio-particle {
+    opacity: 0 !important;
+  }
 
   @media (prefers-reduced-motion: reduce) {
     .aurora-layer,
+    .gloss-blob,
+    .gloss-highlight,
+    .radio-core,
+    .radio-trefoil,
+    .radio-particle,
     .chaos-glyph,
     .chaos-glyph::before,
     .chaos-glyph::after,
@@ -2077,7 +2477,9 @@
     .chaos-glyph::after {
       opacity: 0;
     }
-    .cyber-sheen {
+    .cyber-sheen,
+    .gloss-highlight,
+    .radio-particle {
       opacity: 0;
     }
   }

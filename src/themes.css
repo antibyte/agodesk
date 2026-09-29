@@ -1160,7 +1160,557 @@
   }
 }
 
+/* ════════════════════════════════════════════════════════════════════════
+   Black Gloss ── Klavierlack-Schwarz mit organischen, konvexen Flächen:
+   Spiegelkante oben, tiefer Innenschatten unten, Chrom-Akzente, weiche
+   Radien und eine langsam wandernde Lichtreflexion.
+   ════════════════════════════════════════════════════════════════════════ */
+:root[data-ui-theme="blackgloss"] {
+  color-scheme: dark;
+
+  --gloss-chrome-hi: #f2f3f7;
+  --gloss-chrome: #9a9ea9;
+  --gloss-chrome-lo: #3b3d45;
+
+  --aurora-1: #1b1c22;
+  --aurora-2: #2a2b33;
+  --aurora-3: #0f1014;
+  --aurora-gradient: linear-gradient(
+    135deg,
+    var(--gloss-chrome-hi) 0%,
+    var(--gloss-chrome) 45%,
+    var(--gloss-chrome-lo) 100%
+  );
+
+  --color-bg: #050506;
+  --color-bg-elevated: #0c0c0f;
+  --color-surface: rgba(14, 14, 18, 0.9);
+  --color-surface-solid: #0e0e12;
+  --color-input-bg: rgba(8, 8, 10, 0.95);
+  --color-text: #ececf1;
+  --color-text-strong: #ffffff;
+  --color-muted: #8e909a;
+  --color-text-muted: #7f818b;
+  --color-footnote: #9a9ca6;
+  --color-border: rgba(255, 255, 255, 0.12);
+  --color-border-subtle: rgba(255, 255, 255, 0.06);
+  --color-accent: #dfe2ea;
+  --color-accent-soft: rgba(223, 226, 234, 0.1);
+  --color-companion: #b8bcc8;
+  --color-user-bg: linear-gradient(180deg, #33343b 0%, #17181c 38%, #0a0a0d 100%);
+  --color-user-text: #f4f4f8;
+  --color-assistant-bg: rgba(255, 255, 255, 0.035);
+  --color-assistant-text: #e6e7ec;
+  --color-system-bg: rgba(14, 14, 18, 0.92);
+  --color-system-text: #b9bbc4;
+  --color-danger: #ff6b6b;
+  --color-danger-soft: rgba(255, 107, 107, 0.12);
+  --color-warning: #ffc857;
+  --color-warning-soft: rgba(255, 200, 87, 0.12);
+  --color-success: #7ee2a8;
+  --color-success-soft: rgba(126, 226, 168, 0.12);
+  --color-backdrop: rgba(0, 0, 0, 0.78);
+
+  --surface-0: var(--color-bg);
+  --surface-1: var(--color-surface);
+  --surface-2: rgba(18, 18, 22, 0.96);
+  --edge-light: rgba(255, 255, 255, 0.22);
+
+  --glass-surface: rgba(12, 12, 15, 0.92);
+  --glass-border: rgba(255, 255, 255, 0.1);
+  --glass-highlight: rgba(255, 255, 255, 0.18);
+  --blur: 20px;
+  --blur-strong: 32px;
+
+  --color-panel-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.28), inset 0 -2px 6px rgba(0, 0, 0, 0.7),
+    0 18px 48px rgba(0, 0, 0, 0.72);
+  --color-bubble-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+  --shadow-1: 0 2px 6px rgba(0, 0, 0, 0.6);
+  --shadow-2: 0 14px 40px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.05);
+  --shadow-3: 0 32px 90px rgba(0, 0, 0, 0.85);
+  --accent-glow: 0 0 0 1px rgba(255, 255, 255, 0.18), 0 10px 30px rgba(0, 0, 0, 0.6);
+  --shadow-companion:
+    0 24px 60px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(255, 255, 255, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+
+  --font-display: "Space Grotesk", "Inter", system-ui, sans-serif;
+  --font-sans: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+
+  --radius-sm: 0.75rem;
+  --radius-md: 1rem;
+  --radius-lg: 1.35rem;
+  --radius-xl: 1.75rem;
+  --radius-window: 22px;
+  --radius-composer: 2rem;
+  --radius-2xl: 2.25rem;
+  --transition-fast: 180ms cubic-bezier(0.22, 1, 0.36, 1);
+  --transition-base: 320ms cubic-bezier(0.22, 1, 0.36, 1);
+  --focus-ring: 0 0 0 2px #050506, 0 0 0 4px rgba(223, 226, 234, 0.6);
+}
+
+/* Konvexe Lackflächen: Spiegelkante oben, Tiefe unten. Nur In-Flow-Elemente bekommen position. */
+:root[data-ui-theme="blackgloss"] .status-bar,
+:root[data-ui-theme="blackgloss"] .input-box {
+  position: relative;
+  overflow: hidden;
+}
+
+:root[data-ui-theme="blackgloss"] .status-bar,
+:root[data-ui-theme="blackgloss"] .input-box,
+:root[data-ui-theme="blackgloss"] .ui-card:not(dialog),
+:root[data-ui-theme="blackgloss"]
+  .glass-panel:not(
+    dialog,
+    .chat-history-panel,
+    .integrations-panel,
+    .warnings-panel,
+    .overflow-menu,
+    .embed-modal,
+    .onboarding-dialog
+  ),
+:root[data-ui-theme="blackgloss"] .glass-panel-fixed {
+  border-color: rgba(255, 255, 255, 0.1);
+  background-color: #0c0c10;
+  background-image:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.16) 0%,
+      rgba(255, 255, 255, 0.05) 18%,
+      transparent 45%,
+      rgba(0, 0, 0, 0.35) 100%
+    ),
+    radial-gradient(ellipse 80% 60% at 20% 0%, rgba(255, 255, 255, 0.08), transparent 60%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
+    inset 0 -2px 6px rgba(0, 0, 0, 0.7),
+    inset 0 0 0 1px rgba(0, 0, 0, 0.6),
+    0 1px 0 rgba(255, 255, 255, 0.04),
+    0 18px 48px rgba(0, 0, 0, 0.72);
+}
+
+/* Wandernde Lichtreflexion auf Statusleiste und Composer. */
+:root[data-ui-theme="blackgloss"] .status-bar::before,
+:root[data-ui-theme="blackgloss"] .input-box::before {
+  content: "";
+  position: absolute;
+  top: -40%;
+  bottom: -40%;
+  left: -30%;
+  width: 26%;
+  pointer-events: none;
+  background: linear-gradient(
+    100deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.05) 40%,
+    rgba(255, 255, 255, 0.12) 50%,
+    rgba(255, 255, 255, 0.05) 60%,
+    transparent 100%
+  );
+  transform: skewX(-18deg);
+  animation: gloss-sheen-slide 11s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+:root[data-ui-theme="blackgloss"] .input-box::before {
+  animation-delay: -5.5s;
+}
+
+@keyframes gloss-sheen-slide {
+  0%,
+  62% {
+    left: -30%;
+    opacity: 0;
+  }
+  66% {
+    opacity: 1;
+  }
+  96% {
+    left: 130%;
+    opacity: 1;
+  }
+  100% {
+    left: 130%;
+    opacity: 0;
+  }
+}
+
+:root[data-ui-theme="blackgloss"] .input-box:focus-within {
+  border-color: rgba(255, 255, 255, 0.28);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.42),
+    inset 0 -2px 6px rgba(0, 0, 0, 0.7),
+    inset 0 0 0 1px rgba(0, 0, 0, 0.6),
+    0 0 0 1px rgba(255, 255, 255, 0.08),
+    0 18px 48px rgba(0, 0, 0, 0.72);
+}
+
+/* Modals/Overlays: solide Fläche, keine Lackdeko, die Layout bricht. */
+:root[data-ui-theme="blackgloss"] dialog,
+:root[data-ui-theme="blackgloss"] .embed-modal,
+:root[data-ui-theme="blackgloss"] .onboarding-dialog,
+:root[data-ui-theme="blackgloss"] .chat-history-panel,
+:root[data-ui-theme="blackgloss"] .integrations-panel,
+:root[data-ui-theme="blackgloss"] .warnings-panel,
+:root[data-ui-theme="blackgloss"] .overflow-menu {
+  background-image: none;
+  background-color: var(--color-surface-solid);
+}
+
+/* Bubbles: User als Lack-Tropfen, Assistent als matte Vertiefung. */
+:root[data-ui-theme="blackgloss"] .user .bubble {
+  background:
+    radial-gradient(ellipse 70% 45% at 30% 0%, rgba(255, 255, 255, 0.22), transparent 70%),
+    var(--color-user-bg);
+  color: var(--color-user-text);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    inset 0 -2px 4px rgba(0, 0, 0, 0.7),
+    0 10px 28px rgba(0, 0, 0, 0.6);
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.6);
+}
+
+:root[data-ui-theme="blackgloss"] .user .bubble time {
+  color: rgba(244, 244, 248, 0.7);
+}
+
+:root[data-ui-theme="blackgloss"] .assistant .bubble {
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+/* Chrom-Knopf: Klavierlack mit Kante. */
+:root[data-ui-theme="blackgloss"] .ui-btn-primary {
+  background: linear-gradient(180deg, #3a3b43 0%, #1a1b20 50%, #0a0a0d 100%);
+  color: #f4f4f8;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.6);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.45),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.8),
+    0 8px 24px rgba(0, 0, 0, 0.6);
+}
+
+:root[data-ui-theme="blackgloss"] .ui-btn-primary:not(:disabled):hover {
+  filter: none;
+  background: linear-gradient(180deg, #4a4b54 0%, #22232a 50%, #0e0e12 100%);
+  border-color: rgba(255, 255, 255, 0.34);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.6),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.8),
+    0 12px 30px rgba(0, 0, 0, 0.7);
+}
+
+:root[data-ui-theme="blackgloss"] .ui-btn-secondary {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.02) 100%);
+  border-color: rgba(255, 255, 255, 0.1);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.6);
+}
+
+:root[data-ui-theme="blackgloss"] .status-bar .companion-orb-core {
+  box-shadow:
+    inset 0 -3px 5px rgba(0, 0, 0, 0.55),
+    inset 0 2px 3px rgba(255, 255, 255, 0.7),
+    0 6px 14px rgba(0, 0, 0, 0.7);
+}
+
+:root[data-ui-theme="blackgloss"] ::selection {
+  background: rgba(223, 226, 234, 0.85);
+  color: #050506;
+}
+
+:root[data-ui-theme="blackgloss"] ::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0.1));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+:root[data-ui-theme="blackgloss"] ::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.32), rgba(255, 255, 255, 0.16));
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   Radioactive ── giftiges Säuregrün und Warngelb auf fast-schwarzem Olive:
+   atmender Glow, leuchtende Schrift, Warnstreifen, Geigerzähler-Knistern.
+   ════════════════════════════════════════════════════════════════════════ */
+:root[data-ui-theme="radioactive"] {
+  color-scheme: dark;
+
+  --radio-toxic: #39ff14;
+  --radio-acid: #b6ff00;
+  --radio-yellow: #e8ff00;
+
+  --aurora-1: var(--radio-toxic);
+  --aurora-2: var(--radio-acid);
+  --aurora-3: var(--radio-yellow);
+  --aurora-gradient: linear-gradient(
+    135deg,
+    var(--radio-toxic) 0%,
+    var(--radio-acid) 55%,
+    var(--radio-yellow) 100%
+  );
+
+  --color-bg: #060a03;
+  --color-bg-elevated: #0b1205;
+  --color-surface: rgba(9, 16, 5, 0.9);
+  --color-surface-solid: #0c1406;
+  --color-input-bg: rgba(5, 9, 3, 0.95);
+  --color-text: #e9ffd9;
+  --color-text-strong: #ffffff;
+  --color-muted: #86a86a;
+  --color-text-muted: #7d9c63;
+  --color-footnote: #9fc283;
+  --color-border: rgba(182, 255, 0, 0.3);
+  --color-border-subtle: rgba(182, 255, 0, 0.12);
+  --color-accent: #b6ff00;
+  --color-accent-soft: rgba(182, 255, 0, 0.14);
+  --color-companion: #39ff14;
+  --color-user-bg: linear-gradient(145deg, #1d3a05 0%, #0c1e04 55%, #213a00 100%);
+  --color-user-text: #f2ffe0;
+  --color-assistant-bg: rgba(57, 255, 20, 0.06);
+  --color-assistant-text: #e6ffd4;
+  --color-system-bg: rgba(9, 16, 5, 0.92);
+  --color-system-text: #b4d99a;
+  --color-danger: #ff4d3d;
+  --color-danger-soft: rgba(255, 77, 61, 0.14);
+  --color-warning: #ffd60a;
+  --color-warning-soft: rgba(255, 214, 10, 0.14);
+  --color-success: #39ff14;
+  --color-success-soft: rgba(57, 255, 20, 0.14);
+  --color-backdrop: rgba(2, 5, 0, 0.86);
+
+  --surface-0: var(--color-bg);
+  --surface-1: var(--color-surface);
+  --surface-2: rgba(10, 18, 5, 0.96);
+  --edge-light: rgba(182, 255, 0, 0.22);
+
+  --glass-surface: rgba(7, 13, 3, 0.86);
+  --glass-border: rgba(182, 255, 0, 0.42);
+  --glass-highlight: rgba(232, 255, 0, 0.12);
+  --blur: 18px;
+  --blur-strong: 28px;
+
+  --color-panel-shadow:
+    0 0 0 1px rgba(182, 255, 0, 0.3), 0 0 32px rgba(182, 255, 0, 0.2),
+    0 12px 32px rgba(0, 0, 0, 0.6);
+  --color-bubble-shadow: 0 0 18px rgba(57, 255, 20, 0.18);
+  --shadow-1: 0 0 12px rgba(57, 255, 20, 0.22);
+  --shadow-2: 0 0 32px rgba(182, 255, 0, 0.22), 0 12px 32px rgba(0, 0, 0, 0.6);
+  --shadow-3: 0 0 64px rgba(182, 255, 0, 0.3);
+  --accent-glow:
+    0 0 0 1px rgba(182, 255, 0, 0.55), 0 0 22px rgba(182, 255, 0, 0.4),
+    0 0 44px rgba(57, 255, 20, 0.18);
+  --shadow-companion: 0 0 56px rgba(57, 255, 20, 0.35), 0 0 0 1px rgba(182, 255, 0, 0.45);
+
+  --font-display: "Space Grotesk", "Inter", system-ui, sans-serif;
+  --font-sans: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+
+  --radius-sm: 0.3rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.7rem;
+  --radius-xl: 0.9rem;
+  --radius-window: 12px;
+  --radius-composer: 1rem;
+  --radius-2xl: 1.1rem;
+  --focus-ring: 0 0 0 2px #060a03, 0 0 0 3px #b6ff00, 0 0 14px #b6ff00;
+}
+
+:root[data-ui-theme="radioactive"] .status-bar,
+:root[data-ui-theme="radioactive"] .input-box {
+  position: relative;
+}
+
+/* Strahlende Rahmen mit atmendem Glow. */
+:root[data-ui-theme="radioactive"] .status-bar,
+:root[data-ui-theme="radioactive"] .input-box,
+:root[data-ui-theme="radioactive"] .ui-card:not(dialog),
+:root[data-ui-theme="radioactive"]
+  .glass-panel:not(
+    dialog,
+    .chat-history-panel,
+    .integrations-panel,
+    .warnings-panel,
+    .overflow-menu,
+    .embed-modal,
+    .onboarding-dialog
+  ),
+:root[data-ui-theme="radioactive"] .glass-panel-fixed {
+  border-color: rgba(182, 255, 0, 0.5);
+  background-color: rgba(7, 13, 3, 0.94);
+  background-image:
+    linear-gradient(180deg, rgba(232, 255, 0, 0.1) 0%, transparent 32%),
+    radial-gradient(ellipse 70% 50% at 50% 110%, rgba(57, 255, 20, 0.12), transparent 70%);
+  box-shadow:
+    inset 0 1px 0 rgba(232, 255, 0, 0.28),
+    0 0 0 1px rgba(182, 255, 0, 0.22),
+    0 0 26px rgba(182, 255, 0, 0.22),
+    0 12px 32px rgba(0, 0, 0, 0.6);
+  animation: radio-frame-breathe 3.6s ease-in-out infinite;
+}
+
+@keyframes radio-frame-breathe {
+  0%,
+  100% {
+    box-shadow:
+      inset 0 1px 0 rgba(232, 255, 0, 0.28),
+      0 0 0 1px rgba(182, 255, 0, 0.22),
+      0 0 22px rgba(182, 255, 0, 0.18),
+      0 12px 32px rgba(0, 0, 0, 0.6);
+  }
+  50% {
+    box-shadow:
+      inset 0 1px 0 rgba(232, 255, 0, 0.36),
+      0 0 0 1px rgba(182, 255, 0, 0.34),
+      0 0 40px rgba(182, 255, 0, 0.34),
+      0 12px 32px rgba(0, 0, 0, 0.6);
+  }
+}
+
+/* Warnstreifen als schmaler Saum an der Composer-Oberkante. */
+:root[data-ui-theme="radioactive"] .input-box::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: var(--space-5);
+  right: var(--space-5);
+  height: 3px;
+  border-radius: 0 0 2px 2px;
+  pointer-events: none;
+  opacity: 0.7;
+  background: repeating-linear-gradient(-45deg, #e8ff00 0 8px, #0a1002 8px 16px);
+}
+
+:root[data-ui-theme="radioactive"] .input-box:focus-within {
+  border-color: rgba(232, 255, 0, 0.8);
+  box-shadow:
+    inset 0 1px 0 rgba(232, 255, 0, 0.4),
+    0 0 0 1px rgba(182, 255, 0, 0.4),
+    0 0 44px rgba(182, 255, 0, 0.42),
+    0 12px 32px rgba(0, 0, 0, 0.6);
+  animation: none;
+}
+
+/* Modals/Overlays: solide Fläche. */
+:root[data-ui-theme="radioactive"] dialog,
+:root[data-ui-theme="radioactive"] .embed-modal,
+:root[data-ui-theme="radioactive"] .onboarding-dialog,
+:root[data-ui-theme="radioactive"] .chat-history-panel,
+:root[data-ui-theme="radioactive"] .integrations-panel,
+:root[data-ui-theme="radioactive"] .warnings-panel,
+:root[data-ui-theme="radioactive"] .overflow-menu {
+  background-image: none;
+  background-color: var(--color-surface-solid);
+}
+
+:root[data-ui-theme="radioactive"] .status-bar .connection-label {
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--radio-acid);
+  text-shadow:
+    0 0 8px rgba(182, 255, 0, 0.7),
+    0 0 18px rgba(57, 255, 20, 0.4);
+}
+
+:root[data-ui-theme="radioactive"] .status-bar .companion-orb-core {
+  box-shadow:
+    0 0 0 1px rgba(232, 255, 0, 0.6),
+    0 0 18px rgba(182, 255, 0, 0.8),
+    0 0 36px rgba(57, 255, 20, 0.4);
+}
+
+/* Bubbles: User im Reaktor-Grün mit Säure-Rand, Assistent leicht verstrahlt. */
+:root[data-ui-theme="radioactive"] .user .bubble {
+  background:
+    linear-gradient(180deg, rgba(232, 255, 0, 0.12) 0%, transparent 30%), var(--color-user-bg);
+  color: var(--color-user-text);
+  border: 1px solid rgba(182, 255, 0, 0.6);
+  box-shadow:
+    0 0 0 1px rgba(57, 255, 20, 0.2),
+    0 0 22px rgba(182, 255, 0, 0.28),
+    inset 0 1px 0 rgba(232, 255, 0, 0.2);
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.5);
+}
+
+:root[data-ui-theme="radioactive"] .user .bubble time {
+  color: rgba(182, 255, 0, 0.8);
+}
+
+:root[data-ui-theme="radioactive"] .assistant .bubble {
+  background: linear-gradient(180deg, rgba(57, 255, 20, 0.08), rgba(9, 16, 5, 0.9));
+  border: 1px solid rgba(182, 255, 0, 0.22);
+  box-shadow: inset 0 1px 0 rgba(232, 255, 0, 0.08);
+}
+
+/* Säure-Knopf: helle Fläche, dunkler Text, harter Glow. */
+:root[data-ui-theme="radioactive"] .ui-btn-primary {
+  background: linear-gradient(135deg, #39ff14 0%, #b6ff00 55%, #e8ff00 100%);
+  color: #071000;
+  border: 1px solid rgba(232, 255, 0, 0.7);
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.35);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.5),
+    0 0 0 1px rgba(182, 255, 0, 0.4),
+    0 0 22px rgba(182, 255, 0, 0.55),
+    0 0 44px rgba(57, 255, 20, 0.25);
+  animation: radio-btn-pulse 2.2s ease-in-out infinite;
+}
+
+:root[data-ui-theme="radioactive"] .ui-btn-primary:not(:disabled):hover {
+  filter: brightness(1.08) saturate(1.1);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.6),
+    0 0 0 1px rgba(232, 255, 0, 0.7),
+    0 0 30px rgba(182, 255, 0, 0.7),
+    0 0 60px rgba(57, 255, 20, 0.35);
+}
+
+@keyframes radio-btn-pulse {
+  0%,
+  100% {
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.5),
+      0 0 0 1px rgba(182, 255, 0, 0.4),
+      0 0 18px rgba(182, 255, 0, 0.45),
+      0 0 36px rgba(57, 255, 20, 0.2);
+  }
+  50% {
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.5),
+      0 0 0 1px rgba(182, 255, 0, 0.55),
+      0 0 30px rgba(182, 255, 0, 0.65),
+      0 0 56px rgba(57, 255, 20, 0.32);
+  }
+}
+
+:root[data-ui-theme="radioactive"] ::selection {
+  background: #b6ff00;
+  color: #071000;
+}
+
+:root[data-ui-theme="radioactive"] ::-webkit-scrollbar-thumb {
+  background: rgba(182, 255, 0, 0.4);
+  box-shadow: 0 0 8px rgba(182, 255, 0, 0.5);
+  transition:
+    background var(--transition-fast),
+    box-shadow var(--transition-fast);
+}
+
+:root[data-ui-theme="radioactive"] ::-webkit-scrollbar-thumb:hover {
+  background: rgba(182, 255, 0, 0.65);
+  box-shadow: 0 0 12px rgba(182, 255, 0, 0.8);
+}
+
 /* Reduce-Motion: Theme-Element-Animationen abschalten */
+:root[data-reduce-motion="true"][data-ui-theme="blackgloss"] .status-bar::before,
+:root[data-reduce-motion="true"][data-ui-theme="blackgloss"] .input-box::before,
+:root[data-reduce-motion="true"][data-ui-theme="radioactive"] .status-bar,
+:root[data-reduce-motion="true"][data-ui-theme="radioactive"] .input-box,
+:root[data-reduce-motion="true"][data-ui-theme="radioactive"] .ui-card,
+:root[data-reduce-motion="true"][data-ui-theme="radioactive"] .glass-panel,
+:root[data-reduce-motion="true"][data-ui-theme="radioactive"] .glass-panel-fixed,
+:root[data-reduce-motion="true"][data-ui-theme="radioactive"] .ui-btn-primary,
 :root[data-reduce-motion="true"][data-ui-theme="minimal"] .status-bar,
 :root[data-reduce-motion="true"][data-ui-theme="minimal"] .input-box,
 :root[data-reduce-motion="true"][data-ui-theme="minimal"] .ui-card,
@@ -1225,4 +1775,20 @@
     0 0 0 1px rgba(34, 240, 255, 0.12),
     0 0 36px rgba(192, 38, 255, 0.28),
     0 0 60px rgba(255, 43, 214, 0.12);
+}
+
+:root[data-ui-theme="blackgloss"] dialog[open] {
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.3),
+    inset 0 -2px 6px rgba(0, 0, 0, 0.7),
+    var(--shadow-3);
+}
+
+:root[data-ui-theme="radioactive"] dialog[open] {
+  border: 1px solid rgba(182, 255, 0, 0.55);
+  box-shadow:
+    inset 0 1px 0 rgba(232, 255, 0, 0.3),
+    0 0 0 1px rgba(182, 255, 0, 0.25),
+    0 0 44px rgba(182, 255, 0, 0.3);
 }

@@ -126,11 +126,15 @@
     object-fit: cover;
     display: block;
     opacity: 0;
-    transition: opacity var(--transition-base);
+    transform: scale(1.08);
+    transition:
+      opacity var(--transition-base),
+      transform 420ms cubic-bezier(0.22, 1, 0.36, 1);
   }
 
   .persona-avatar img.loaded {
     opacity: 1;
+    transform: scale(1);
   }
 
   .persona-avatar[data-tone="assistant"] {
@@ -186,6 +190,7 @@
     .persona-avatar img {
       transition: none;
       opacity: 1;
+      transform: none;
     }
   }
 </style>

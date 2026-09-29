@@ -12,6 +12,8 @@ const UI_THEME_COLOR_SCHEME: Partial<Record<UiTheme, "light" | "dark">> = {
   cyberpunk: "dark",
   papyrus: "light",
   chaos: "dark",
+  blackgloss: "dark",
+  radioactive: "dark",
 };
 
 let currentUiTheme: UiTheme = "aurora";

@@ -44,6 +44,7 @@ export interface LocalAgentTurnResult {
 
 let activeTurn = false;
 let cancelRequested = false;
+let turnAbort: AbortController | null = null;
 
 export function localAgentTurnActive(): boolean {
   return activeTurn;
@@ -55,6 +56,7 @@ export function cancelLocalAgentTurn(): void {
     return;
   }
   cancelRequested = true;
+  turnAbort?.abort();
   rejectAllLocalAgentWaiters(new Error(getTranslateFn()("localAgent.error.turnCancelled")));
 }
 
@@ -75,6 +77,8 @@ function toWireToolCalls(toolCalls: LlmToolCall[]): unknown[] {
 export async function runLocalAgentTurn(
   options: RunLocalAgentTurnOptions,
 ): Promise<LocalAgentTurnResult> {
+  if (activeTurn) throw new Error("A local agent turn is already active.");
+  turnAbort = new AbortController();
   activeTurn = true;
   cancelRequested = false;
 
@@ -195,6 +199,8 @@ export async function runLocalAgentTurn(
       }
     }
   } finally {
+    turnAbort?.abort();
+    turnAbort = null;
     activeTurn = false;
   }
 
@@ -433,6 +439,7 @@ async function executeLocalTool(
     operation,
     call.arguments,
     ctx.options.onApprovalPrompt,
+    turnAbort?.signal,
   );
 
   emitLocalActivity({

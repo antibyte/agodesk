@@ -7,11 +7,7 @@ import { getTranslateFn } from "../i18n/store";
 import type { ChatAttachmentItem, ChatMessagePayload, WsMessage } from "../types/protocol";
 import { hasAdvertisedChatCancel, hasAdvertisedChatSessions } from "../types/protocol";
 import { shouldSendVoiceOutputForSettings } from "./chat-tts-policy";
-import {
-  buildChatCancelMessage,
-  buildChatSessionCreateMessage,
-  waitForActiveConversation,
-} from "./chat-conversation-flow";
+import { buildChatCancelMessage, ensureActiveConversation } from "./chat-conversation-flow";
 import { stopAllChatAssistantTts } from "./chat-audio";
 import { stopChatMediaPlayback } from "./chat-media-playback";
 import { interruptLocalSpeechPlayback } from "./local-speech-tts";
@@ -211,14 +207,10 @@ export async function sendChatMessageWithConversation(
   options: Omit<BuildChatMessageOptions, "conversationId"> & { files?: File[] } = {},
 ): Promise<WsMessage<ChatMessagePayload>> {
   const caps = get(sessionState).advertisedCapabilities;
-  let conversationId = get(chatConversationState).activeConversationId;
-  if (hasAdvertisedChatSessions(caps) && !conversationId) {
-    await ws.send(buildChatSessionCreateMessage(sessionId));
-    try {
-      conversationId = await waitForActiveConversation();
-    } catch {
-      conversationId = get(chatConversationState).activeConversationId;
-    }
+  const conversationId = hasAdvertisedChatSessions(caps)
+    ? await ensureActiveConversation(ws, sessionId)
+    : get(chatConversationState).activeConversationId;
+  if (hasAdvertisedChatSessions(caps) && !get(chatConversationState).legacyChatMode) {
     if (!conversationId) {
       throw new Error(getTranslateFn()("chatOutbound.error.conversationNotReady"));
     }

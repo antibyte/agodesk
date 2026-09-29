@@ -1,4 +1,9 @@
-import type { AgentActivityPayload, AgoDeskPlan, SessionStatus, SystemWarning } from "../types/protocol";
+import type {
+  AgentActivityPayload,
+  AgoDeskPlan,
+  SessionStatus,
+  SystemWarning,
+} from "../types/protocol";
 import { isUpdateBannerVisible, type UpdateState } from "./update-flow";
 import { isChatPlanPanelVisible } from "../stores/chat-plan";
 import { isActivityTimelineVisible } from "../stores/activity-timeline";
@@ -23,10 +28,7 @@ export function selectApproval(input: ApprovalInput): ApprovalKind | null {
   if (input.certModalOpen) {
     return null;
   }
-  if (
-    input.desktopControlEnabled &&
-    (input.remoteControlPending || input.remoteControlActive)
-  ) {
+  if (input.desktopControlEnabled && (input.remoteControlPending || input.remoteControlActive)) {
     return "remote";
   }
   if (input.shellPending && input.hasShellRequest) {

@@ -111,6 +111,8 @@ function int16ToBase64(pcm: Int16Array): string {
 }
 
 export class SpeechAudioCapture {
+  private generation = 0;
+  private starting = false;
   private stream: MediaStream | null = null;
   private context: AudioContext | null = null;
   private source: MediaStreamAudioSourceNode | null = null;
@@ -123,55 +125,71 @@ export class SpeechAudioCapture {
   private vadProcessors: Array<(samples: Float32Array) => void> = [];
 
   async start(onChunk: AudioChunkHandler): Promise<void> {
-    if (this.stream) {
+    if (this.stream || this.starting) {
       return;
     }
 
+    this.starting = true;
+    const generation = ++this.generation;
     this.onChunk = onChunk;
-
-    this.stream = await navigator.mediaDevices.getUserMedia({
-      audio: {
-        channelCount: 1,
-        echoCancellation: true,
-        noiseSuppression: true,
-        autoGainControl: true,
-      },
-      video: false,
-    });
-
-    this.context = new AudioContext({ sampleRate: TARGET_SAMPLE_RATE });
-    await this.ensureContextRunning();
-    this.inputRate = this.context.sampleRate;
-
-    this.source = this.context.createMediaStreamSource(this.stream);
-    this.analyser = this.context.createAnalyser();
-    configureSpeechAnalyser(this.analyser);
-    this.silentGain = this.context.createGain();
-    this.silentGain.gain.value = 0;
-    this.silentGain.connect(this.context.destination);
-
-    // Visualizer tap — parallel, not in the capture chain.
-    this.source.connect(this.analyser);
-
     try {
-      await ensureCaptureWorklet(this.context);
-      this.worklet = new AudioWorkletNode(this.context, CAPTURE_WORKLET_NAME);
-      this.worklet.port.onmessage = (event: MessageEvent<Float32Array>) => {
-        void this.handleSamples(event.data);
-      };
-      this.source.connect(this.worklet);
-      this.worklet.connect(this.silentGain);
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          channelCount: 1,
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
+        video: false,
+      });
+      if (generation !== this.generation) {
+        stream.getTracks().forEach((track) => track.stop());
+        return;
+      }
+      this.stream = stream;
+
+      this.context = new AudioContext({ sampleRate: TARGET_SAMPLE_RATE });
+      await this.ensureContextRunning();
+      if (generation !== this.generation) return;
+      this.inputRate = this.context.sampleRate;
+
+      this.source = this.context.createMediaStreamSource(this.stream);
+      this.analyser = this.context.createAnalyser();
+      configureSpeechAnalyser(this.analyser);
+      this.silentGain = this.context.createGain();
+      this.silentGain.gain.value = 0;
+      this.silentGain.connect(this.context.destination);
+
+      // Visualizer tap — parallel, not in the capture chain.
+      this.source.connect(this.analyser);
+
+      try {
+        await ensureCaptureWorklet(this.context);
+        if (generation !== this.generation) return;
+        this.worklet = new AudioWorkletNode(this.context, CAPTURE_WORKLET_NAME);
+        this.worklet.port.onmessage = (event: MessageEvent<Float32Array>) => {
+          void this.handleSamples(event.data);
+        };
+        this.source.connect(this.worklet);
+        this.worklet.connect(this.silentGain);
+      } catch (error) {
+        if (generation !== this.generation) return;
+        console.warn(
+          "AudioWorklet capture unavailable, using legacy ScriptProcessor fallback.",
+          error,
+        );
+        this.processor = this.context.createScriptProcessor(4096, 1, 1);
+        this.processor.onaudioprocess = (event) => {
+          void this.handleSamples(event.inputBuffer.getChannelData(0));
+        };
+        this.source.connect(this.processor);
+        this.processor.connect(this.silentGain);
+      }
     } catch (error) {
-      console.warn(
-        "AudioWorklet capture unavailable, using legacy ScriptProcessor fallback.",
-        error,
-      );
-      this.processor = this.context.createScriptProcessor(4096, 1, 1);
-      this.processor.onaudioprocess = (event) => {
-        void this.handleSamples(event.inputBuffer.getChannelData(0));
-      };
-      this.source.connect(this.processor);
-      this.processor.connect(this.silentGain);
+      if (generation === this.generation) this.stop();
+      throw error;
+    } finally {
+      if (generation === this.generation) this.starting = false;
     }
   }
 
@@ -229,6 +247,8 @@ export class SpeechAudioCapture {
   }
 
   stop(): void {
+    this.generation += 1;
+    this.starting = false;
     this.onChunk = null;
     this.vadProcessors = [];
 

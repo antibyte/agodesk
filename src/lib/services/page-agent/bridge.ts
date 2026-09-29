@@ -11,7 +11,6 @@ import {
   PAGE_AGENT_EVENT,
   PAGE_AGENT_PAGE_READY_EVENT,
   invokePageAgentEnsure,
-  invokePageAgentExecute,
   invokePageAgentNavigate,
   invokePageAgentResolve,
 } from "./inject";
@@ -28,6 +27,8 @@ interface PageAgentBridgeEvent {
 let unlisten: UnlistenFn | null = null;
 let unlistenPageReady: UnlistenFn | null = null;
 let starting = false;
+let generation = 0;
+const inFlight = new Set<string>();
 let ensureTimer: ReturnType<typeof setTimeout> | null = null;
 
 /** Sends WS envelopes directly through the Tauri transport (no ChatView needed). */
@@ -49,26 +50,24 @@ function scheduleEnsureAfterNavigation(): void {
   }, 200);
 }
 
-async function handleNavigate(url: string, resumeTask?: string): Promise<void> {
-  const trimmed = url.trim();
-  if (!trimmed) {
-    throw new Error("page-agent navigate requires a non-empty URL.");
+async function handleNavigate(id: string, url: string): Promise<void> {
+  const destination = new URL(url);
+  if (
+    !["http:", "https:"].includes(destination.protocol) ||
+    destination.username ||
+    destination.password
+  ) {
+    throw new Error("Page-agent navigation only supports HTTP(S) URLs without credentials.");
   }
-  const task = resumeTask?.trim() || "";
-  await invokePageAgentNavigate(trimmed);
-  // Soft-ensure reinjects the panel on the new document, then continue the
-  // original task automatically (go_to_url wipes the previous JS context).
-  await invokePageAgentEnsure();
-  if (task) {
-    await invokePageAgentExecute(task);
-  }
+  await invokePageAgentNavigate(id, url);
 }
 
 async function handleRequest(id: string, bodyText: string): Promise<void> {
+  const currentGeneration = generation;
   const session = get(sessionState);
   const localAgent = get(settings).localAgent;
   try {
-    if (!session.sessionId) {
+    if (!session.sessionId || session.status !== "accepted") {
       throw new Error("Keine AuraGo-Session. Verbinde dich zuerst, bevor du den Page-Agent nutzt.");
     }
     const request = parseOpenAiChatRequest(bodyText);
@@ -95,11 +94,14 @@ async function handleRequest(id: string, bodyText: string): Promise<void> {
       result,
       localAgent.auragoProviderId || PAGE_AGENT_COSMETIC_MODEL,
     );
+    if (currentGeneration !== generation || get(sessionState).sessionId !== session.sessionId)
+      return;
     await invokePageAgentResolve(id, true, JSON.stringify(completion));
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.warn("[agodesk:page-agent] llm request error", { id, message });
-    await invokePageAgentResolve(id, false, message).catch(() => {});
+    if (currentGeneration === generation)
+      await invokePageAgentResolve(id, false, message).catch(() => {});
   }
 }
 
@@ -109,41 +111,79 @@ export async function startPageAgentBridge(): Promise<void> {
     return;
   }
   starting = true;
+  const currentGeneration = generation;
   try {
-    unlisten = await listen<string>(PAGE_AGENT_EVENT, (event) => {
+    const stopRequests = await listen<string>(PAGE_AGENT_EVENT, (event) => {
+      if (
+        currentGeneration !== generation ||
+        typeof event.payload !== "string" ||
+        event.payload.length > 524288
+      )
+        return;
       let parsed: PageAgentBridgeEvent | null = null;
       try {
         parsed = JSON.parse(event.payload) as PageAgentBridgeEvent;
       } catch {
         parsed = null;
       }
-      if (!parsed || typeof parsed.id !== "string") {
+      if (
+        !parsed ||
+        typeof parsed.id !== "string" ||
+        !parsed.id ||
+        parsed.id.length > 128 ||
+        inFlight.has(parsed.id) ||
+        inFlight.size >= 8 ||
+        get(sessionState).status !== "accepted" ||
+        !get(settings).pageAgentEnabled ||
+        !get(settings).desktopControlEnabled ||
+        !get(settings).browserControlEnabled
+      ) {
         return;
       }
       if (typeof parsed.navigate === "string" && parsed.navigate.trim()) {
-        void handleNavigate(
-          parsed.navigate,
-          typeof parsed.resumeTask === "string" ? parsed.resumeTask : undefined,
-        ).catch((error) => {
-          console.warn("[agodesk:page-agent] navigate failed", {
-            id: parsed.id,
-            url: parsed.navigate,
-            message: error instanceof Error ? error.message : String(error),
-          });
-        });
+        inFlight.add(parsed.id);
+        void handleNavigate(parsed.id, parsed.navigate)
+          .catch((error) => {
+            console.warn("[agodesk:page-agent] navigate failed", {
+              id: parsed.id,
+              message: error instanceof Error ? error.message : String(error),
+            });
+            if (currentGeneration === generation) {
+              void invokePageAgentResolve(
+                parsed.id,
+                false,
+                error instanceof Error ? error.message : String(error),
+              ).catch(() => {});
+            }
+          })
+          .finally(() => inFlight.delete(parsed.id));
         return;
       }
-      void handleRequest(parsed.id, typeof parsed.body === "string" ? parsed.body : "{}");
+      if (typeof parsed.body !== "string") return;
+      inFlight.add(parsed.id);
+      void handleRequest(parsed.id, parsed.body).finally(() => inFlight.delete(parsed.id));
     });
-    unlistenPageReady = await listen(PAGE_AGENT_PAGE_READY_EVENT, () => {
-      scheduleEnsureAfterNavigation();
+    if (currentGeneration !== generation) {
+      stopRequests();
+      return;
+    }
+    unlisten = stopRequests;
+    const stopReady = await listen(PAGE_AGENT_PAGE_READY_EVENT, () => {
+      if (currentGeneration === generation) scheduleEnsureAfterNavigation();
     });
+    if (currentGeneration !== generation) {
+      stopReady();
+      return;
+    }
+    unlistenPageReady = stopReady;
   } finally {
     starting = false;
   }
 }
 
 export function stopPageAgentBridge(): void {
+  generation += 1;
+  inFlight.clear();
   if (ensureTimer) {
     clearTimeout(ensureTimer);
     ensureTimer = null;

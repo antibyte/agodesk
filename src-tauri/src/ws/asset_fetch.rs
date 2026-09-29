@@ -11,11 +11,32 @@ use base64::{engine::general_purpose::STANDARD, Engine as _};
 use serde::Serialize;
 use serde::Deserialize;
 use std::io::{Read, Write};
+use std::sync::{Condvar, Mutex, OnceLock};
 use tauri::AppHandle;
 use url::Url;
 
 const MAX_ASSET_BYTES: usize = 5 * 1024 * 1024;
 const MAX_HTTP_REDIRECTS: usize = 5;
+static ASSET_SLOTS: (Mutex<usize>, Condvar) = (Mutex::new(0), Condvar::new());
+
+struct AssetSlot;
+impl AssetSlot {
+    fn acquire() -> Self {
+        let (lock, wake) = &ASSET_SLOTS;
+        let mut count = lock.lock().unwrap_or_else(|error| error.into_inner());
+        while *count >= 4 {
+            count = wake.wait(count).unwrap_or_else(|error| error.into_inner());
+        }
+        *count += 1;
+        Self
+    }
+}
+impl Drop for AssetSlot {
+    fn drop(&mut self) {
+        *ASSET_SLOTS.0.lock().unwrap_or_else(|error| error.into_inner()) -= 1;
+        ASSET_SLOTS.1.notify_one();
+    }
+}
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -33,8 +54,10 @@ pub fn fetch_server_asset_impl(
     _session_id: Option<&str>,
     allowed_origins: &[String],
 ) -> Result<FetchedAsset, String> {
+    let _slot = AssetSlot::acquire();
     let asset = Url::parse(asset_url).map_err(|error| error.to_string())?;
     ensure_asset_origin_allowed(&asset, server_url, allowed_origins)?;
+    let initial_origin = asset.origin();
 
     let mut current_url = asset;
     let mut redirects = 0usize;
@@ -44,6 +67,7 @@ pub fn fetch_server_asset_impl(
             .ok_or_else(|| "Missing host in asset URL.".to_string())?;
 
         let pinned = pinned_fingerprint_override
+            .filter(|_| current_url.origin() == initial_origin)
             .map(str::to_string)
             .or(pinned_fingerprint_for_http_url(app, current_url.as_str())?)
             .or_else(|| {
@@ -67,11 +91,11 @@ pub fn fetch_server_asset_impl(
 
         log_asset_fetch(
             app,
-            &format!("GET {current_url} tls={tls_mode:?} pin={}", pinned.is_some()),
+            &format!("GET {} tls={tls_mode:?} pin={}", current_url.origin().ascii_serialization(), pinned.is_some()),
         );
-        let fetch_result = fetch_via_reqwest(&current_url, &tls_mode);
+        let fetch_result = fetch_asset_response(&current_url, &tls_mode, pinned.as_deref());
         if let Err(FetchError::Failed(message)) = &fetch_result {
-            log_asset_fetch(app, &format!("FAIL {current_url} {message}"));
+            log_asset_fetch(app, &format!("FAIL {message}"));
         }
 
         match fetch_result {
@@ -89,12 +113,12 @@ pub fn fetch_server_asset_impl(
             Err(FetchError::Failed(message)) => {
                 if message.contains("HTTP 409") {
                     if let Some(next) = url_without_query(&current_url) {
-                        log_asset_fetch(app, &format!("RETRY 409 without query {next}"));
+                        log_asset_fetch(app, "RETRY 409 without query");
                         current_url = next;
                         continue;
                     }
                 }
-                return Err(format!("{message} ({current_url})"));
+                return Err(message);
             }
         }
     };
@@ -121,12 +145,19 @@ pub fn fetch_server_asset_impl(
 }
 
 fn log_asset_fetch(app: &AppHandle, message: &str) {
+    if std::env::var("AGODESK_ASSET_DEBUG").as_deref() != Ok("1") {
+        return;
+    }
     if let Ok(path) = store_path(app) {
         if let Some(dir) = path.parent() {
+            let path = dir.join("asset-fetch.log");
+            let full = std::fs::metadata(&path).is_ok_and(|meta| meta.len() >= 1024 * 1024);
             let _ = std::fs::OpenOptions::new()
                 .create(true)
-                .append(true)
-                .open(dir.join("asset-fetch.log"))
+                .write(true)
+                .append(!full)
+                .truncate(full)
+                .open(path)
                 .and_then(|mut file| {
                     writeln!(
                         file,
@@ -138,30 +169,32 @@ fn log_asset_fetch(app: &AppHandle, message: &str) {
     }
 }
 
-fn fetch_via_reqwest(url: &Url, tls_mode: &TlsMode) -> Result<HttpResponse, FetchError> {
-    let mut builder = reqwest::blocking::Client::builder()
+fn fetch_asset_response(url: &Url, tls_mode: &TlsMode, pinned: Option<&str>) -> Result<HttpResponse, FetchError> {
+    if *tls_mode == TlsMode::PinnedSelfSignedDev {
+        if url.scheme() != "https" {
+            return Err(FetchError::Failed("Certificate pins require HTTPS.".to_string()));
+        }
+        // Validate the peer before sending any signed URL or HTTP request.
+        return fetch_https(url.host_str().ok_or_else(|| FetchError::Failed("Missing host.".to_string()))?,
+            url.port_or_known_default().unwrap_or(443), &url[url::Position::BeforePath..url::Position::AfterQuery], tls_mode, pinned);
+    }
+    static SYSTEM_CLIENT: OnceLock<Result<reqwest::blocking::Client, String>> = OnceLock::new();
+    static LOCAL_CLIENT: OnceLock<Result<reqwest::blocking::Client, String>> = OnceLock::new();
+    let client = if *tls_mode == TlsMode::System { &SYSTEM_CLIENT } else { &LOCAL_CLIENT }
+        .get_or_init(|| reqwest::blocking::Client::builder()
         .timeout(std::time::Duration::from_secs(20))
         .redirect(reqwest::redirect::Policy::none())
-        .use_native_tls();
-
-    match tls_mode {
-        TlsMode::System => {}
-        TlsMode::PinnedSelfSignedDev | TlsMode::InsecureLoopbackDev => {
-            builder = builder
-                .danger_accept_invalid_certs(true)
-                .danger_accept_invalid_hostnames(true);
-        }
-    }
-
-    let client = builder
-        .build()
-        .map_err(|error| FetchError::Failed(error.to_string()))?;
+        .use_native_tls()
+        .danger_accept_invalid_certs(*tls_mode == TlsMode::InsecureLoopbackDev)
+        .danger_accept_invalid_hostnames(*tls_mode == TlsMode::InsecureLoopbackDev)
+        .build().map_err(|error| error.to_string()))
+        .as_ref().map_err(|error| FetchError::Failed(error.clone()))?;
     let response = client
         .get(url.as_str())
         .header("Accept", "*/*")
         .header("Accept-Encoding", "identity")
         .send()
-        .map_err(|error| FetchError::Failed(error.to_string()))?;
+        .map_err(|error| FetchError::Failed(error.without_url().to_string()))?;
 
     let status = response.status().as_u16();
     if (300..400).contains(&status) {
@@ -191,12 +224,22 @@ fn fetch_via_reqwest(url: &Url, tls_mode: &TlsMode) -> Result<HttpResponse, Fetc
                 .trim()
                 .to_string()
         });
-    let body = response
-        .bytes()
-        .map_err(|error| FetchError::Failed(error.to_string()))?
-        .to_vec();
+    if response.content_length().is_some_and(|length| length > MAX_ASSET_BYTES as u64) {
+        return Err(FetchError::Failed("Asset exceeds maximum size.".to_string()));
+    }
+    let body = read_bounded_body(response)?;
 
     Ok(HttpResponse { body, content_type })
+}
+
+fn read_bounded_body(reader: impl Read) -> Result<Vec<u8>, FetchError> {
+    let mut body = Vec::new();
+    reader.take((MAX_ASSET_BYTES + 1) as u64).read_to_end(&mut body)
+        .map_err(|error| FetchError::Failed(error.to_string()))?;
+    if body.len() > MAX_ASSET_BYTES {
+        return Err(FetchError::Failed("Asset exceeds maximum size.".to_string()));
+    }
+    Ok(body)
 }
 
 #[derive(Debug)]
@@ -413,9 +456,7 @@ fn extract_content_type(header_text: &str) -> Option<String> {
 }
 
 fn url_without_query(url: &Url) -> Option<Url> {
-    if url.query().is_none() {
-        return None;
-    }
+    url.query()?;
     let mut next = url.clone();
     next.set_query(None);
     Some(next)
@@ -489,17 +530,6 @@ fn connect_asset_socket(host: &str, port: u16) -> Result<std::net::TcpStream, St
         .set_write_timeout(Some(std::time::Duration::from_secs(20)))
         .map_err(|error| error.to_string())?;
     Ok(stream)
-}
-
-fn fetch_plain_http(
-    host: &str,
-    port: u16,
-    path_and_query: &str,
-) -> Result<HttpResponse, FetchError> {
-    let stream = connect_asset_socket(host, port).map_err(FetchError::Failed)?;
-    let mut stream = stream;
-    write_http_get(&mut stream, host, port, path_and_query).map_err(FetchError::Failed)?;
-    read_http_body(&mut stream)
 }
 
 fn fetch_https(
@@ -725,7 +755,7 @@ fn decode_chunked_body(raw: &[u8]) -> Result<Vec<u8>, String> {
         let line_end = raw[cursor..]
             .iter()
             .position(|byte| *byte == b'\n')
-            .ok_or_else(|| "Invalid chunked response.".to_string())?
+            .ok_or_else(|| "Truncated chunked response.".to_string())?
             + cursor;
         let size_line = std::str::from_utf8(&raw[cursor..line_end])
             .map_err(|error| error.to_string())?
@@ -738,16 +768,22 @@ fn decode_chunked_body(raw: &[u8]) -> Result<Vec<u8>, String> {
             usize::from_str_radix(size_line, 16).map_err(|_| "Invalid chunk size.".to_string())?;
         cursor = line_end + 1;
         if chunk_size == 0 {
-            break;
+            return Ok(body);
         }
-        if cursor + chunk_size > raw.len() {
+        if chunk_size > MAX_ASSET_BYTES.saturating_sub(body.len()) {
+            return Err("Asset exceeds maximum size.".to_string());
+        }
+        let end = cursor.checked_add(chunk_size).and_then(|end| end.checked_add(2))
+            .ok_or_else(|| "Invalid chunk size.".to_string())?;
+        if end > raw.len() {
             return Err("Truncated chunked response.".to_string());
         }
         body.extend_from_slice(&raw[cursor..cursor + chunk_size]);
-        cursor += chunk_size + 2;
+        if &raw[end - 2..end] != b"\r\n" { return Err("Invalid chunk terminator.".to_string()); }
+        cursor = end;
     }
 
-    Ok(body)
+    Err("Truncated chunked response.".to_string())
 }
 
 const MAX_UPLOAD_BYTES: usize = 25 * 1024 * 1024;
@@ -1012,10 +1048,7 @@ fn write_http_post_multipart(
 }
 
 fn read_http_upload_body(stream: &mut impl Read) -> Result<HttpResponse, FetchError> {
-    let mut raw = Vec::new();
-    stream
-        .read_to_end(&mut raw)
-        .map_err(|error| FetchError::Failed(error.to_string()))?;
+    let raw = read_bounded_body(stream)?;
     parse_http_upload_response(&raw)
 }
 
@@ -1064,6 +1097,71 @@ fn parse_http_upload_response(raw: &[u8]) -> Result<HttpResponse, FetchError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn certificate_pin_is_verified_before_the_http_request() {
+        use sha2::{Digest, Sha256};
+        let cert = include_bytes!("../../test-fixtures/asset-tls/cert.pem");
+        let key = include_bytes!("../../test-fixtures/asset-tls/key.pem");
+        let identity = native_tls::Identity::from_pkcs8(cert, key).unwrap();
+        let der = native_tls::Certificate::from_pem(cert).unwrap().to_der().unwrap();
+        let expected = hex::encode(Sha256::digest(&der));
+        for pin_matches in [false, true] {
+            let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+            let port = listener.local_addr().unwrap().port();
+            let acceptor = native_tls::TlsAcceptor::new(identity.clone()).unwrap();
+            let server = std::thread::spawn(move || {
+                let (stream, _) = listener.accept().unwrap();
+                stream.set_read_timeout(Some(std::time::Duration::from_secs(3))).unwrap();
+                let mut tls = acceptor.accept(stream).unwrap();
+                let mut bytes = [0u8; 4096];
+                let count = tls.read(&mut bytes).unwrap_or(0);
+                if count > 0 {
+                    tls.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 3\r\nContent-Type: image/png\r\nConnection: close\r\n\r\nPNG").unwrap();
+                }
+                count
+            });
+            let url = Url::parse(&format!("https://127.0.0.1:{port}/asset?signature=test-only")).unwrap();
+            let pin = if pin_matches { expected.clone() } else { "00".repeat(32) };
+            let result = fetch_asset_response(&url, &TlsMode::PinnedSelfSignedDev, Some(&pin));
+            let received_bytes = server.join().unwrap();
+            if pin_matches {
+                assert_eq!(result.unwrap().body, b"PNG");
+                assert!(received_bytes > 0);
+            } else {
+                assert!(matches!(result, Err(FetchError::Failed(message)) if message.contains("PIN_MISMATCH")));
+                assert_eq!(received_bytes, 0, "A mismatched certificate must not receive the signed URL");
+            }
+        }
+    }
+
+    #[test]
+    fn response_reading_is_bounded_even_without_content_length() {
+        let mut reader = std::io::repeat(b'x');
+        assert!(read_bounded_body(&mut reader).is_err());
+        assert_eq!(read_bounded_body(&b"ok"[..]).unwrap(), b"ok");
+    }
+
+    #[test]
+    fn chunked_reader_handles_partial_chunk_headers_and_waits_for_final_chunk() {
+        struct Fragmented(std::io::Cursor<Vec<u8>>);
+        impl Read for Fragmented {
+            fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+                let length = buf.len().min(1);
+                self.0.read(&mut buf[..length])
+            }
+        }
+        let bytes = b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n2\r\nab\r\n3\r\ncde\r\n0\r\n\r\n".to_vec();
+        assert_eq!(read_http_body(&mut Fragmented(std::io::Cursor::new(bytes))).unwrap().body, b"abcde");
+        assert!(decode_chunked_body(b"2\r\nab\r\n").is_err());
+        assert!(decode_chunked_body(b"ffffffffffffffff\r\n").is_err());
+    }
+
+    #[test]
+    fn pins_cannot_be_used_with_plaintext_http() {
+        let url = Url::parse("http://localhost/test").unwrap();
+        assert!(fetch_asset_response(&url, &TlsMode::PinnedSelfSignedDev, Some("bad")).is_err());
+    }
 
     #[test]
     fn read_http_body_stops_at_content_length_without_eof() {

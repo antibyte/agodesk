@@ -110,7 +110,7 @@ test("buildPageAgentBootstrap wires the binding and resolver without real secret
     /Never reset after a finished task|hides the done\/summary|no done card to wipe|Keep the done card/i,
   );
   assert.match(script, /go_to_url/);
-  assert.match(script, /experimentalScriptExecutionTool:\s*true/);
+  assert.match(script, /experimentalScriptExecutionTool:\s*false/);
   assert.match(script, /resumeTask/);
   assert.match(script, /__agodeskPageAgent\.task/);
   assert.match(script, /MUST call go_to_url/);

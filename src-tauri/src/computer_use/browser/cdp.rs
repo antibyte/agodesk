@@ -1,4 +1,6 @@
 use std::future::Future;
+use std::collections::HashMap;
+use std::sync::Arc;
 use std::process::Child;
 use std::time::{Duration, Instant};
 
@@ -7,10 +9,12 @@ use chromiumoxide::browser::Browser;
 use chromiumoxide::cdp::browser_protocol::page::{
     AddScriptToEvaluateOnNewDocumentParams, CaptureScreenshotFormat, EventLoadEventFired,
     RemoveScriptToEvaluateOnNewDocumentParams, ScriptIdentifier,
+    CreateIsolatedWorldParams, GetFrameTreeParams,
 };
 use chromiumoxide::cdp::browser_protocol::target::TargetId;
 use chromiumoxide::cdp::js_protocol::runtime::{
     AddBindingParams, EvaluateParams, EventBindingCalled, RemoveBindingParams,
+    ExecutionContextId,
 };
 use chromiumoxide::page::{Page, ScreenshotParams};
 use chromiumoxide::Handler;
@@ -31,6 +35,7 @@ use super::state::BrowserState;
 /// Global function agodesk exposes inside the target page. page-agent's LLM
 /// transport calls it with a JSON string; each call raises `Runtime.bindingCalled`.
 pub const PAGE_AGENT_BINDING: &str = "agodeskPageAgentLlm";
+const PAGE_AGENT_WORLD: &str = "agodesk.page-agent.isolated";
 /// Tauri event the CDP layer emits for every page-agent LLM request so the
 /// frontend bridge can proxy it to AuraGo.
 pub const PAGE_AGENT_EVENT: &str = "agodesk:page-agent-llm";
@@ -63,11 +68,36 @@ pub struct CdpSession {
 /// source (self-contained bundle + bootstrap) is retained so the runtime can be
 /// re-installed after tab switches without another round-trip to the frontend.
 struct PageAgentRuntime {
+    page: Page,
+    pending: Arc<tokio::sync::Mutex<HashMap<String, PageAgentRequest>>>,
     app: AppHandle,
     source: String,
     script_id: Option<ScriptIdentifier>,
     listener_task: JoinHandle<()>,
     load_task: JoinHandle<()>,
+}
+
+#[derive(Clone)]
+struct PageAgentRequest {
+    document_id: String,
+    context: ExecutionContextId,
+    created: Instant,
+    navigate: Option<String>,
+    resume_task: Option<String>,
+}
+
+async fn page_agent_context(page: &Page) -> Result<ExecutionContextId, String> {
+    let tree = with_cdp_timeout(page.execute(GetFrameTreeParams::default())).await?
+        .map_err(map_page_error)?;
+    let mut params = CreateIsolatedWorldParams::new(tree.result.frame_tree.frame.id);
+    params.world_name = Some(PAGE_AGENT_WORLD.to_string());
+    Ok(with_cdp_timeout(page.execute(params)).await?.map_err(map_page_error)?.result.execution_context_id)
+}
+
+fn page_agent_binding_params() -> AddBindingParams {
+    let mut params = AddBindingParams::new(PAGE_AGENT_BINDING);
+    params.execution_context_name = Some(PAGE_AGENT_WORLD.to_string());
+    params
 }
 
 pub async fn connect(
@@ -417,18 +447,28 @@ pub async fn page_agent_resolve(
     ok: bool,
     payload: String,
 ) -> Result<(), String> {
-    let page = {
+    let (page, context, document_id) = {
         let guard = state.session.lock().await;
         let session = session_ref(&guard)?;
-        session.page.clone()
+        let runtime = session.page_agent.as_ref().ok_or("Page-agent is disabled.")?;
+        let request = runtime.pending.lock().await.remove(&request_id).ok_or("Unknown page-agent request.")?;
+        if request.created.elapsed() >= Duration::from_secs(120) || (ok && request.navigate.is_some()) {
+            return Err("Expired or invalid page-agent request.".to_string());
+        }
+        let script = format!("window.__agodeskPageAgentDocumentId === {}", serde_json::to_string(&request.document_id).unwrap());
+        if !evaluate_bool(&runtime.page, &script).await? {
+            return Err("Page-agent document changed.".to_string());
+        }
+        (runtime.page.clone(), request.context, request.document_id)
     };
     let script = format!(
-        "window.__agodeskPageAgentResolve && window.__agodeskPageAgentResolve({id}, {ok}, {payload});",
+        "window.__agodeskPageAgentDocumentId === {document_id} && window.__agodeskPageAgentResolve && window.__agodeskPageAgentResolve({id}, {ok}, {payload});",
+        document_id = serde_json::to_string(&document_id).unwrap(),
         id = serde_json::to_string(&request_id).unwrap_or_else(|_| "\"\"".to_string()),
         ok = if ok { "true" } else { "false" },
         payload = serde_json::to_string(&payload).unwrap_or_else(|_| "\"\"".to_string()),
     );
-    run_page_script(&page, &script).await
+    run_page_script_in_context(&page, &script, context).await
 }
 
 /// Starts (or resumes) a page-agent task in the active tab after reinjection.
@@ -438,10 +478,17 @@ pub async fn page_agent_execute(state: &BrowserState, task: String) -> Result<()
         let session = session_ref(&guard)?;
         session.page.clone()
     };
+    execute_page_agent_task(&page, &task).await
+}
+
+async fn execute_page_agent_task(page: &Page, task: &str) -> Result<(), String> {
+    if task.trim().is_empty() || task.len() > 16_384 {
+        return Err("Invalid page-agent task.".to_string());
+    }
     // After cross-origin navigation the DOM-ready wrap may still be booting
     // page-agent; wait briefly instead of failing the resume.
     for attempt in 0..12 {
-        if page_agent_is_ready(&page).await.unwrap_or(false) {
+        if page_agent_is_ready(page).await.unwrap_or(false) {
             break;
         }
         if attempt == 11 {
@@ -458,37 +505,47 @@ pub async fn page_agent_execute(state: &BrowserState, task: String) -> Result<()
   if (agent.status === "running") {{
     return "already-running";
   }}
+  window.__agodeskPageAgentAuthorize();
   agent.execute({task});
   return "started";
 }})()"#,
         task = serde_json::to_string(&task).unwrap_or_else(|_| "\"\"".to_string()),
     );
-    run_page_script(&page, &script).await
+    run_page_script(page, &script).await
 }
 
 /// Navigates the active tab for page-agent without the desktop input-approval
 /// gate (the user already asked the in-page agent to open the URL), then
 /// soft-ensures the injection is alive on the new document.
-pub async fn page_agent_navigate(state: &BrowserState, url: String) -> Result<(), String> {
-    ensure_session_alive(state).await?;
-    let trimmed = url.trim();
-    if trimmed.is_empty() {
-        return Err("page-agent navigate requires a non-empty URL.".to_string());
+fn validate_page_agent_url(raw: &str) -> Result<url::Url, String> {
+    let url = url::Url::parse(raw.trim()).map_err(|_| "Invalid navigation URL.".to_string())?;
+    if !matches!(url.scheme(), "http" | "https") || url.host_str().is_none()
+        || !url.username().is_empty() || url.password().is_some() {
+        return Err("Page-agent navigation only supports HTTP(S) URLs without credentials.".to_string());
     }
+    Ok(url)
+}
 
-    let page = {
-        let guard = state.session.lock().await;
-        let session = session_ref(&guard)?;
-        session.page.clone()
-    };
-    with_cdp_timeout(page.goto(trimmed))
-        .await?
-        .map_err(map_page_error)?;
-
-    // Document may still be settling; soft-ensure reinjects if the new-document
-    // hook did not bring the agent back (and never tears down the hook).
-    tokio::time::sleep(Duration::from_millis(250)).await;
-    page_agent_ensure(state, None).await
+pub async fn page_agent_navigate(state: &BrowserState, request_id: String, url: String) -> Result<(), String> {
+    let destination = validate_page_agent_url(&url)?;
+    let guard = state.session.lock().await;
+    let session = session_ref(&guard)?;
+    let runtime = session.page_agent.as_ref().ok_or("Page-agent is disabled.")?;
+    let request = runtime.pending.lock().await.get(&request_id).cloned().ok_or("Unknown navigation request.")?;
+    if request.navigate.as_deref() != Some(url.as_str()) || request.created.elapsed() >= Duration::from_secs(120)
+        || page_agent_context(&runtime.page).await? != request.context {
+        return Err("Stale or invalid navigation request.".to_string());
+    }
+    if !evaluate_bool(&runtime.page, &format!("window.__agodeskPageAgentDocumentId === {}", serde_json::to_string(&request.document_id).unwrap())).await? {
+        return Err("Page-agent document changed.".to_string());
+    }
+    with_cdp_timeout(runtime.page.goto(destination.as_str())).await?.map_err(map_page_error)?;
+    runtime.pending.lock().await.remove(&request_id);
+    run_page_script(&runtime.page, &runtime.source).await?;
+    if let Some(task) = request.resume_task.filter(|task| !task.trim().is_empty()) {
+        execute_page_agent_task(&runtime.page, &task).await?;
+    }
+    Ok(())
 }
 
 /// Soft-ensure: if page-agent is missing after a navigation, re-evaluate the
@@ -511,9 +568,7 @@ pub async fn page_agent_ensure(
 
     let ready = page_agent_is_ready(&page).await.unwrap_or(false);
     if !ready {
-        let _ = page
-            .execute(AddBindingParams::new(PAGE_AGENT_BINDING))
-            .await;
+        let _ = with_cdp_timeout(page.execute(page_agent_binding_params())).await;
         let has_ctor = evaluate_bool(
             &page,
             "typeof window.PageAgent === 'function' && typeof window.PageAgentTool === 'function'",
@@ -580,6 +635,7 @@ async fn page_agent_is_ready(page: &Page) -> Result<bool, String> {
 
 async fn evaluate_bool(page: &Page, expression: &str) -> Result<bool, String> {
     let params = EvaluateParams::builder()
+        .context_id(page_agent_context(page).await?)
         .expression(expression)
         .return_by_value(true)
         .await_promise(false)
@@ -614,13 +670,14 @@ async fn install_page_agent(
     app: AppHandle,
     source: String,
 ) -> Result<PageAgentRuntime, String> {
-    page.execute(AddBindingParams::new(PAGE_AGENT_BINDING))
-        .await
+    with_cdp_timeout(page.execute(page_agent_binding_params()))
+        .await?
         .map_err(map_page_error)?;
 
-    let script_id = page
-        .execute(AddScriptToEvaluateOnNewDocumentParams::new(source.clone()))
-        .await
+    let mut script_params = AddScriptToEvaluateOnNewDocumentParams::new(source.clone());
+    script_params.world_name = Some(PAGE_AGENT_WORLD.to_string());
+    let script_id = with_cdp_timeout(page.execute(script_params))
+        .await?
         .map_err(map_page_error)?
         .result
         .identifier
@@ -634,11 +691,30 @@ async fn install_page_agent(
         .await
         .map_err(map_page_error)?;
     let listener_app = app.clone();
+    let listener_page = page.clone();
+    let pending = Arc::new(tokio::sync::Mutex::new(HashMap::<String, PageAgentRequest>::new()));
+    let listener_pending = pending.clone();
     let listener_task = tokio::spawn(async move {
         while let Some(event) = listener.next().await {
-            if event.name == PAGE_AGENT_BINDING {
-                let _ = listener_app.emit(PAGE_AGENT_EVENT, event.payload.clone());
-            }
+            if event.name != PAGE_AGENT_BINDING || event.payload.len() > MAX_CONTENT_BYTES { continue; }
+            let Ok(context) = page_agent_context(&listener_page).await else { continue; };
+            if context != event.execution_context_id { continue; }
+            let Ok(value) = serde_json::from_str::<serde_json::Value>(&event.payload) else { continue; };
+            let Some(id) = value.get("id").and_then(|value| value.as_str()).filter(|id| !id.is_empty() && id.len() <= 128) else { continue; };
+            let Some(document_id) = value.get("documentId").and_then(|value| value.as_str()).filter(|id| id.len() <= 64) else { continue; };
+            let check = format!("!!window.__agodeskPageAgentTaskActive && window.__agodeskPageAgentDocumentId === {}", serde_json::to_string(document_id).unwrap());
+            if !evaluate_bool(&listener_page, &check).await.unwrap_or(false) { continue; }
+            let mut requests = listener_pending.lock().await;
+            requests.retain(|_, request| request.context == context && request.created.elapsed() < Duration::from_secs(120));
+            if requests.len() >= 8 || requests.contains_key(id) { continue; }
+            requests.insert(id.to_string(), PageAgentRequest {
+                document_id: document_id.to_string(),
+                context,
+                created: Instant::now(),
+                navigate: value.get("navigate").and_then(|value| value.as_str()).map(str::to_string),
+                resume_task: value.get("resumeTask").and_then(|value| value.as_str()).filter(|task| task.len() <= 16_384).map(str::to_string),
+            });
+            let _ = listener_app.emit(PAGE_AGENT_EVENT, event.payload.clone());
         }
     });
 
@@ -657,6 +733,8 @@ async fn install_page_agent(
     });
 
     Ok(PageAgentRuntime {
+        page: page.clone(),
+        pending,
         app,
         source,
         script_id: Some(script_id),
@@ -665,17 +743,16 @@ async fn install_page_agent(
     })
 }
 
-async fn teardown_page_agent(page: &Page, runtime: PageAgentRuntime) {
+async fn teardown_page_agent(_page: &Page, runtime: PageAgentRuntime) {
+    let page = &runtime.page;
     runtime.listener_task.abort();
     runtime.load_task.abort();
     if let Some(identifier) = runtime.script_id {
-        let _ = page
-            .execute(RemoveScriptToEvaluateOnNewDocumentParams::new(identifier))
-            .await;
+        let _ = with_cdp_timeout_duration(HEALTH_CHECK_TIMEOUT,
+            page.execute(RemoveScriptToEvaluateOnNewDocumentParams::new(identifier))).await;
     }
-    let _ = page
-        .execute(RemoveBindingParams::new(PAGE_AGENT_BINDING))
-        .await;
+    let _ = with_cdp_timeout_duration(HEALTH_CHECK_TIMEOUT,
+        page.execute(RemoveBindingParams::new(PAGE_AGENT_BINDING))).await;
     let _ = run_page_script(
         page,
         "window.__agodeskPageAgentTeardown && window.__agodeskPageAgentTeardown();",
@@ -702,15 +779,23 @@ async fn reinstall_page_agent_for_active_page(session: &mut CdpSession) {
 }
 
 async fn run_page_script(page: &Page, script: &str) -> Result<(), String> {
+    run_page_script_in_context(page, script, page_agent_context(page).await?).await
+}
+
+async fn run_page_script_in_context(page: &Page, script: &str, context: ExecutionContextId) -> Result<(), String> {
     let params = EvaluateParams::builder()
+        .context_id(context)
         .expression(format!("(function(){{ {script} \n}})(); void 0;"))
         .return_by_value(false)
         .await_promise(false)
         .build()
         .map_err(map_page_error)?;
-    with_cdp_timeout(page.execute(params))
+    let response = with_cdp_timeout(page.execute(params))
         .await?
         .map_err(map_page_error)?;
+    if response.result.exception_details.is_some() {
+        return Err("Page-agent script failed.".to_string());
+    }
     Ok(())
 }
 
@@ -836,6 +921,7 @@ async fn tab_action(
                     .map_err(map_page_error)?;
                 session.active_target_id = next.target_id().as_ref().to_string();
                 session.page = next;
+                reinstall_page_agent_for_active_page(session).await;
             }
             Ok(serde_json::json!({
                 "action": params.action,
@@ -854,8 +940,7 @@ async fn disconnect_inner(state: &BrowserState) -> Result<(), String> {
     let mut guard = state.session.lock().await;
     if let Some(mut session) = guard.take() {
         if let Some(runtime) = session.page_agent.take() {
-            runtime.listener_task.abort();
-            runtime.load_task.abort();
+            teardown_page_agent(&session.page, runtime).await;
         }
         if session.launched {
             let _ = session.browser.close().await;
@@ -1232,6 +1317,19 @@ fn terminate_launched_child(child: &mut Child) {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn page_agent_binding_is_scoped_to_its_isolated_world() {
+        assert_eq!(super::page_agent_binding_params().execution_context_name.as_deref(), Some(super::PAGE_AGENT_WORLD));
+    }
+
+    #[test]
+    fn page_agent_navigation_rejects_privileged_schemes_and_credentials() {
+        for url in ["file:///secret", "javascript:alert(1)", "data:text/html,test", "chrome://settings", "https://user:secret@example.org"] {
+            assert!(super::validate_page_agent_url(url).is_err(), "{url}");
+        }
+        assert!(super::validate_page_agent_url("https://example.org/path").is_ok());
+        assert!(super::validate_page_agent_url("http://localhost:8080/").is_ok());
+    }
     use super::*;
 
     #[test]

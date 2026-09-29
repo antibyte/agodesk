@@ -57,6 +57,7 @@ import {
   normalizeChatSessionPayload,
   normalizeChatCancelledPayload,
   normalizeChatAudioPayload,
+  sanitizeServerMediaRef,
   filterVisibleChatSessions,
   extractConversationIdFromPayload,
   requiresLocalDesktopApproval,
@@ -874,6 +875,68 @@ test("normalizeChatMediaPayload parst flaches und verschachteltes Item", () => {
   });
   assert.equal(flat?.item.kind, "link");
   assert.equal(flat?.item.url, "https://example.com");
+});
+
+test("sanitizeServerMediaRef repariert beschaedigte Server-Referenzen", () => {
+  assert.equal(
+    sanitizeServerMediaRef("/api/agodesk/media/audio/a.mp3&?agodesk_exp=1&agodesk_sig=x"),
+    "/api/agodesk/media/audio/a.mp3?agodesk_exp=1&agodesk_sig=x",
+  );
+  assert.equal(
+    sanitizeServerMediaRef("/api/agodesk/media/audio/a.mp3\\u0026?agodesk_exp=1&agodesk_sig=x"),
+    "/api/agodesk/media/audio/a.mp3?agodesk_exp=1&agodesk_sig=x",
+  );
+  assert.equal(
+    sanitizeServerMediaRef("/api/agodesk/media/audio/a.mp3%5Cu0026?agodesk_exp=1"),
+    "/api/agodesk/media/audio/a.mp3?agodesk_exp=1",
+  );
+  assert.equal(
+    sanitizeServerMediaRef("https://h/api/agodesk/media/a.png?agodesk_exp=1&amp;agodesk_sig=x"),
+    "https://h/api/agodesk/media/a.png?agodesk_exp=1&agodesk_sig=x",
+  );
+  assert.equal(sanitizeServerMediaRef("/api/agodesk/media/a.png?&"), "/api/agodesk/media/a.png");
+  assert.equal(
+    sanitizeServerMediaRef("/api/agodesk/media/audio/a.mp3%60?agodesk_exp=1&agodesk_sig=x"),
+    "/api/agodesk/media/audio/a.mp3?agodesk_exp=1&agodesk_sig=x",
+  );
+  assert.equal(
+    sanitizeServerMediaRef("/api/agodesk/media/audio/a.mp3`?agodesk_exp=1&agodesk_sig=x"),
+    "/api/agodesk/media/audio/a.mp3?agodesk_exp=1&agodesk_sig=x",
+  );
+  // Intakte Referenzen und Nicht-URLs bleiben unveraendert.
+  assert.equal(
+    sanitizeServerMediaRef("/api/agodesk/media/a.png?agodesk_exp=1&agodesk_sig=x"),
+    "/api/agodesk/media/a.png?agodesk_exp=1&agodesk_sig=x",
+  );
+  assert.equal(
+    sanitizeServerMediaRef("C:\\users\\andre\\u1234.mp3"),
+    "C:\\users\\andre\\u1234.mp3",
+  );
+  assert.equal(sanitizeServerMediaRef("music.mp3&"), "music.mp3&");
+});
+
+test("normalizeChatMediaPayload und normalizeChatAudioPayload bereinigen Pfade", () => {
+  const media = normalizeChatMediaPayload({
+    conversation_id: "sess-abc",
+    item: {
+      kind: "audio",
+      path: "/api/agodesk/media/audio/m.mp3&?agodesk_exp=1&agodesk_sig=x",
+      preview_url: "/api/agodesk/media/audio/m.mp3\\u0026?agodesk_exp=1&agodesk_sig=x",
+    },
+  });
+  assert.equal(media?.item.path, "/api/agodesk/media/audio/m.mp3?agodesk_exp=1&agodesk_sig=x");
+  assert.equal(
+    media?.item.preview_url,
+    "/api/agodesk/media/audio/m.mp3?agodesk_exp=1&agodesk_sig=x",
+  );
+
+  const audio = normalizeChatAudioPayload({
+    session_id: "s",
+    conversation_id: "c",
+    request_id: "r",
+    path: "/api/agodesk/media/audio/m.mp3&?agodesk_exp=1&agodesk_sig=x",
+  });
+  assert.equal(audio?.path, "/api/agodesk/media/audio/m.mp3?agodesk_exp=1&agodesk_sig=x");
 });
 
 test("normalizeChatMediaPayload mappt agent_path auf path", () => {

@@ -40,7 +40,6 @@ tauri-plugin-updater = "2"
 tauri-plugin-process = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-keyring = "3"
 whoami = "2"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time", "net", "io-util"] }
 tokio-tungstenite = { version = "0.26", features = ["native-tls"] }
@@ -76,7 +75,7 @@ ort-sys = { version = "=2.0.0-rc.7", optional = true, default-features = false }
 rand = { version = "0.8", optional = true }
 rand_distr = { version = "0.4", optional = true }
 unicode-normalization = { version = "0.1", optional = true }
-fff-search = "0.9"
+fff-search = "0.11"
 regex = "1"
 
 # RUSTSEC-2024-0429 / GHSA-wrw7-89jp-8q8g: backport VariantStrIter fix onto glib 0.18.5
@@ -85,6 +84,7 @@ regex = "1"
 glib = { path = "vendor/glib-0.18.5-patched" }
 
 [target.'cfg(windows)'.dependencies]
+keyring = { version = "3", features = ["windows-native"] }
 windows = { version = "0.58", features = [
   "Win32_Foundation",
   "Win32_Graphics_Gdi",
@@ -103,11 +103,13 @@ uiautomation = { version = "0.25", default-features = false, features = ["input"
 libc = "0.2"
 
 [target.'cfg(target_os = "linux")'.dependencies]
+keyring = { version = "3", features = ["sync-secret-service", "crypto-rust", "vendored"] }
 xcap = "0.0.14"
 atspi = { version = "0.30", default-features = true, features = ["tokio"] }
 zbus = { version = "5", default-features = false, features = ["tokio"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
+keyring = { version = "3", features = ["apple-native"] }
 xcap = "0.0.14"
 objc2 = "0.5"
 objc2-foundation = "0.2"

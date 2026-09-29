@@ -46,8 +46,8 @@ test("resolveLocale erkennt navigator.language", () => {
   }
 });
 
-test("loadMessages fallback: leere fr-Locale nutzt en/de", () => {
-  const fr = loadMessages("fr");
+test("loadMessages loads French on demand", async () => {
+  const fr = await loadMessages("fr");
   assert.equal(fr["settings.title"], "Paramètres");
   assert.equal(fr["chatFormat.day.today"], "Aujourd'hui");
 });

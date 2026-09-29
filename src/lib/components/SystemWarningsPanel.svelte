@@ -5,11 +5,7 @@
   import UpdateBanner from "./UpdateBanner.svelte";
   import ChatPlanFloatingPanel from "./ChatPlanFloatingPanel.svelte";
   import ActivityTimelinePanel from "./ActivityTimelinePanel.svelte";
-  import type {
-    AgentActivityPayload,
-    AgoDeskPlan,
-    SystemWarning,
-  } from "../types/protocol";
+  import type { AgentActivityPayload, AgoDeskPlan, SystemWarning } from "../types/protocol";
   import type { InboxItem } from "../services/chrome-placement";
   import type { UpdateStatus } from "../services/update-flow";
   import { formatMessageTime } from "../services/chat-format";
@@ -127,7 +123,11 @@
         {#if warnings.length > 0}
           <ul class="warning-list">
             {#each warnings as warning (warning.id)}
-              <li class="warning-item" data-severity={warning.severity} data-ack={warning.acknowledged}>
+              <li
+                class="warning-item"
+                data-severity={warning.severity}
+                data-ack={warning.acknowledged}
+              >
                 <div class="warning-head">
                   <span class="severity">{severityLabel(warning.severity)}</span>
                   {#if warning.category}

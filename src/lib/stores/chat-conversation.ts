@@ -3,6 +3,7 @@ import type { ChatSessionSummary } from "../types/protocol";
 import { filterVisibleChatSessions, isVisibleChatSession } from "../types/protocol";
 
 export interface ChatConversationState {
+  switching: boolean;
   activeConversationId: string | null;
   activeRequestId: string | null;
   requestInFlight: boolean;
@@ -17,6 +18,7 @@ export interface ChatConversationState {
 }
 
 const initialState: ChatConversationState = {
+  switching: false,
   activeConversationId: null,
   activeRequestId: null,
   requestInFlight: false,
@@ -34,6 +36,9 @@ function createChatConversationStore() {
 
   return {
     subscribe,
+    setSwitching(switching: boolean): void {
+      update((state) => ({ ...state, switching }));
+    },
     reset(): void {
       set({ ...initialState });
     },
@@ -89,7 +94,7 @@ function createChatConversationStore() {
         requestInFlight: false,
         stoppedRequestIds: state.stoppedRequestIds.includes(requestId)
           ? state.stoppedRequestIds
-          : [...state.stoppedRequestIds, requestId],
+          : [...state.stoppedRequestIds, requestId].slice(-256),
       }));
     },
     markServerAudio(requestId: string): void {

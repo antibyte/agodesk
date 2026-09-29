@@ -24,9 +24,17 @@ import { resetDesktopStreamState } from "./desktop-stream";
 import { handleDesktopCommand } from "./session-flow";
 import { handleIncomingShellCommand, resetShellCommandState } from "./shell-flow";
 
-const pendingInputCommands: DesktopCommandPayload[] = [];
+interface PendingInputCommand {
+  command: DesktopCommandPayload;
+  wsSend: DesktopResultSender;
+  context: DesktopCommandContext;
+  signal?: AbortSignal;
+}
+const pendingInputCommands: PendingInputCommand[] = [];
+let desktopGeneration = 0;
 
 export function resetDesktopCommandState(): void {
+  desktopGeneration += 1;
   pendingInputCommands.length = 0;
   resetDesktopStreamState();
   resetShellCommandState();
@@ -58,8 +66,10 @@ export async function handleIncomingDesktopCommand(
     deviceId: string;
     wsSend: DesktopResultSender;
     onRemoteControlPrompt?: (operation: string) => void;
+    signal?: AbortSignal;
   },
 ): Promise<void> {
+  if (context.signal?.aborted) return;
   const command =
     normalizeDesktopCommandPayload(message.payload) ?? (message.payload as DesktopCommandPayload);
 
@@ -109,6 +119,7 @@ export async function handleIncomingDesktopCommand(
 
   if (isShellOperation(command.operation)) {
     await handleIncomingShellCommand(command, context.wsSend, desktopContext, {
+      signal: context.signal,
       onApprovalPrompt: () => {
         context.onRemoteControlPrompt?.(command.operation);
       },
@@ -144,7 +155,22 @@ export async function handleIncomingDesktopCommand(
     requiresLocalDesktopApproval(command.operation, command.params)
   ) {
     if (isDesktopInputOperation(command.operation)) {
-      pendingInputCommands.push(command);
+      pendingInputCommands.push({
+        command,
+        wsSend: context.wsSend,
+        context: desktopContext,
+        signal: context.signal,
+      });
+      context.signal?.addEventListener(
+        "abort",
+        () => {
+          const index = pendingInputCommands.findIndex(
+            (entry) => entry.command.command_id === command.command_id,
+          );
+          if (index >= 0) pendingInputCommands.splice(index, 1);
+        },
+        { once: true },
+      );
       return;
     }
   }
@@ -153,31 +179,29 @@ export async function handleIncomingDesktopCommand(
 }
 
 export async function flushPendingInputCommands(
-  wsSend: DesktopResultSender,
+  _wsSend: DesktopResultSender,
   approved: boolean,
-  desktopContext: DesktopCommandContext = {},
+  _desktopContext: DesktopCommandContext = {},
 ): Promise<void> {
+  const generation = desktopGeneration;
   const queue = pendingInputCommands.splice(0, pendingInputCommands.length);
   if (queue.length === 0) {
     return;
   }
 
-  if (!approved) {
-    const t = getTranslateFn();
-    for (const command of queue) {
+  for (const entry of queue) {
+    if (generation !== desktopGeneration || entry.signal?.aborted) continue;
+    if (!approved) {
       await rejectCommand(
-        wsSend,
-        command,
+        entry.wsSend,
+        entry.command,
         "DESKTOP_INPUT_DENIED",
-        t("desktopFlow.error.inputDenied"),
-        desktopContext,
+        getTranslateFn()("desktopFlow.error.inputDenied"),
+        entry.context,
       );
+    } else {
+      await executeDesktopCommand(entry.wsSend, entry.command, { context: entry.context });
     }
-    return;
-  }
-
-  for (const command of queue) {
-    await executeDesktopCommand(wsSend, command, { context: desktopContext });
   }
 }
 
@@ -189,6 +213,7 @@ export async function rejectPendingInputCommands(
 }
 
 export function clearRemoteControlState(): void {
+  desktopGeneration += 1;
   pendingInputCommands.length = 0;
   sessionState.setRemoteControlPending(false);
   sessionState.setRemoteControlActive(false);

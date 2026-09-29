@@ -32,8 +32,9 @@
     "build:win-installer": "npm run build:win",
     "build:linux": "npm run build && npm run build:sidecar && node scripts/build-linux-bundles.mjs",
     "icons:generate": "npm run tauri -- icon src-tauri/icons/app-icon.svg -o src-tauri/icons",
-    "test": "node --import tsx --test src/lib/**/*.test.ts",
-    "test:mock-attachments": "node scripts/test-mock-attachment-flow.mjs"
+    "test": "node --import tsx --test \"src/lib/**/*.test.ts\" \"scripts/*.test.mjs\"",
+    "test:mock-attachments": "node scripts/test-mock-attachment-flow.mjs",
+    "test:browser-security": "node scripts/test-browser-security.mjs"
   },
   "dependencies": {
     "@ricky0123/vad-web": "^0.0.7",
@@ -62,6 +63,7 @@
     "eslint-plugin-svelte": "^2.46.1",
     "globals": "^15.14.0",
     "page-agent": "^1.12.2",
+    "playwright": "^1.63.0",
     "prettier": "^3.4.2",
     "prettier-plugin-svelte": "^3.3.3",
     "svelte": "^5.0.0",

@@ -151,6 +151,11 @@
     color: var(--color-footnote);
     opacity: 0.78;
     font-variant-numeric: tabular-nums;
+    transition: opacity var(--transition-fast);
+  }
+
+  .message-row:hover .bubble time {
+    opacity: 1;
   }
 
   .user .bubble time {
@@ -162,6 +167,11 @@
     color: var(--color-user-text);
     box-shadow: var(--accent-glow);
     border: 1px solid color-mix(in srgb, var(--aurora-2) 28%, transparent);
+    transition: filter var(--transition-fast);
+  }
+
+  .message-row.user:hover .bubble {
+    filter: brightness(1.04);
   }
 
   .user .bubble.tail-user {

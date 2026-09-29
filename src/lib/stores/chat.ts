@@ -36,6 +36,16 @@ function createChatStore() {
 
   return {
     subscribe,
+    replaceMessages(messages: ChatMessage[]): void {
+      seenIds.clear();
+      streamingByRequestId.clear();
+      const next = messages.slice(-MAX_CHAT_MESSAGES).filter((message) => {
+        if (seenIds.has(message.id)) return false;
+        seenIds.add(message.id);
+        return true;
+      });
+      set(next);
+    },
     addMessage(message: ChatMessage): void {
       if (seenIds.has(message.id)) {
         return;

@@ -37,11 +37,7 @@
     isUpdateBannerVisible,
     updateState,
   } from "../services/update-flow";
-  import {
-    countInboxBadge,
-    deriveInboxItems,
-    selectApproval,
-  } from "../services/chrome-placement";
+  import { countInboxBadge, deriveInboxItems, selectApproval } from "../services/chrome-placement";
   import { loadSettings, saveSettings, markOnboardingCompleted } from "../services/settings";
   import { applyOpenPetsSettings } from "../services/openpets-flow";
   import { openPetsContext } from "../stores/openpets-context";
@@ -57,13 +53,18 @@
   } from "../services/chat-outbound";
   import { addFilesToKnowledgeArchive } from "../services/knowledge-archive-flow";
   import { cancelVaultSecret, submitVaultSecret } from "../services/vault-secret-prompt-flow";
-  import { localAgentReady, localAgentTurnActive } from "../services/local-agent";
+  import {
+    cancelLocalAgentTurn,
+    localAgentReady,
+    localAgentTurnActive,
+  } from "../services/local-agent";
   import {
     createNewChatConversation,
     loadChatConversation,
   } from "../services/chat-conversation-flow";
   import { chatConversationState } from "../stores/chat-conversation";
   import { chatMediaState } from "../stores/chat-media-state";
+  import { chatMediaPlaybackState } from "../services/chat-media-playback";
   import {
     refreshIntegrationsWebhosts,
     refreshSystemWarnings,
@@ -118,10 +119,7 @@
   import { connectChatWebSocket, createWebSocketService } from "../services/chat-ws-connect";
   import { isChatError } from "../services/websocket";
   import { chatPlanState, isChatPlanPanelVisible } from "../stores/chat-plan";
-  import {
-    activityTimelineState,
-    isActivityTimelineVisible,
-  } from "../stores/activity-timeline";
+  import { activityTimelineState, isActivityTimelineVisible } from "../stores/activity-timeline";
   import { artifactInspectorState, isArtifactInspectorVisible } from "../stores/artifact-inspector";
   import { agentMoodState } from "../stores/agent-mood";
   import { activeSkillState } from "../stores/active-skill";
@@ -189,9 +187,10 @@
   let pageAgentBusy = $state(false);
 
   const chatConversationReady = $derived(
-    !hasAdvertisedChatSessions($sessionState.advertisedCapabilities) ||
-      Boolean($chatConversationState.activeConversationId) ||
-      $chatConversationState.legacyChatMode,
+    !$chatConversationState.switching &&
+      (!hasAdvertisedChatSessions($sessionState.advertisedCapabilities) ||
+        Boolean($chatConversationState.activeConversationId) ||
+        $chatConversationState.legacyChatMode),
   );
 
   const chatSpeakerEnabled = $derived(resolveChatSpeakerMode($settings));
@@ -203,7 +202,11 @@
       chatConversationReady,
   );
 
-  const stopVisible = $derived($chatConversationState.requestInFlight || localAgentTurnActive());
+  const stopVisible = $derived(
+    $chatConversationState.requestInFlight ||
+      localAgentTurnActive() ||
+      $chatMediaPlaybackState.playing,
+  );
 
   const historyEnabled = $derived(hasAdvertisedChatSessions($sessionState.advertisedCapabilities));
 
@@ -795,8 +798,10 @@
   }
 
   async function handleApproveShell(): Promise<void> {
+    const commandId = $shellApprovalState.request?.commandId;
+    if (!commandId) return;
     try {
-      await approvePendingShellCommand();
+      await approvePendingShellCommand(commandId);
       addSystemMessage("chatView.shellApproval.approved", undefined, "success");
     } catch {
       addSystemMessage("chatView.error.shellApprovalFailed", undefined, "error");
@@ -926,19 +931,31 @@
   }
 
   async function handleNewChat(): Promise<void> {
-    if (!historyEnabled || !$sessionState.sessionId) {
+    if (!historyEnabled || !$sessionState.sessionId || $chatConversationState.switching) {
       return;
     }
+    setPendingState(false);
+    cancelLocalAgentTurn();
     chatConversationState.setHistoryOpen(false);
-    await createNewChatConversation(wsService, $sessionState.sessionId);
+    try {
+      await createNewChatConversation(wsService, $sessionState.sessionId);
+    } catch {
+      addSystemMessage("chatOutbound.error.conversationNotReady", undefined, "error");
+    }
   }
 
   async function handleLoadConversation(conversationId: string): Promise<void> {
-    if (!$sessionState.sessionId) {
+    if (!$sessionState.sessionId || $chatConversationState.switching) {
       return;
     }
+    setPendingState(false);
+    cancelLocalAgentTurn();
     chatConversationState.setHistoryOpen(false);
-    await loadChatConversation(wsService, $sessionState.sessionId, conversationId);
+    try {
+      await loadChatConversation(wsService, $sessionState.sessionId, conversationId);
+    } catch {
+      addSystemMessage("chatOutbound.error.conversationNotReady", undefined, "error");
+    }
   }
 
   function handleToggleHistory(): void {
@@ -1138,7 +1155,7 @@
     compact={settingsOpen}
     remotePending={$sessionState.remoteControlPending}
     remoteActive={$sessionState.remoteControlActive}
-    remoteOperation={remoteOperation}
+    {remoteOperation}
     onApproveRemote={() => void handleApproveRemote()}
     onDenyRemote={() => void handleDenyRemote()}
     onStopRemote={() => void handleStopRemote()}
@@ -1149,10 +1166,10 @@
     onApproveShell={() => void handleApproveShell()}
     onDenyShell={() => void handleDenyShell()}
     onStopShellSession={() => void handleStopSessionFromShell()}
-    pairingBusy={pairingBusy}
+    {pairingBusy}
     pairingServerUrl={$settings.serverUrl}
     pairingErrorMessage={$sessionState.errorMessage}
-    pairingFocusRequest={pairingFocusRequest}
+    {pairingFocusRequest}
     onPair={(token) => void handlePair(token)}
     onUnpair={() => void handleUnpair()}
   />

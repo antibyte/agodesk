@@ -8,6 +8,7 @@ const EXPECTED_ICON_FAILURES = [
   "not a recognized image file",
   "HTTP 404",
   "HTTP 403",
+  "ASSET_ORIGIN_DENIED",
   "CERTIFICATE_PIN_MISMATCH",
   "connection refused",
   "Verbindung verweigerte",

@@ -34,6 +34,9 @@ Thumbs.db
 .env.*
 *.pem
 *.key
+# Public, disposable localhost identity used only by TLS regression tests.
+!src-tauri/test-fixtures/asset-tls/cert.pem
+!src-tauri/test-fixtures/asset-tls/key.pem
 .tauri/
 
 # Test / coverage

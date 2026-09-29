@@ -60,14 +60,7 @@ fn run_shell_command(
         .stderr(Stdio::piped());
 
     apply_minimal_environment(&mut command, shell);
-
-    #[cfg(windows)]
-    {
-        use std::os::windows::process::CommandExt;
-        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-        const CREATE_NEW_PROCESS_GROUP: u32 = 0x0000_0200;
-        command.creation_flags(CREATE_NO_WINDOW | CREATE_NEW_PROCESS_GROUP);
-    }
+    configure_shell_process(&mut command);
 
     let mut child = command
         .spawn()
@@ -261,10 +254,28 @@ fn is_valid_utf8_prefix(bytes: &[u8]) -> bool {
     std::str::from_utf8(bytes).is_ok()
 }
 
+pub(crate) fn configure_shell_process(command: &mut Command) {
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        const CREATE_NEW_PROCESS_GROUP: u32 = 0x0000_0200;
+        command.creation_flags(CREATE_NO_WINDOW | CREATE_NEW_PROCESS_GROUP);
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::CommandExt;
+        // kill_process_tree targets this group, including inherited stdout/stdin pipes.
+        command.process_group(0);
+    }
+}
+
 pub(crate) fn kill_process_tree(pid: u32) {
     #[cfg(windows)]
     {
+        use std::os::windows::process::CommandExt;
         let _ = Command::new("taskkill")
+            .creation_flags(0x0800_0000)
             .args(["/PID", &pid.to_string(), "/T", "/F"])
             .stdin(Stdio::null())
             .stdout(Stdio::null())
@@ -284,6 +295,21 @@ pub(crate) fn kill_process_tree(pid: u32) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(unix)]
+    #[test]
+    fn timeout_kills_children_holding_output_pipes() {
+        let started = Instant::now();
+        let result = run_shell_command(ShellExecRequest {
+            command: "sleep 10 & wait".to_string(),
+            cwd: std::env::temp_dir().to_string_lossy().into_owned(),
+            shell: "sh".to_string(),
+            timeout_ms: 100,
+            max_output_bytes: 1024,
+        }, "sh", Duration::from_millis(100));
+        assert!(result.unwrap_err().starts_with("SHELL_TIMEOUT"));
+        assert!(started.elapsed() < Duration::from_secs(3));
+    }
 
     #[test]
     fn read_limited_output_truncates_safely() {

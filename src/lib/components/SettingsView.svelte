@@ -540,6 +540,8 @@
     cyberpunk: ["#00f0ff", "#ff4500", "#faff00"],
     papyrus: ["#5e3c20", "#c9a227", "#e9dec4"],
     chaos: ["#7e22ce", "#9d174d", "#0f766e"],
+    blackgloss: ["#050506", "#2a2b31", "#c9ccd6"],
+    radioactive: ["#0a1402", "#39ff14", "#e8ff00"],
   };
 
   function selectUiTheme(next: UiTheme): void {

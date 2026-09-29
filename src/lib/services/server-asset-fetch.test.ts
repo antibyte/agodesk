@@ -65,6 +65,27 @@ test("buildChatMediaUrlCandidates nutzt signierte Media-URLs unveraendert", () =
   assert.deepEqual(candidates, [`https://aurago.example.com${signed}`]);
 });
 
+test("buildChatMediaUrlCandidates repariert Streu-& zwischen Dateiname und Query", () => {
+  // Echtfall aus asset-fetch.log: Server liefert `…mp3&?agodesk_exp=…` → HTTP 404.
+  const broken =
+    "/api/agodesk/media/audio/music_8c0807c0-889e-46b9-bdfd-16f4aff01930.mp3&?agodesk_exp=1789237789&agodesk_sig=e4a4";
+  const candidates = buildChatMediaUrlCandidates("wss://aurago.example.com/api/agodesk/ws", broken);
+  assert.deepEqual(candidates, [
+    "https://aurago.example.com/api/agodesk/media/audio/music_8c0807c0-889e-46b9-bdfd-16f4aff01930.mp3?agodesk_exp=1789237789&agodesk_sig=e4a4",
+  ]);
+});
+
+test("buildChatMediaUrlCandidates dekodiert literale JSON-Escapes im Pfad", () => {
+  // Echtfall: doppelt kodiertes `&` kommt als literales `\u0026` an.
+  const broken =
+    "/api/agodesk/media/audio/music_8c0807c0.mp3\\u0026?agodesk_exp=1789237785&agodesk_sig=5aa2";
+  const candidates = buildChatMediaUrlCandidates("wss://aurago.example.com/api/agodesk/ws", broken);
+  assert.deepEqual(candidates, [
+    "https://aurago.example.com/api/agodesk/media/audio/music_8c0807c0.mp3?agodesk_exp=1789237785&agodesk_sig=5aa2",
+  ]);
+  assert.equal(isSignedAgodeskMediaPath(broken), true);
+});
+
 test("buildChatMediaUrlCandidates erzeugt keine unsignierten Media-URLs fuer Dateinamen", () => {
   const candidates = buildChatMediaUrlCandidates(
     "wss://aurago.example.com/api/agodesk/ws",

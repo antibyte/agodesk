@@ -22,6 +22,7 @@ const CONVERSATION_READY_TIMEOUT_MS = 15_000;
 const BOOTSTRAP_WATCHDOG_MS = 4_000;
 
 let bootstrapPending = false;
+let transition: { target: string | null; previous: string | null } | null = null;
 let bootstrapRecoveryUsed = false;
 let bootstrapWatchdogTimer: ReturnType<typeof setTimeout> | null = null;
 const conversationReadyWaiters = new Set<(conversationId: string) => void>();
@@ -35,6 +36,8 @@ function clearBootstrapWatchdog(): void {
 }
 
 function resolveConversationReady(conversationId: string): void {
+  transition = null;
+  chatConversationState.setSwitching(false);
   bootstrapPending = false;
   bootstrapRecoveryUsed = false;
   clearBootstrapWatchdog();
@@ -46,6 +49,9 @@ function resolveConversationReady(conversationId: string): void {
 }
 
 function rejectConversationReady(error: Error): void {
+  if (transition) chatConversationState.setActiveConversationId(transition.previous);
+  transition = null;
+  chatConversationState.setSwitching(false);
   bootstrapPending = false;
   clearBootstrapWatchdog();
   for (const reject of conversationReadyRejecters) {
@@ -108,11 +114,11 @@ export function waitForActiveConversation(
   timeoutMs = CONVERSATION_READY_TIMEOUT_MS,
 ): Promise<string> {
   const active = get(chatConversationState).activeConversationId;
-  if (active) {
+  if (active && !bootstrapPending) {
     return Promise.resolve(active);
   }
   const state = get(chatConversationState);
-  if (state.legacyChatMode) {
+  if (state.legacyChatMode && !bootstrapPending) {
     return Promise.resolve("");
   }
 
@@ -191,16 +197,15 @@ export function buildChatCancelMessage(
 }
 
 export function applyLoadedConversationMessages(messages: LoadedConversationMessage[]): void {
-  chatMessages.clearMessages();
-  for (const message of messages) {
-    chatMessages.addMessage({
+  chatMessages.replaceMessages(
+    messages.map((message) => ({
       id: crypto.randomUUID(),
       role: message.role,
       text: message.content,
       timestamp: message.timestamp ?? new Date().toISOString(),
       ...(message.attachments?.length ? { attachments: message.attachments } : {}),
-    });
-  }
+    })),
+  );
 }
 
 function pickBootstrapConversation(
@@ -229,6 +234,7 @@ function activateConversation(
   session?: ChatSessionSummary,
   messages?: LoadedConversationMessage[],
 ): void {
+  const replacing = transition !== null;
   if (conversationId) {
     chatConversationState.setActiveConversationId(conversationId);
     void saveLastConversationId(conversationId);
@@ -237,13 +243,27 @@ function activateConversation(
   if (session) {
     chatConversationState.upsertSession(session);
   }
-  resolveConversationReady(conversationId);
-  if (messages) {
-    applyLoadedConversationMessages(messages);
+  if (messages || replacing) {
+    applyLoadedConversationMessages(messages ?? []);
   }
+  resolveConversationReady(conversationId);
 }
 
 export function applyChatSessionPayload(payload: unknown): boolean {
+  const incomingId = extractConversationIdFromPayload(payload);
+  const current = get(chatConversationState);
+  if (
+    !bootstrapPending &&
+    current.activeConversationId &&
+    incomingId !== current.activeConversationId
+  )
+    return false;
+  if (
+    transition &&
+    (!incomingId ||
+      (transition.target ? incomingId !== transition.target : incomingId === transition.previous))
+  )
+    return false;
   const normalized = normalizeChatSessionPayload(payload);
   if (normalized) {
     activateConversation(normalized.conversation_id, normalized.session, normalized.messages);
@@ -332,6 +352,7 @@ export async function bootstrapChatConversation(
 }
 
 export async function recoverConversationBootstrap(ws: NativeWebSocketService): Promise<boolean> {
+  if (transition) return false;
   if (!bootstrapPending || bootstrapRecoveryUsed) {
     return false;
   }
@@ -367,25 +388,79 @@ export async function tryResolveBootstrapFromMessage(message: WsMessage): Promis
     return false;
   }
 
-  return applyChatSessionPayload(message.payload);
+  return transition ? false : applyChatSessionPayload(message.payload);
+}
+
+async function switchConversation(
+  ws: NativeWebSocketService,
+  sessionId: string,
+  target: string | null,
+): Promise<void> {
+  if (bootstrapPending) throw new Error("conversation_switch_in_progress");
+  const current = { target, previous: get(chatConversationState).activeConversationId };
+  const previousRequest = get(chatConversationState).activeRequestId;
+  transition = current;
+  bootstrapPending = true;
+  clearBootstrapWatchdog();
+  chatConversationState.setSwitching(true);
+  chatConversationState.setActiveConversationId(null);
+  chatConversationState.setLegacyChatMode(false);
+  if (previousRequest) {
+    chatConversationState.markStopped(previousRequest);
+    const partial = get(chatMessages).find(
+      (message) => message.requestId === previousRequest && message.streaming,
+    );
+    if (partial) {
+      chatMessages.finalizeStreamingResponse(
+        previousRequest,
+        partial.text,
+        partial.timestamp,
+        partial.id,
+      );
+    }
+  } else chatConversationState.finishRequest();
+  chatConversationState.clearServerAudioTracking();
+  stopAllChatAssistantTts();
+  const ready = waitForActiveConversation();
+  // Attach the rejection handler before send, which can itself be asynchronous.
+  void ready.catch(() => {});
+  try {
+    if (previousRequest && current.previous) {
+      await ws
+        .send(buildChatCancelMessage(sessionId, current.previous, previousRequest))
+        .catch(() => {});
+    }
+    await ws.send(
+      target
+        ? buildChatSessionLoadMessage(sessionId, target)
+        : buildChatSessionCreateMessage(sessionId),
+    );
+    await ready;
+  } catch (error) {
+    if (transition === current)
+      rejectConversationReady(error instanceof Error ? error : new Error(String(error)));
+    throw error;
+  }
+}
+
+export function isConversationEventCurrent(payload: unknown): boolean {
+  const state = get(chatConversationState);
+  if (state.switching) return false;
+  if (!payload || typeof payload !== "object") return true;
+  const record = payload as Record<string, unknown>;
+  const conversationId = record.conversation_id ?? record.conversationId;
+  const requestId = record.request_id ?? record.requestId;
+  if (typeof requestId === "string" && state.stoppedRequestIds.includes(requestId)) return false;
+  return (
+    !conversationId || !state.activeConversationId || conversationId === state.activeConversationId
+  );
 }
 
 export async function createNewChatConversation(
   ws: NativeWebSocketService,
   sessionId: string,
 ): Promise<void> {
-  chatConversationState.finishRequest();
-  chatMessages.clearMessages();
-  chatConversationState.clearServerAudioTracking();
-  bootstrapPending = true;
-  bootstrapRecoveryUsed = false;
-  scheduleBootstrapWatchdog(ws, sessionId);
-  await ws.send(buildChatSessionCreateMessage(sessionId));
-  try {
-    await waitForActiveConversation();
-  } catch {
-    // Reset or timeout during create — caller may retry.
-  }
+  await switchConversation(ws, sessionId, null);
 }
 
 export async function loadChatConversation(
@@ -393,23 +468,14 @@ export async function loadChatConversation(
   sessionId: string,
   conversationId: string,
 ): Promise<void> {
-  chatConversationState.finishRequest();
-  chatConversationState.clearServerAudioTracking();
-  bootstrapPending = true;
-  bootstrapRecoveryUsed = false;
-  scheduleBootstrapWatchdog(ws, sessionId);
-  await ws.send(buildChatSessionLoadMessage(sessionId, conversationId));
-  try {
-    await waitForActiveConversation();
-  } catch {
-    // Reset or timeout during load — caller may retry.
-  }
+  await switchConversation(ws, sessionId, conversationId);
 }
 
 export async function ensureActiveConversation(
   ws: NativeWebSocketService,
   sessionId: string,
 ): Promise<string | null> {
+  if (bootstrapPending) return waitForActiveConversation();
   const active = get(chatConversationState).activeConversationId;
   if (active) {
     return active;
@@ -423,8 +489,9 @@ export async function ensureActiveConversation(
   await requestConversationCreate(ws, sessionId);
   try {
     return await waitForActiveConversation();
-  } catch {
-    return get(chatConversationState).activeConversationId;
+  } catch (error) {
+    rejectConversationReady(error instanceof Error ? error : new Error(String(error)));
+    throw error;
   }
 }
 
@@ -439,6 +506,7 @@ export function resetChatConversationRuntimeState(): void {
 }
 
 export function isChatConversationReady(advertisedCapabilities: readonly string[]): boolean {
+  if (bootstrapPending) return false;
   if (!hasAdvertisedChatSessions(advertisedCapabilities)) {
     return true;
   }

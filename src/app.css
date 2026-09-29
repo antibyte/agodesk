@@ -487,6 +487,7 @@ select {
   background: color-mix(in srgb, var(--color-accent) 8%, var(--glass-surface));
   border-color: color-mix(in srgb, var(--color-accent) 24%, var(--color-border));
   transform: translateY(-1px);
+  box-shadow: 0 6px 18px color-mix(in srgb, var(--color-accent) 12%, transparent);
 }
 
 .ui-btn.ghost {
@@ -561,6 +562,10 @@ select {
   backdrop-filter: blur(calc(var(--blur) * 0.4));
   -webkit-backdrop-filter: blur(calc(var(--blur) * 0.4));
   letter-spacing: 0.02em;
+  transition:
+    background var(--transition-base),
+    border-color var(--transition-base),
+    color var(--transition-base);
 }
 
 .ui-chip[data-tone="warning"] {
@@ -650,6 +655,9 @@ select {
   border-radius: var(--radius-full);
   background: currentColor;
   box-shadow: 0 0 0 0.24rem color-mix(in srgb, currentColor 12%, transparent);
+  transition:
+    color var(--transition-base),
+    box-shadow var(--transition-base);
 }
 
 .ui-status-orb[data-tone="ready"],

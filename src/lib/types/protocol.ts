@@ -206,7 +206,12 @@ export function normalizeSessionAcceptedPayload(payload: unknown): SessionAccept
   const record = payload as Record<string, unknown>;
   const sessionId = record.session_id ?? record.sessionId;
   const deviceId = record.device_id ?? record.deviceId;
-  if (typeof sessionId !== "string" || typeof deviceId !== "string") {
+  if (
+    typeof sessionId !== "string" ||
+    typeof deviceId !== "string" ||
+    !/^[a-zA-Z0-9_-]{1,128}$/.test(deviceId) ||
+    /^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])$/i.test(deviceId)
+  ) {
     return null;
   }
 
@@ -1335,7 +1340,7 @@ export function normalizeChatAudioPayload(payload: unknown): ChatAudioPayload | 
   const sessionId = readString(record, "session_id", "sessionId");
   const conversationId = readString(record, "conversation_id", "conversationId");
   const requestId = readString(record, "request_id", "requestId");
-  const path = readString(record, "path", "url");
+  const path = readMediaRef(record, "path", "url");
   if (!requestId || !path) {
     return null;
   }
@@ -1353,6 +1358,62 @@ export function normalizeChatAudioPayload(payload: unknown): ChatAudioPayload | 
   };
 }
 
+function looksLikeUrlOrWebPath(value: string): boolean {
+  return value.startsWith("/") || /^https?:\/\//i.test(value);
+}
+
+function stripTrailingMediaPathJunk(path: string): string {
+  return path.replace(/[&?#`'"\s]+$/g, "");
+}
+
+/**
+ * Repariert beschädigte Media-Referenzen vom Server: literale JSON-Escapes
+ * (`\u0026`, auch bereits URL-kodiert als `%5Cu0026`), HTML-Entities (`&amp;`)
+ * sowie Streu-`&`/`?` zwischen Pfad und Query (`file.mp3&?agodesk_exp=…`).
+ * Nicht-URL-Werte (z. B. Agent-Dateipfade mit Backslashes) bleiben unverändert.
+ */
+export function sanitizeServerMediaRef(value: string): string {
+  let ref = value.trim();
+  if (!ref || !looksLikeUrlOrWebPath(ref)) {
+    return ref;
+  }
+
+  ref = ref
+    .replace(/%5Cu([0-9a-fA-F]{4})/gi, (_match, hex: string) =>
+      String.fromCharCode(Number.parseInt(hex, 16)),
+    )
+    .replace(/\\u([0-9a-fA-F]{4})/g, (_match, hex: string) =>
+      String.fromCharCode(Number.parseInt(hex, 16)),
+    )
+    .replace(/&amp;/gi, "&")
+    .replace(/%60/gi, "`")
+    .replace(/%26/gi, "&")
+    .replace(/%3F/gi, "?");
+
+  const queryIndex = ref.indexOf("?");
+  if (queryIndex === -1) {
+    return stripTrailingMediaPathJunk(ref);
+  }
+
+  const pathPart = stripTrailingMediaPathJunk(ref.slice(0, queryIndex));
+  const queryPart = ref
+    .slice(queryIndex + 1)
+    .split("&")
+    .filter((pair) => pair.trim().length > 0)
+    .join("&");
+
+  return queryPart ? `${pathPart}?${queryPart}` : pathPart;
+}
+
+function readMediaRef(record: Record<string, unknown>, ...keys: string[]): string | undefined {
+  const value = readString(record, ...keys);
+  if (value === undefined) {
+    return undefined;
+  }
+  const sanitized = sanitizeServerMediaRef(value);
+  return sanitized.length > 0 ? sanitized : undefined;
+}
+
 function readAgodeskMediaLocation(record: Record<string, unknown>): {
   path?: string;
   agentPath?: string;
@@ -1367,9 +1428,9 @@ function readAgodeskMediaLocation(record: Record<string, unknown>): {
     readString(record, "agent_path", "agentPath") ??
     (metadata ? readString(metadata, "agent_path", "agentPath") : undefined);
   const path =
-    readString(record, "path", "web_path", "webPath", "media_path", "mediaPath") ??
+    readMediaRef(record, "path", "web_path", "webPath", "media_path", "mediaPath") ??
     agentPath ??
-    (metadata ? readString(metadata, "path", "media_path", "mediaPath") : undefined);
+    (metadata ? readMediaRef(metadata, "path", "media_path", "mediaPath") : undefined);
   const storageFilename =
     readString(record, "storage_filename", "storageFilename") ??
     (metadata ? readString(metadata, "storage_filename", "storageFilename") : undefined);
@@ -1453,11 +1514,11 @@ function normalizeChatMediaItem(
   const attachmentId = readString(record, "attachment_id", "attachmentId");
   const artifactId = readString(record, "artifact_id", "artifactId");
   const mediaLocation = readAgodeskMediaLocation(record);
-  const previewUrl = readString(record, "preview_url", "previewUrl");
+  const previewUrl = readMediaRef(record, "preview_url", "previewUrl");
   const preview = readString(record, "preview");
   const content = readString(record, "content");
   const contentRef = readString(record, "content_ref", "contentRef");
-  const url = readString(record, "url");
+  const url = readMediaRef(record, "url");
   const embedUrl = readString(record, "embed_url", "embedUrl");
   const title = readString(record, "title");
   const caption = readString(record, "caption");
@@ -2929,7 +2990,15 @@ export interface ChatMessage {
 export type ThemeMode = "system" | "light" | "dark";
 
 /** Full visual theme (design language), independent of the light/dark mode. */
-export type UiTheme = "aurora" | "minimal" | "blossom" | "cyberpunk" | "papyrus" | "chaos";
+export type UiTheme =
+  | "aurora"
+  | "minimal"
+  | "blossom"
+  | "cyberpunk"
+  | "papyrus"
+  | "chaos"
+  | "blackgloss"
+  | "radioactive";
 
 export const UI_THEMES: readonly UiTheme[] = [
   "aurora",
@@ -2938,6 +3007,8 @@ export const UI_THEMES: readonly UiTheme[] = [
   "cyberpunk",
   "papyrus",
   "chaos",
+  "blackgloss",
+  "radioactive",
 ] as const;
 
 /** Themes that bring a fixed look and ignore the light/dark mode switch. */
@@ -2947,6 +3018,8 @@ export const FIXED_UI_THEMES: readonly UiTheme[] = [
   "cyberpunk",
   "papyrus",
   "chaos",
+  "blackgloss",
+  "radioactive",
 ] as const;
 
 export function normalizeUiTheme(value: unknown): UiTheme {
@@ -2967,7 +3040,9 @@ export type UiSoundTheme =
   | "blossom"
   | "cyberpunk"
   | "papyrus"
-  | "chaos";
+  | "chaos"
+  | "blackgloss"
+  | "radioactive";
 
 export type UiSoundEvent = "send" | "receive" | "success" | "error" | "notice";
 
@@ -3168,6 +3243,8 @@ export const UI_SOUND_THEMES: readonly UiSoundTheme[] = [
   "cyberpunk",
   "papyrus",
   "chaos",
+  "blackgloss",
+  "radioactive",
 ] as const;
 
 export const UI_SOUND_THEME_LABELS: Record<UiSoundTheme, string> = {
@@ -3181,6 +3258,8 @@ export const UI_SOUND_THEME_LABELS: Record<UiSoundTheme, string> = {
   cyberpunk: "Cyberpunk",
   papyrus: "Papyrus",
   chaos: "Chaos",
+  blackgloss: "Black Gloss",
+  radioactive: "Radioactive",
 };
 
 export function normalizeUiSoundTheme(value: unknown): UiSoundTheme {
@@ -3195,6 +3274,8 @@ export const UI_THEME_SOUND: Record<UiTheme, UiSoundTheme> = {
   cyberpunk: "cyberpunk",
   papyrus: "papyrus",
   chaos: "chaos",
+  blackgloss: "blackgloss",
+  radioactive: "radioactive",
 };
 
 export type FileAccessPermission = "read" | "write";

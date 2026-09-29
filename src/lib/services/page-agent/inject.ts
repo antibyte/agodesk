@@ -70,8 +70,8 @@ export async function invokePageAgentExecute(task: string): Promise<void> {
 }
 
 /** CDP navigate for page-agent (skips desktop input approval, soft-ensures after load). */
-export async function invokePageAgentNavigate(url: string): Promise<void> {
-  await invoke("browser_page_agent_navigate", { url });
+export async function invokePageAgentNavigate(requestId: string, url: string): Promise<void> {
+  await invoke("browser_page_agent_navigate", { requestId, url });
 }
 
 /** Soft-ensure page-agent is present and the panel input is visible after navigation. */

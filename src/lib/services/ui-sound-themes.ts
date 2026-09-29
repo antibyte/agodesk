@@ -480,6 +480,141 @@ const chaos: UiSoundThemeDefinition = {
   },
 };
 
+/* Black Gloss: tiefe, glatte Sinus-Tropfen auf Lack — kurzer Anschlag, weiches Ausklingen. */
+const blackgloss: UiSoundThemeDefinition = {
+  baseGain: 0.7,
+  events: {
+    send: [
+      {
+        freq: 520,
+        type: "sine",
+        startOffset: 0,
+        attack: 0.003,
+        decay: 0.09,
+        peakGain: 0.11,
+        freqEnd: 780,
+      },
+    ],
+    receive: [
+      {
+        freq: 392,
+        type: "sine",
+        startOffset: 0,
+        attack: 0.004,
+        decay: 0.115,
+        peakGain: 0.12,
+        freqEnd: 330,
+      },
+      { freq: 784, type: "sine", startOffset: 0.02, attack: 0.003, decay: 0.05, peakGain: 0.04 },
+    ],
+    success: [
+      { freq: 440, type: "sine", startOffset: 0, attack: 0.004, decay: 0.08, peakGain: 0.1 },
+      { freq: 660, type: "sine", startOffset: 0.07, attack: 0.004, decay: 0.11, peakGain: 0.1 },
+    ],
+    error: [
+      {
+        freq: 196,
+        type: "triangle",
+        startOffset: 0,
+        attack: 0.004,
+        decay: 0.115,
+        peakGain: 0.12,
+        freqEnd: 150,
+      },
+    ],
+    notice: [
+      { freq: 587, type: "sine", startOffset: 0, attack: 0.004, decay: 0.09, peakGain: 0.1 },
+    ],
+  },
+};
+
+/* Radioactive: Geigerzähler-Knistern — kurze Rausch-Klicks plus giftig-schnarrende Sägezahn-Töne. */
+const radioactive: UiSoundThemeDefinition = {
+  baseGain: 0.85,
+  events: {
+    send: [
+      { freq: 3000, type: "noise", startOffset: 0, attack: 0.001, decay: 0.018, peakGain: 0.09 },
+      { freq: 3000, type: "noise", startOffset: 0.03, attack: 0.001, decay: 0.014, peakGain: 0.07 },
+      {
+        freq: 880,
+        type: "sawtooth",
+        startOffset: 0.02,
+        attack: 0.002,
+        decay: 0.07,
+        peakGain: 0.06,
+        freqEnd: 1320,
+      },
+    ],
+    receive: [
+      { freq: 3000, type: "noise", startOffset: 0, attack: 0.001, decay: 0.016, peakGain: 0.08 },
+      {
+        freq: 3000,
+        type: "noise",
+        startOffset: 0.045,
+        attack: 0.001,
+        decay: 0.016,
+        peakGain: 0.08,
+      },
+      { freq: 3000, type: "noise", startOffset: 0.07, attack: 0.001, decay: 0.012, peakGain: 0.06 },
+      {
+        freq: 660,
+        type: "triangle",
+        startOffset: 0.03,
+        attack: 0.003,
+        decay: 0.09,
+        peakGain: 0.07,
+        freqEnd: 495,
+      },
+    ],
+    success: [
+      { freq: 3000, type: "noise", startOffset: 0, attack: 0.001, decay: 0.014, peakGain: 0.07 },
+      {
+        freq: 523,
+        type: "sawtooth",
+        startOffset: 0.02,
+        attack: 0.002,
+        decay: 0.06,
+        peakGain: 0.07,
+      },
+      {
+        freq: 784,
+        type: "sawtooth",
+        startOffset: 0.08,
+        attack: 0.002,
+        decay: 0.09,
+        peakGain: 0.07,
+        freqEnd: 1046,
+      },
+    ],
+    error: [
+      { freq: 3000, type: "noise", startOffset: 0, attack: 0.001, decay: 0.02, peakGain: 0.1 },
+      { freq: 3000, type: "noise", startOffset: 0.025, attack: 0.001, decay: 0.02, peakGain: 0.1 },
+      { freq: 3000, type: "noise", startOffset: 0.05, attack: 0.001, decay: 0.02, peakGain: 0.1 },
+      {
+        freq: 240,
+        type: "sawtooth",
+        startOffset: 0.03,
+        attack: 0.002,
+        decay: 0.115,
+        peakGain: 0.09,
+        freqEnd: 110,
+      },
+    ],
+    notice: [
+      { freq: 3000, type: "noise", startOffset: 0, attack: 0.001, decay: 0.016, peakGain: 0.08 },
+      {
+        freq: 740,
+        type: "triangle",
+        startOffset: 0.02,
+        attack: 0.003,
+        decay: 0.07,
+        peakGain: 0.07,
+        freqEnd: 988,
+      },
+    ],
+  },
+};
+
 export const UI_SOUND_THEME_DEFINITIONS: Record<UiSoundTheme, UiSoundThemeDefinition> = {
   soft,
   classic,
@@ -491,4 +626,6 @@ export const UI_SOUND_THEME_DEFINITIONS: Record<UiSoundTheme, UiSoundThemeDefini
   cyberpunk,
   papyrus,
   chaos,
+  blackgloss,
+  radioactive,
 };

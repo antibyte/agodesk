@@ -26,19 +26,115 @@ use std::sync::Arc;
 use tauri::{AppHandle, Emitter, Manager, State};
 use tokio::sync::Mutex;
 
-/// Restrict fallback secret files to owner-read/write on Unix (0600).
-#[cfg(unix)]
-fn restrict_secret_file_permissions(path: &Path) {
-    use std::os::unix::fs::PermissionsExt;
-    if let Ok(metadata) = fs::metadata(path) {
-        let mut perms = metadata.permissions();
-        perms.set_mode(0o600);
-        let _ = fs::set_permissions(path, perms);
+fn validate_device_id(device_id: &str) -> Result<(), String> {
+    if device_id.is_empty() || device_id.len() > 128
+        || !device_id.bytes().all(|byte| byte.is_ascii_alphanumeric() || byte == b'_' || byte == b'-')
+    {
+        return Err("Invalid device ID.".to_string());
+    }
+    let name = device_id.to_ascii_uppercase();
+    if matches!(name.as_str(), "CON" | "PRN" | "AUX" | "NUL")
+        || (name.len() == 4 && (name.starts_with("COM") || name.starts_with("LPT"))
+            && matches!(name.as_bytes()[3], b'1'..=b'9'))
+    {
+        return Err("Reserved device ID.".to_string());
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod credential_tests {
+    use super::*;
+
+    #[test]
+    fn device_ids_are_single_safe_segments() {
+        for id in ["", "../gemini_api", "..\\gemini_api", "C:\\key", "NUL", "com1", "lpt9"] {
+            assert!(validate_device_id(id).is_err(), "{id}");
+        }
+        assert!(validate_device_id(&"x".repeat(129)).is_err());
+        assert!(validate_device_id("device_abc-123").is_ok());
+    }
+
+    #[test]
+    fn legacy_secret_migrates_only_after_verified_native_write() {
+        let entry = Entry::new_with_credential(Box::<keyring::mock::MockCredential>::default());
+        let path = std::env::temp_dir().join(format!("agodesk-credential-test-{}", uuid::Uuid::new_v4()));
+        fs::write(&path, "test-only-key").unwrap();
+        assert_eq!(read_secret(&entry, &path).unwrap().as_deref(), Some("test-only-key"));
+        assert!(!path.exists());
+        assert_eq!(entry.get_password().unwrap(), "test-only-key");
+        delete_secret(&entry, &path).unwrap();
+        assert!(read_secret(&entry, &path).unwrap().is_none());
+    }
+
+    #[test]
+    fn failed_storage_and_conflicting_secrets_preserve_the_legacy_file() {
+        let entry = Entry::new_with_credential(Box::<keyring::mock::MockCredential>::default());
+        let path = std::env::temp_dir().join(format!("agodesk-credential-test-{}", uuid::Uuid::new_v4()));
+        fs::write(&path, "original").unwrap();
+        let mock = entry.get_credential().downcast_ref::<keyring::mock::MockCredential>().unwrap();
+        mock.set_error(keyring::Error::Invalid("test".to_string(), "unavailable".to_string()));
+        assert!(write_secret(&entry, &path, "new").is_err());
+        assert_eq!(fs::read_to_string(&path).unwrap(), "original");
+        entry.set_password("different").unwrap();
+        assert!(read_secret(&entry, &path).is_err());
+        assert_eq!(fs::read_to_string(&path).unwrap(), "original");
+        fs::remove_file(path).unwrap();
     }
 }
 
-#[cfg(not(unix))]
-fn restrict_secret_file_permissions(_path: &Path) {}
+fn remove_legacy_secret(path: &Path) -> Result<(), String> {
+    match fs::remove_file(path) {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(error.to_string()),
+    }
+}
+
+fn write_secret(entry: &Entry, legacy: &Path, value: &str) -> Result<(), String> {
+    if value.trim().is_empty() {
+        return Err("Secret is empty.".to_string());
+    }
+    entry.set_password(value).map_err(|error| error.to_string())?;
+    if entry.get_password().map_err(|error| error.to_string())? != value {
+        return Err("Credential verification failed; legacy copy retained.".to_string());
+    }
+    remove_legacy_secret(legacy)
+}
+
+fn read_secret(entry: &Entry, legacy: &Path) -> Result<Option<String>, String> {
+    match entry.get_password() {
+        Ok(value) => {
+            // Never remove a different legacy value: it may be newer user work.
+            match fs::read_to_string(legacy) {
+                Ok(legacy_value) if legacy_value != value => {
+                    return Err("Native and legacy credentials differ; legacy copy retained. Save the desired key again.".to_string());
+                }
+                Ok(_) => remove_legacy_secret(legacy)?,
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                Err(error) => return Err(error.to_string()),
+            }
+            Ok(Some(value))
+        }
+        Err(keyring::Error::NoEntry) => {
+            let value = match fs::read_to_string(legacy) {
+                Ok(value) => value,
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+                Err(error) => return Err(error.to_string()),
+            };
+            write_secret(entry, legacy, &value)?;
+            Ok(Some(value))
+        }
+        Err(error) => Err(error.to_string()),
+    }
+}
+
+fn delete_secret(entry: &Entry, legacy: &Path) -> Result<(), String> {
+    match entry.delete_credential() {
+        Ok(()) | Err(keyring::Error::NoEntry) => remove_legacy_secret(legacy),
+        Err(error) => Err(error.to_string()),
+    }
+}
 
 #[derive(Serialize)]
 pub struct HostInfo {
@@ -48,42 +144,14 @@ pub struct HostInfo {
 }
 
 fn keyring_entry(device_id: &str) -> Result<Entry, String> {
-    Entry::new("agodesk", device_id).map_err(|error| error.to_string())
+    validate_device_id(device_id)?;
+    Entry::new("agodesk.devices", device_id).map_err(|error| error.to_string())
 }
 
 fn fallback_key_path(app: &AppHandle, device_id: &str) -> Result<PathBuf, String> {
-    let dir = app
-        .path()
-        .app_config_dir()
-        .map_err(|error| error.to_string())?;
-    let keys_dir = dir.join("shared_keys");
-    fs::create_dir_all(&keys_dir).map_err(|error| error.to_string())?;
-    Ok(keys_dir.join(format!("{device_id}.key")))
-}
-
-fn write_fallback_key(app: &AppHandle, device_id: &str, shared_key: &str) -> Result<(), String> {
-    let path = fallback_key_path(app, device_id)?;
-    fs::write(&path, shared_key).map_err(|error| error.to_string())?;
-    restrict_secret_file_permissions(&path);
-    Ok(())
-}
-
-fn read_fallback_key(app: &AppHandle, device_id: &str) -> Option<String> {
-    let path = fallback_key_path(app, device_id).ok()?;
-    if path.exists() {
-        fs::read_to_string(path).ok()
-    } else {
-        None
-    }
-}
-
-fn delete_fallback_key(app: &AppHandle, device_id: &str) -> Result<(), String> {
-    if let Ok(path) = fallback_key_path(app, device_id) {
-        if path.exists() {
-            fs::remove_file(path).map_err(|error| error.to_string())?;
-        }
-    }
-    Ok(())
+    validate_device_id(device_id)?;
+    Ok(app.path().app_config_dir().map_err(|error| error.to_string())?
+        .join("shared_keys").join(format!("{device_id}.key")))
 }
 
 const GEMINI_KEY_ID: &str = "gemini_api_key";
@@ -93,72 +161,22 @@ fn gemini_keyring_entry() -> Result<Entry, String> {
 }
 
 fn gemini_fallback_path(app: &AppHandle) -> Result<PathBuf, String> {
-    let dir = app
-        .path()
-        .app_config_dir()
-        .map_err(|error| error.to_string())?;
-    Ok(dir.join("gemini_api.key"))
-}
-
-fn write_gemini_fallback_key(app: &AppHandle, api_key: &str) -> Result<(), String> {
-    let path = gemini_fallback_path(app)?;
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|error| error.to_string())?;
-    }
-    fs::write(&path, api_key).map_err(|error| error.to_string())?;
-    restrict_secret_file_permissions(&path);
-    Ok(())
-}
-
-fn read_gemini_fallback_key(app: &AppHandle) -> Option<String> {
-    let path = gemini_fallback_path(app).ok()?;
-    if path.exists() {
-        fs::read_to_string(path).ok()
-    } else {
-        None
-    }
-}
-
-fn delete_gemini_fallback_key(app: &AppHandle) -> Result<(), String> {
-    if let Ok(path) = gemini_fallback_path(app) {
-        if path.exists() {
-            fs::remove_file(path).map_err(|error| error.to_string())?;
-        }
-    }
-    Ok(())
+    Ok(app.path().app_config_dir().map_err(|error| error.to_string())?.join("gemini_api.key"))
 }
 
 #[tauri::command]
 pub fn store_gemini_api_key(app: AppHandle, api_key: String) -> Result<(), String> {
-    let trimmed = api_key.trim();
-    if trimmed.is_empty() {
-        return Err("API key is empty.".to_string());
-    }
-    write_gemini_fallback_key(&app, trimmed)?;
-    if let Ok(entry) = gemini_keyring_entry() {
-        let _ = entry.set_password(trimmed);
-    }
-    Ok(())
+    write_secret(&gemini_keyring_entry()?, &gemini_fallback_path(&app)?, api_key.trim())
 }
 
 #[tauri::command]
 pub fn get_gemini_api_key(app: AppHandle) -> Result<Option<String>, String> {
-    if let Ok(entry) = gemini_keyring_entry() {
-        if let Ok(password) = entry.get_password() {
-            if !password.trim().is_empty() {
-                return Ok(Some(password));
-            }
-        }
-    }
-    Ok(read_gemini_fallback_key(&app))
+    read_secret(&gemini_keyring_entry()?, &gemini_fallback_path(&app)?)
 }
 
 #[tauri::command]
 pub fn delete_gemini_api_key(app: AppHandle) -> Result<(), String> {
-    if let Ok(entry) = gemini_keyring_entry() {
-        let _ = entry.delete_credential();
-    }
-    delete_gemini_fallback_key(&app)
+    delete_secret(&gemini_keyring_entry()?, &gemini_fallback_path(&app)?)
 }
 
 #[tauri::command]
@@ -173,72 +191,22 @@ fn xai_keyring_entry() -> Result<Entry, String> {
 }
 
 fn xai_fallback_path(app: &AppHandle) -> Result<PathBuf, String> {
-    let dir = app
-        .path()
-        .app_config_dir()
-        .map_err(|error| error.to_string())?;
-    Ok(dir.join("xai_api.key"))
-}
-
-fn write_xai_fallback_key(app: &AppHandle, api_key: &str) -> Result<(), String> {
-    let path = xai_fallback_path(app)?;
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|error| error.to_string())?;
-    }
-    fs::write(&path, api_key).map_err(|error| error.to_string())?;
-    restrict_secret_file_permissions(&path);
-    Ok(())
-}
-
-fn read_xai_fallback_key(app: &AppHandle) -> Option<String> {
-    let path = xai_fallback_path(app).ok()?;
-    if path.exists() {
-        fs::read_to_string(path).ok()
-    } else {
-        None
-    }
-}
-
-fn delete_xai_fallback_key(app: &AppHandle) -> Result<(), String> {
-    if let Ok(path) = xai_fallback_path(app) {
-        if path.exists() {
-            fs::remove_file(path).map_err(|error| error.to_string())?;
-        }
-    }
-    Ok(())
+    Ok(app.path().app_config_dir().map_err(|error| error.to_string())?.join("xai_api.key"))
 }
 
 #[tauri::command]
 pub fn store_xai_api_key(app: AppHandle, api_key: String) -> Result<(), String> {
-    let trimmed = api_key.trim();
-    if trimmed.is_empty() {
-        return Err("API key is empty.".to_string());
-    }
-    write_xai_fallback_key(&app, trimmed)?;
-    if let Ok(entry) = xai_keyring_entry() {
-        let _ = entry.set_password(trimmed);
-    }
-    Ok(())
+    write_secret(&xai_keyring_entry()?, &xai_fallback_path(&app)?, api_key.trim())
 }
 
 #[tauri::command]
 pub fn get_xai_api_key(app: AppHandle) -> Result<Option<String>, String> {
-    if let Ok(entry) = xai_keyring_entry() {
-        if let Ok(password) = entry.get_password() {
-            if !password.trim().is_empty() {
-                return Ok(Some(password));
-            }
-        }
-    }
-    Ok(read_xai_fallback_key(&app))
+    read_secret(&xai_keyring_entry()?, &xai_fallback_path(&app)?)
 }
 
 #[tauri::command]
 pub fn delete_xai_api_key(app: AppHandle) -> Result<(), String> {
-    if let Ok(entry) = xai_keyring_entry() {
-        let _ = entry.delete_credential();
-    }
-    delete_xai_fallback_key(&app)
+    delete_secret(&xai_keyring_entry()?, &xai_fallback_path(&app)?)
 }
 
 #[tauri::command]
@@ -600,72 +568,22 @@ fn mistral_keyring_entry() -> Result<Entry, String> {
 }
 
 fn mistral_fallback_path(app: &AppHandle) -> Result<PathBuf, String> {
-    let dir = app
-        .path()
-        .app_config_dir()
-        .map_err(|error| error.to_string())?;
-    Ok(dir.join("mistral_api.key"))
-}
-
-fn write_mistral_fallback_key(app: &AppHandle, api_key: &str) -> Result<(), String> {
-    let path = mistral_fallback_path(app)?;
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|error| error.to_string())?;
-    }
-    fs::write(&path, api_key).map_err(|error| error.to_string())?;
-    restrict_secret_file_permissions(&path);
-    Ok(())
-}
-
-fn read_mistral_fallback_key(app: &AppHandle) -> Option<String> {
-    let path = mistral_fallback_path(app).ok()?;
-    if path.exists() {
-        fs::read_to_string(path).ok()
-    } else {
-        None
-    }
-}
-
-fn delete_mistral_fallback_key(app: &AppHandle) -> Result<(), String> {
-    if let Ok(path) = mistral_fallback_path(app) {
-        if path.exists() {
-            fs::remove_file(path).map_err(|error| error.to_string())?;
-        }
-    }
-    Ok(())
+    Ok(app.path().app_config_dir().map_err(|error| error.to_string())?.join("mistral_api.key"))
 }
 
 #[tauri::command]
 pub fn store_mistral_api_key(app: AppHandle, api_key: String) -> Result<(), String> {
-    let trimmed = api_key.trim();
-    if trimmed.is_empty() {
-        return Err("API key is empty.".to_string());
-    }
-    write_mistral_fallback_key(&app, trimmed)?;
-    if let Ok(entry) = mistral_keyring_entry() {
-        let _ = entry.set_password(trimmed);
-    }
-    Ok(())
+    write_secret(&mistral_keyring_entry()?, &mistral_fallback_path(&app)?, api_key.trim())
 }
 
 #[tauri::command]
 pub fn get_mistral_api_key(app: AppHandle) -> Result<Option<String>, String> {
-    if let Ok(entry) = mistral_keyring_entry() {
-        if let Ok(password) = entry.get_password() {
-            if !password.trim().is_empty() {
-                return Ok(Some(password));
-            }
-        }
-    }
-    Ok(read_mistral_fallback_key(&app))
+    read_secret(&mistral_keyring_entry()?, &mistral_fallback_path(&app)?)
 }
 
 #[tauri::command]
 pub fn delete_mistral_api_key(app: AppHandle) -> Result<(), String> {
-    if let Ok(entry) = mistral_keyring_entry() {
-        let _ = entry.delete_credential();
-    }
-    delete_mistral_fallback_key(&app)
+    delete_secret(&mistral_keyring_entry()?, &mistral_fallback_path(&app)?)
 }
 
 #[tauri::command]
@@ -1632,34 +1550,18 @@ fn extract_xai_client_secret(value: &serde_json::Value) -> Option<String> {
 }
 
 #[tauri::command]
-pub fn store_shared_key(
-    app: AppHandle,
-    device_id: String,
-    shared_key: String,
-) -> Result<(), String> {
-    write_fallback_key(&app, &device_id, &shared_key)?;
-    if let Ok(entry) = keyring_entry(&device_id) {
-        let _ = entry.set_password(&shared_key);
-    }
-    Ok(())
+pub fn store_shared_key(app: AppHandle, device_id: String, shared_key: String) -> Result<(), String> {
+    write_secret(&keyring_entry(&device_id)?, &fallback_key_path(&app, &device_id)?, &shared_key)
 }
 
 #[tauri::command]
 pub fn get_shared_key(app: AppHandle, device_id: String) -> Result<Option<String>, String> {
-    if let Ok(entry) = keyring_entry(&device_id) {
-        if let Ok(password) = entry.get_password() {
-            return Ok(Some(password));
-        }
-    }
-    Ok(read_fallback_key(&app, &device_id))
+    read_secret(&keyring_entry(&device_id)?, &fallback_key_path(&app, &device_id)?)
 }
 
 #[tauri::command]
 pub fn delete_shared_key(app: AppHandle, device_id: String) -> Result<(), String> {
-    if let Ok(entry) = keyring_entry(&device_id) {
-        let _ = entry.delete_credential();
-    }
-    delete_fallback_key(&app, &device_id)
+    delete_secret(&keyring_entry(&device_id)?, &fallback_key_path(&app, &device_id)?)
 }
 
 #[tauri::command]
@@ -1872,9 +1774,10 @@ pub async fn browser_page_agent_execute(
 #[tauri::command]
 pub async fn browser_page_agent_navigate(
     state: State<'_, BrowserState>,
+    request_id: String,
     url: String,
 ) -> Result<(), String> {
-    browser::page_agent_navigate(&state, url).await
+    browser::page_agent_navigate(&state, request_id, url).await
 }
 
 #[tauri::command]

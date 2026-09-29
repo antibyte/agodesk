@@ -154,12 +154,12 @@ pub async fn page_agent_execute(_state: &BrowserState, _task: String) -> Result<
 }
 
 #[cfg(feature = "browser-automation")]
-pub async fn page_agent_navigate(state: &BrowserState, url: String) -> Result<(), String> {
-    cdp::page_agent_navigate(state, url).await
+pub async fn page_agent_navigate(state: &BrowserState, request_id: String, url: String) -> Result<(), String> {
+    cdp::page_agent_navigate(state, request_id, url).await
 }
 
 #[cfg(not(feature = "browser-automation"))]
-pub async fn page_agent_navigate(_state: &BrowserState, _url: String) -> Result<(), String> {
+pub async fn page_agent_navigate(_state: &BrowserState, _request_id: String, _url: String) -> Result<(), String> {
     Err(format!(
         "{BROWSER_UNAVAILABLE}: Browser automation is not compiled into this build."
     ))

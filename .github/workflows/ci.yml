@@ -39,6 +39,11 @@ jobs:
       - name: Mock attachment flow
         run: npm run test:mock-attachments
 
+      - name: Browser security regression
+        run: |
+          npx playwright install --with-deps chromium
+          npm run test:browser-security
+
       - name: Build
         run: npm run build
 
@@ -83,11 +88,15 @@ jobs:
           touch src-tauri/bin/agodesk-speech-x86_64-unknown-linux-gnu
 
       - name: Cargo check
-        run: cargo check
+        run: cargo check --locked --all-targets
         working-directory: src-tauri
 
       - name: Cargo clippy
-        run: cargo clippy -- -D warnings
+        run: cargo clippy --locked --all-targets -- -D warnings
+        working-directory: src-tauri
+
+      - name: Cargo tests
+        run: cargo test --locked --all-targets --no-default-features --features browser-automation
         working-directory: src-tauri
 
       - name: Install cargo-audit

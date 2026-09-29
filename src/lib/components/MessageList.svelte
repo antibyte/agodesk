@@ -333,11 +333,22 @@
     backdrop-filter: blur(var(--blur));
     -webkit-backdrop-filter: blur(var(--blur));
     z-index: 2;
+    transition:
+      border-color var(--transition-fast),
+      color var(--transition-fast),
+      transform var(--transition-fast),
+      box-shadow var(--transition-fast);
   }
 
   .scroll-fab:hover {
     border-color: color-mix(in srgb, var(--color-accent) 35%, var(--color-border));
     color: var(--color-accent);
+    transform: translateY(-2px);
+    box-shadow: var(--accent-glow);
+  }
+
+  .scroll-fab:active {
+    transform: translateY(0) scale(0.96);
   }
 
   .scroll-fab:focus-visible {

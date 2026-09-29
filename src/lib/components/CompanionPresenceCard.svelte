@@ -92,6 +92,13 @@
       transform var(--motion-companion);
   }
 
+  .companion-card:hover {
+    transform: translateY(-2px);
+    box-shadow:
+      var(--shadow-companion),
+      0 0 0 1px var(--color-companion-ring);
+  }
+
   .companion-card.compact {
     padding: var(--space-4);
     gap: var(--space-4);
@@ -105,6 +112,11 @@
   .avatar-wrap {
     position: relative;
     display: inline-flex;
+    transition: transform var(--motion-companion);
+  }
+
+  .companion-card:hover .avatar-wrap {
+    transform: translateY(-1px) scale(1.02);
   }
 
   .avatar-aura {
@@ -118,6 +130,11 @@
     );
     animation: aurora-breathe 4.8s ease-in-out infinite;
     pointer-events: none;
+    transition: filter var(--transition-base);
+  }
+
+  .companion-card:hover .avatar-aura {
+    filter: saturate(1.25) brightness(1.1);
   }
 
   .companion-orb {

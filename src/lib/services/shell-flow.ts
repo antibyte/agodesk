@@ -77,6 +77,8 @@ export interface ShellApprovalRequest {
 }
 
 interface PendingShellCommand {
+  request?: ShellApprovalRequest;
+  signal?: AbortSignal;
   command: DesktopCommandPayload;
   params: ShellExecParams;
   context?: DesktopCommandContext;
@@ -92,17 +94,38 @@ export const shellApprovalState = writable<{
 });
 
 const pendingShellCommands: PendingShellCommand[] = [];
+let shellGeneration = 0;
 
 export function resetShellCommandState(): void {
+  shellGeneration += 1;
   pendingShellCommands.length = 0;
   shellApprovalState.set({ pending: false, request: null });
 }
 
 function setShellApproval(request: ShellApprovalRequest | null): void {
+  if (request) {
+    const entry = pendingShellCommands.find(
+      (entry) => entry.command.command_id === request.commandId,
+    );
+    if (entry) entry.request = request;
+    showNextShellApproval();
+    return;
+  }
   shellApprovalState.set({
     pending: request !== null,
     request,
   });
+}
+
+function showNextShellApproval(): void {
+  const request = pendingShellCommands[0]?.request ?? null;
+  shellApprovalState.set({ pending: request !== null, request });
+}
+
+export function cancelPendingShellCommand(commandId: string): void {
+  const index = pendingShellCommands.findIndex((entry) => entry.command.command_id === commandId);
+  if (index >= 0) pendingShellCommands.splice(index, 1);
+  showNextShellApproval();
 }
 
 async function rejectShellCommand(
@@ -175,8 +198,14 @@ export async function handleIncomingShellCommand(
   command: DesktopCommandPayload,
   wsSend: DesktopResultSender,
   context?: DesktopCommandContext,
-  options: { onApprovalPrompt?: () => void } = {},
+  options: { onApprovalPrompt?: () => void; signal?: AbortSignal } = {},
 ): Promise<void> {
+  if (options.signal?.aborted) return;
+  if (pendingShellCommands.some((entry) => entry.command.command_id === command.command_id)) return;
+  const generation = shellGeneration;
+  options.signal?.addEventListener("abort", () => cancelPendingShellCommand(command.command_id), {
+    once: true,
+  });
   const shellSettings = get(settings).shellAccess;
   const caps = get(sessionState).advertisedCapabilities;
   const isSessionOp = command.operation !== "shell_exec";
@@ -234,6 +263,7 @@ export async function handleIncomingShellCommand(
     if (shellSettings.requiresApproval && shellSessionRequiresApproval(command.operation)) {
       pendingShellCommands.push({
         command,
+        signal: options.signal,
         params: { ...params, command: `stdin → ${sessionId}` },
         context,
         wsSend,
@@ -262,6 +292,8 @@ export async function handleIncomingShellCommand(
   }
 
   const validation = await validateShellExecRequest(shellSettings, params, { negotiated });
+  if (generation !== shellGeneration || options.signal?.aborted) return;
+  if (pendingShellCommands.some((entry) => entry.command.command_id === command.command_id)) return;
   if (!validation.ok) {
     auditShellAccess({
       commandId: command.command_id,
@@ -280,7 +312,7 @@ export async function handleIncomingShellCommand(
     (command.operation === "shell_exec" || shellSessionRequiresApproval(command.operation));
 
   if (needsApproval) {
-    pendingShellCommands.push({ command, params, context, wsSend });
+    pendingShellCommands.push({ command, params, context, wsSend, signal: options.signal });
     setShellApproval({
       commandId: command.command_id,
       command: validation.command,
@@ -305,66 +337,47 @@ export async function handleIncomingShellCommand(
   await runValidatedShell(wsSend, command, validation, context);
 }
 
-export async function approvePendingShellCommand(): Promise<void> {
-  const next = pendingShellCommands.shift();
-  if (!next) {
-    setShellApproval(null);
-    return;
-  }
-
-  setShellApproval(null);
+export async function approvePendingShellCommand(commandId: string): Promise<void> {
+  const next = pendingShellCommands[0];
+  if (!next || next.command.command_id !== commandId) return;
+  pendingShellCommands.shift();
+  showNextShellApproval();
+  const generation = shellGeneration;
   const shellSettings = get(settings).shellAccess;
   const caps = get(sessionState).advertisedCapabilities;
-  const isSessionOp = next.command.operation !== "shell_exec";
-  const negotiated = isSessionOp
-    ? hasAdvertisedShellSession(caps) || hasAdvertisedShellExec(caps)
-    : hasAdvertisedShellExec(caps);
+  const negotiated =
+    next.command.operation === "shell_exec"
+      ? hasAdvertisedShellExec(caps)
+      : hasAdvertisedShellSession(caps) || hasAdvertisedShellExec(caps);
 
+  if (next.signal?.aborted) return;
   if (next.command.operation === "shell_session_input") {
-    await executeShellSessionCommand(next.wsSend, next.command, { context: next.context });
-  } else {
-    const validation = await validateShellExecRequest(shellSettings, next.params, { negotiated });
-    if (!validation.ok) {
+    if (!negotiated || !shellAccessIsConfigured(shellSettings)) {
       await rejectShellCommand(
         next.wsSend,
         next.command,
-        validation.code,
-        validation.message,
+        "SHELL_ACCESS_DENIED",
+        getTranslateFn()("shellFlow.error.disabled"),
         next.context,
       );
       return;
     }
-    await runValidatedShell(next.wsSend, next.command, validation, next.context);
+    await executeShellSessionCommand(next.wsSend, next.command, { context: next.context });
+    return;
   }
-
-  if (pendingShellCommands.length > 0) {
-    const queued = pendingShellCommands[0];
-    if (queued.command.operation === "shell_session_input") {
-      const sessionId = String(
-        (queued.command.params as Record<string, unknown> | undefined)?.shell_session_id ?? "",
-      );
-      setShellApproval({
-        commandId: queued.command.command_id,
-        command: `stdin → ${sessionId}`,
-        cwdLabel: sessionId,
-        cwdDisplay: sessionId,
-        timeoutMs: shellSettings.defaultTimeoutMs,
-      });
-      return;
-    }
-    const queuedValidation = await validateShellExecRequest(shellSettings, queued.params, {
-      negotiated,
-    });
-    if (queuedValidation.ok) {
-      setShellApproval({
-        commandId: queued.command.command_id,
-        command: queuedValidation.command,
-        cwdLabel: queuedValidation.cwd.label,
-        cwdDisplay: queuedValidation.cwd.pathDisplay,
-        timeoutMs: queuedValidation.timeoutMs,
-      });
-    }
+  const validation = await validateShellExecRequest(shellSettings, next.params, { negotiated });
+  if (generation !== shellGeneration || next.signal?.aborted) return;
+  if (!validation.ok) {
+    await rejectShellCommand(
+      next.wsSend,
+      next.command,
+      validation.code,
+      validation.message,
+      next.context,
+    );
+    return;
   }
+  await runValidatedShell(next.wsSend, next.command, validation, next.context);
 }
 
 export async function denyPendingShellCommands(

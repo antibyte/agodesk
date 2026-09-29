@@ -22,6 +22,7 @@
   import {
     enqueueChatMediaAudio,
     registerActiveChatMediaElement,
+    stopChatMediaPlayback,
   } from "../services/chat-media-playback";
   import { isInlineImageSrc, resolveInlineImageFallback } from "../services/chat-media-inline";
   import { isInspectableArtifact } from "../types/protocol";
@@ -129,13 +130,26 @@
 
       if (
         mediaItem.kind !== "image" &&
+        mediaItem.kind !== "audio" &&
         !(mediaItem.kind === "document" && (mediaItem.preview_url || mediaItem.path))
       ) {
         return;
       }
 
       try {
-        if (mediaItem.kind === "image") {
+        if (mediaItem.kind === "audio") {
+          const loaded = await loadInlineAsset(mediaItem);
+          if (cancelled) {
+            return;
+          }
+          if (loaded?.startsWith("data:")) {
+            assetDataUrl = loaded;
+            loadError = false;
+          } else {
+            assetDataUrl = null;
+            loadError = true;
+          }
+        } else if (mediaItem.kind === "image") {
           const loaded = await loadInlineAsset(mediaItem);
           if (cancelled) {
             return;
@@ -232,6 +246,10 @@
     enqueueChatMediaAudio(serverUrl, item.conversation_id, item.request_id, path, item.mime_type);
   }
 
+  function handleStopAudio(): void {
+    stopChatMediaPlayback();
+  }
+
   function trackMediaElement(element: HTMLMediaElement): { destroy: () => void } {
     unregisterMedia?.();
     unregisterMedia = registerActiveChatMediaElement(element);
@@ -276,19 +294,26 @@
     {/if}
   {:else if item.kind === "audio"}
     <div class="media-audio">
-      {#if item.path || item.url}
-        <audio controls preload="none" src={resolvedPath || resolvedUrl} use:trackMediaElement
-        ></audio>
+      {#if assetDataUrl}
+        <audio controls preload="metadata" src={assetDataUrl} use:trackMediaElement></audio>
+      {:else if loadError}
+        <p class="media-fallback">{$i18n("chatMedia.audio.unavailable")}</p>
+      {:else}
+        <p class="media-loading">{$i18n("chatMedia.loading")}</p>
       {/if}
       <button type="button" class="ui-btn ui-btn-secondary ui-btn-sm" onclick={handlePlayAudio}>
         {$i18n("chatMedia.audio.playQueue")}
+      </button>
+      <button type="button" class="ui-btn ui-btn-secondary ui-btn-sm" onclick={handleStopAudio}>
+        {$i18n("chatMedia.audio.stop")}
       </button>
     </div>
   {:else if item.kind === "document"}
     {#if previewDataUrl && previewDataUrl.startsWith("data:image/")}
       <img class="media-image" src={previewDataUrl} alt={displayTitle} />
     {:else if previewDataUrl}
-      <iframe class="media-doc-preview" title={displayTitle} src={previewDataUrl}></iframe>
+      <iframe class="media-doc-preview" title={displayTitle} src={previewDataUrl} sandbox=""
+      ></iframe>
     {/if}
   {:else if item.kind === "video" || item.kind === "live_stream"}
     <!-- svelte-ignore a11y_media_has_caption -->

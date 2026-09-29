@@ -510,6 +510,10 @@
     transform: translateY(0) scale(0.99);
   }
 
+  .status-pill:hover .companion-orb-core {
+    transform: scale(1.08);
+  }
+
   .companion-orb {
     position: relative;
     display: grid;
@@ -671,10 +675,23 @@
     font-weight: 700;
     display: grid;
     place-items: center;
+    animation: badge-pop 380ms var(--ease-spring) both;
   }
 
   .action-badge.warning {
     background: var(--color-warning);
+  }
+
+  @keyframes badge-pop {
+    from {
+      opacity: 0;
+      transform: scale(0.4);
+    }
+
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
   }
 
   .compact-only {

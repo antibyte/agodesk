@@ -46,6 +46,28 @@ export function buildPageAgentBootstrap(config: PageAgentBootstrapConfig): strin
 
   var CONFIG = ${settings};
   var pending = Object.create(null);
+  var documentId = Array.from(crypto.getRandomValues(new Uint8Array(16)), function (byte) {
+    return byte.toString(16).padStart(2, "0");
+  }).join("");
+  window.__agodeskPageAgentDocumentId = documentId;
+  var authorizedUntil = 0;
+  window.__agodeskPageAgentTaskActive = false;
+  window.__agodeskPageAgentAuthorize = function () { authorizedUntil = Date.now() + 1000; };
+  function guardPanelEvent(event) {
+    var root = document.getElementById("page-agent-runtime_agent-panel");
+    if (!root || !event.composedPath().includes(root)) return;
+    if (!event.isTrusted) {
+      event.stopImmediatePropagation();
+      event.preventDefault();
+      return;
+    }
+    if (event.type === "click" || event.type === "keydown") {
+      window.__agodeskPageAgentAuthorize();
+    }
+  }
+  ["click", "keydown", "submit", "input"].forEach(function (name) {
+    window.addEventListener(name, guardPanelEvent, true);
+  });
 
   window.__agodeskPageAgentResolve = function (id, ok, payload) {
     var entry = pending[id];
@@ -58,32 +80,54 @@ export function buildPageAgentBootstrap(config: PageAgentBootstrapConfig): strin
     }
   };
 
-  function callBridge(bodyText, signal) {
+  function callBridge(bodyText, signal, navigation) {
     return new Promise(function (resolve, reject) {
+      if (!window.__agodeskPageAgentTaskActive || bodyText.length > 524288 || Object.keys(pending).length >= 8) {
+        reject(new Error("No active task or request limit exceeded."));
+        return;
+      }
       var id = "pa-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2);
       pending[id] = { resolve: resolve, reject: reject };
+      var timer = setTimeout(function () {
+        if (pending[id]) {
+          var entry = pending[id];
+          delete pending[id];
+          entry.reject(new Error("Page-agent request timed out."));
+        }
+      }, 120000);
+      var originalResolve = resolve;
+      var originalReject = reject;
+      function onAbort() {
+        var entry = pending[id];
+        if (!entry) return;
+        delete pending[id];
+        entry.reject(new DOMException("Aborted", "AbortError"));
+      }
+      function cleanup() {
+        clearTimeout(timer);
+        if (signal) signal.removeEventListener("abort", onAbort);
+      }
+      pending[id].resolve = function (value) { cleanup(); originalResolve(value); };
+      pending[id].reject = function (error) { cleanup(); originalReject(error); };
       if (signal) {
         if (signal.aborted) {
-          delete pending[id];
-          reject(new DOMException("Aborted", "AbortError"));
+          onAbort();
           return;
         }
-        signal.addEventListener("abort", function () {
-          if (pending[id]) {
-            delete pending[id];
-            reject(new DOMException("Aborted", "AbortError"));
-          }
-        }, { once: true });
+        signal.addEventListener("abort", onAbort, { once: true });
       }
       try {
         var bridge = window[CONFIG.binding];
         if (typeof bridge !== "function") {
           throw new Error("agodesk page-agent bridge is not available.");
         }
-        bridge(JSON.stringify({ id: id, body: bodyText }));
+        bridge(JSON.stringify(navigation
+          ? { id: id, navigate: navigation.navigate, resumeTask: navigation.resumeTask, documentId: documentId }
+          : { id: id, body: bodyText, documentId: documentId }));
       } catch (error) {
+        var entry = pending[id];
         delete pending[id];
-        reject(error);
+        if (entry) entry.reject(error);
       }
     });
   }
@@ -174,6 +218,7 @@ export function buildPageAgentBootstrap(config: PageAgentBootstrapConfig): strin
             url: z.string().describe("Absolute or host URL, e.g. https://www.amazon.de or amazon.de"),
           }),
           execute: async function (input) {
+            if (!window.__agodeskPageAgentTaskActive) throw new Error("No active page-agent task.");
             var raw = input && typeof input.url === "string" ? input.url.trim() : "";
             if (!raw) {
               throw new Error("go_to_url requires a non-empty url.");
@@ -197,14 +242,11 @@ export function buildPageAgentBootstrap(config: PageAgentBootstrapConfig): strin
             if (typeof resumeTask !== "string") {
               resumeTask = "";
             }
-            bridge(JSON.stringify({
-              id: "nav-" + Date.now().toString(36),
+            await callBridge("{}", undefined, {
               navigate: url,
               resumeTask: resumeTask,
-            }));
-            // Never resolve: navigation destroys this document. Returning would
-            // let the agent invent a follow-up step that never reaches the page.
-            await new Promise(function () {});
+            });
+            // Successful navigation destroys this context; failures reject the tool.
             return "Navigating to " + url;
           },
         });
@@ -217,9 +259,8 @@ export function buildPageAgentBootstrap(config: PageAgentBootstrapConfig): strin
         language: CONFIG.language,
         maxSteps: CONFIG.maxSteps,
         customFetch: agodeskFetch,
-        // Keep script execution available for in-page helpers, but never use it
-        // to change location — that unloads the agent without a CDP resume.
-        experimentalScriptExecutionTool: true,
+        // Model-generated scripts must not gain access to the isolated bridge.
+        experimentalScriptExecutionTool: false,
         customTools: customTools,
         instructions: {
           system:
@@ -229,6 +270,7 @@ export function buildPageAgentBootstrap(config: PageAgentBootstrapConfig): strin
             "Never ask the user to type a URL into the address bar.",
         },
         onAfterTask: function () {
+          window.__agodeskPageAgentTaskActive = false;
           // Native statuschange already expands history (with done text) and
           // shows the next-task input. Only reinforce that — never reset().
           revealPanel(false);
@@ -241,6 +283,17 @@ export function buildPageAgentBootstrap(config: PageAgentBootstrapConfig): strin
           }
         },
       });
+      var execute = agent.execute.bind(agent);
+      agent.execute = function (task) {
+        if (Date.now() > authorizedUntil || window.__agodeskPageAgentTaskActive) {
+          return Promise.reject(new Error("A trusted user action is required to start a task."));
+        }
+        authorizedUntil = 0;
+        window.__agodeskPageAgentTaskActive = true;
+        return Promise.resolve(execute(task)).finally(function () {
+          window.__agodeskPageAgentTaskActive = false;
+        });
+      };
       window.__agodeskPageAgent = agent;
       window.__agodeskPageAgentReveal = revealPanel;
   // Panel starts hidden (page-agent default); reveal so the task input is usable.
@@ -252,6 +305,11 @@ export function buildPageAgentBootstrap(config: PageAgentBootstrapConfig): strin
   }
 
   window.__agodeskPageAgentTeardown = function () {
+    window.__agodeskPageAgentTaskActive = false;
+    authorizedUntil = 0;
+    ["click", "keydown", "submit", "input"].forEach(function (name) {
+      window.removeEventListener(name, guardPanelEvent, true);
+    });
     try {
       var instance = window.__agodeskPageAgent;
       if (instance) {

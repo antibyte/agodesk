@@ -30,7 +30,10 @@ export async function dispatchLocalDesktopOperation(
   operation: DesktopOperation,
   params: Record<string, unknown>,
   onApprovalPrompt?: (operation: string) => void,
+  signal?: AbortSignal,
 ): Promise<LocalDispatchResult> {
+  if (signal?.aborted) return { success: false, error_code: "LOCAL_AGENT_CANCELLED" };
+  const controller = new AbortController();
   const commandId = `local-${crypto.randomUUID()}`;
   const command: DesktopCommandPayload = { command_id: commandId, operation, params };
   const message: WsMessage<DesktopCommandPayload> = {
@@ -49,6 +52,8 @@ export async function dispatchLocalDesktopOperation(
         return;
       }
       settled = true;
+      controller.abort();
+      signal?.removeEventListener("abort", cancel);
       resolve({
         success: false,
         waiting_approval: true,
@@ -56,6 +61,15 @@ export async function dispatchLocalDesktopOperation(
         error_message: getTranslateFn()("localAgent.error.approvalTimeout"),
       });
     }, APPROVAL_WAIT_TIMEOUT_MS);
+    const cancel = () => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      controller.abort();
+      signal?.removeEventListener("abort", cancel);
+      resolve({ success: false, error_code: "LOCAL_AGENT_CANCELLED" });
+    };
+    signal?.addEventListener("abort", cancel, { once: true });
 
     const capturingSend = (resultMessage: WsMessage): void => {
       if (resultMessage.type !== "desktop.result") {
@@ -67,6 +81,7 @@ export async function dispatchLocalDesktopOperation(
       }
       settled = true;
       clearTimeout(timer);
+      signal?.removeEventListener("abort", cancel);
       resolve({
         success: payload.success === true,
         data: payload.data ?? undefined,
@@ -82,12 +97,15 @@ export async function dispatchLocalDesktopOperation(
       deviceId: session.deviceId,
       onRemoteControlPrompt: onApprovalPrompt,
       wsSend: capturingSend,
+      signal: controller.signal,
     }).catch((error: unknown) => {
       if (settled) {
         return;
       }
       settled = true;
       clearTimeout(timer);
+      controller.abort();
+      signal?.removeEventListener("abort", cancel);
       resolve({
         success: false,
         error_code: "LOCAL_AGENT_DISPATCH_FAILED",

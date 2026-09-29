@@ -19,6 +19,7 @@ import { notifyIncomingMessageIfHidden } from "./message-notifications";
 import { cancelAssistantFrontendTts, scheduleAssistantFrontendTts } from "./chat-assistant-tts";
 import {
   applyChatSessionPayload,
+  isConversationEventCurrent,
   bootstrapChatConversation,
   handleChatSessionsListResponse,
   isConversationBootstrapPending,
@@ -381,6 +382,17 @@ export async function handleChatWsMessage(
     }
     return;
   }
+
+  if (
+    (isChatCancelled(message) ||
+      isChatResponseChunk(message) ||
+      isChatResponse(message) ||
+      isChatAudio(message) ||
+      isChatMedia(message) ||
+      isChatPlanUpdate(message)) &&
+    !isConversationEventCurrent(message.payload)
+  )
+    return;
 
   if (isChatCancelled(message)) {
     const normalized = normalizeChatCancelledPayload(message.payload);

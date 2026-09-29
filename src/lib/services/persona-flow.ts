@@ -32,7 +32,8 @@ export function buildPersonaAssetsRequest(
 export async function applyPersonaAssets(payload: unknown, serverUrl: string): Promise<boolean> {
   const normalized = normalizePersonaAssetsPayload(payload);
   if (!normalized) {
-    const record = payload && typeof payload === "object" ? (payload as Record<string, unknown>) : {};
+    const record =
+      payload && typeof payload === "object" ? (payload as Record<string, unknown>) : {};
     void writePersonaDebug({
       stage: "normalize-failed",
       serverUrl,

@@ -32,6 +32,8 @@ let liveSession: ActiveSpeechSession | null = null;
 let audioCapture: SpeechAudioCapture | null = null;
 let activeConnectingSession: ActiveSpeechSession | null = null;
 let bargeDetector: BargeInDetector | null = null;
+let speechGeneration = 0;
+let starting = false;
 
 const MAX_PENDING_AUDIO_CHUNKS = 120;
 
@@ -57,7 +59,7 @@ export function applyAgentMoodToSpeechSession(mood: AgentMoodMetadata): void {
 export const applyAgentMoodToLiveSession = applyAgentMoodToSpeechSession;
 
 export function isSpeechSessionActive(): boolean {
-  return liveSession !== null || activeConnectingSession !== null;
+  return starting || liveSession !== null || activeConnectingSession !== null;
 }
 
 export function isAiSpeaking(): boolean {
@@ -105,7 +107,7 @@ export async function toggleSpeechSession(
 
   options: SpeechSessionOptions,
 ): Promise<void> {
-  if (liveSession || activeConnectingSession) {
+  if (starting || liveSession || activeConnectingSession) {
     await stopSpeechSession();
 
     return;
@@ -123,245 +125,284 @@ export async function toggleSpeechSession(
     return;
   }
 
-  speechState.setProvider(speech.provider);
-  speechState.setAgentMode(Boolean(speech.agentMode));
-  speechState.setStatus("connecting");
-  speechState.setPartialTranscript("");
+  starting = true;
+  const generation = ++speechGeneration;
+  const isCurrent = () => generation === speechGeneration;
+  try {
+    speechState.setProvider(speech.provider);
+    speechState.setAgentMode(Boolean(speech.agentMode));
+    speechState.setStatus("connecting");
+    speechState.setPartialTranscript("");
 
-  let apiKey: string | undefined;
-  if (speechProviderRequiresGeminiApiKey(speech.provider)) {
-    apiKey = (await loadGeminiApiKey()) ?? undefined;
-    if (!apiKey) {
-      speechState.setError(getTranslateFn()("speechFlow.error.noApiKey.gemini_live"));
-      return;
+    let apiKey: string | undefined;
+    if (speechProviderRequiresGeminiApiKey(speech.provider)) {
+      apiKey = (await loadGeminiApiKey()) ?? undefined;
+      if (!isCurrent()) return;
+      if (!apiKey) {
+        speechState.setError(getTranslateFn()("speechFlow.error.noApiKey.gemini_live"));
+        return;
+      }
+    } else if (speechProviderRequiresXaiApiKey(speech.provider)) {
+      // Grok uses native WS with the stored key (API key stays in Tauri).
+      const hasKey = await hasXaiApiKey();
+      if (!isCurrent()) return;
+      if (!hasKey) {
+        speechState.setError(getTranslateFn()("speechFlow.error.noApiKey.grok_voice"));
+        return;
+      }
+    } else if (speechProviderRequiresMistralApiKey(speech.provider)) {
+      // Mistral Voice proxies ASR/TTS through Rust with the stored key.
+      const hasKey = await hasMistralApiKey();
+      if (!isCurrent()) return;
+      if (!hasKey) {
+        speechState.setError(getTranslateFn()("speechFlow.error.noApiKey.mistral_voice"));
+        return;
+      }
     }
-  } else if (speechProviderRequiresXaiApiKey(speech.provider)) {
-    // Grok uses native WS with the stored key (API key stays in Tauri).
-    const hasKey = await hasXaiApiKey();
-    if (!hasKey) {
-      speechState.setError(getTranslateFn()("speechFlow.error.noApiKey.grok_voice"));
-      return;
-    }
-  } else if (speechProviderRequiresMistralApiKey(speech.provider)) {
-    // Mistral Voice proxies ASR/TTS through Rust with the stored key.
-    const hasKey = await hasMistralApiKey();
-    if (!hasKey) {
-      speechState.setError(getTranslateFn()("speechFlow.error.noApiKey.mistral_voice"));
-      return;
-    }
-  }
 
-  const agentContext =
-    speech.agentMode && options.getAgentContext ? options.getAgentContext() : undefined;
+    const agentContext =
+      speech.agentMode && options.getAgentContext ? options.getAgentContext() : undefined;
 
-  const initialMood = get(agentMoodState).mood;
+    const initialMood = get(agentMoodState).mood;
 
-  const session = createActiveSpeechSession(
-    speech,
+    const session = createActiveSpeechSession(
+      speech,
 
-    {
-      onStatus: (status) => {
-        speechState.setStatus(status);
-      },
+      {
+        onStatus: (status) => {
+          if (!isCurrent()) return;
+          speechState.setStatus(status);
+        },
 
-      onPartialTranscript: (text) => {
-        speechState.setPartialTranscript(text);
-      },
+        onPartialTranscript: (text) => {
+          if (!isCurrent()) return;
+          speechState.setPartialTranscript(text);
+        },
 
-      onFinalTranscript: (text) => {
-        if (text.trim()) {
-          speechState.setPartialTranscript("");
-
-          void Promise.resolve(options.onFinalTranscript(text.trim()));
-        }
-      },
-
-      onAssistantText: (text) => {
-        options.onAssistantText?.(text);
-      },
-
-      onToolCalls: async (calls) => {
-        const context = options.getToolContext?.();
-
-        if (!context) {
-          return calls.map((call) => ({
-            id: call.id,
-
-            name: call.name,
-
-            response: {
-              success: false,
-
-              error: getTranslateFn()("speechFlow.error.toolContextUnavailable"),
-            },
-          }));
-        }
-
-        return executeSpeechToolCalls(calls, context);
-      },
-
-      onError: (message) => {
-        if (session instanceof LocalSpeechSession || session instanceof MistralVoiceSession) {
-          speechState.setStatus("listening");
-          speechState.setPartialTranscript(message);
-          window.setTimeout(() => {
+        onFinalTranscript: (text) => {
+          if (!isCurrent()) return;
+          if (text.trim()) {
             speechState.setPartialTranscript("");
-          }, 3000);
+
+            void Promise.resolve(options.onFinalTranscript(text.trim()));
+          }
+        },
+
+        onAssistantText: (text) => {
+          if (!isCurrent()) return;
+          options.onAssistantText?.(text);
+        },
+
+        onToolCalls: async (calls) => {
+          if (!isCurrent()) return [];
+          const context = options.getToolContext?.();
+
+          if (!context) {
+            return calls.map((call) => ({
+              id: call.id,
+
+              name: call.name,
+
+              response: {
+                success: false,
+
+                error: getTranslateFn()("speechFlow.error.toolContextUnavailable"),
+              },
+            }));
+          }
+
+          return executeSpeechToolCalls(calls, context);
+        },
+
+        onError: (message) => {
+          if (!isCurrent()) return;
+          if (session instanceof LocalSpeechSession || session instanceof MistralVoiceSession) {
+            speechState.setStatus("listening");
+            speechState.setPartialTranscript(message);
+            window.setTimeout(() => {
+              if (isCurrent()) speechState.setPartialTranscript("");
+            }, 3000);
+            return;
+          }
+
+          speechState.setError(message);
+
+          void stopSpeechSession();
+        },
+      },
+
+      agentContext,
+
+      initialMood ?? null,
+    );
+
+    activeConnectingSession = session;
+    const capture = new SpeechAudioCapture();
+    audioCapture = capture;
+    const pendingChunks: string[] = [];
+
+    try {
+      await capture.start((chunk) => {
+        if (!isCurrent()) return;
+        if (liveSession?.sendAudio) {
+          liveSession.sendAudio(chunk);
+
           return;
         }
 
-        speechState.setError(message);
+        if (pendingChunks.length >= MAX_PENDING_AUDIO_CHUNKS) {
+          pendingChunks.shift();
+        }
 
-        void stopSpeechSession();
-      },
-    },
+        pendingChunks.push(chunk);
+      });
 
-    agentContext,
-
-    initialMood ?? null,
-  );
-
-  activeConnectingSession = session;
-  const capture = new SpeechAudioCapture();
-  const pendingChunks: string[] = [];
-
-  try {
-    await capture.start((chunk) => {
-      if (liveSession?.sendAudio) {
-        liveSession.sendAudio(chunk);
-
+      if (!isCurrent()) {
+        capture.stop();
+        session.disconnect();
         return;
       }
 
-      if (pendingChunks.length >= MAX_PENDING_AUDIO_CHUNKS) {
-        pendingChunks.shift();
+      await session.connect(apiKey ? { apiKey } : undefined);
+      if (!isCurrent()) {
+        capture.stop();
+        session.disconnect();
+        return;
       }
 
-      pendingChunks.push(chunk);
-    });
+      if (activeConnectingSession === session) {
+        liveSession = session;
 
-    audioCapture = capture;
+        activeConnectingSession = null;
 
-    await session.connect(apiKey ? { apiKey } : undefined);
+        registerActiveLocalSpeechSession(session instanceof LocalSpeechSession ? session : null);
 
-    if (activeConnectingSession === session) {
-      liveSession = session;
+        if (session.sendAudio) {
+          for (const chunk of pendingChunks) {
+            session.sendAudio(chunk);
+          }
 
-      activeConnectingSession = null;
-
-      registerActiveLocalSpeechSession(session instanceof LocalSpeechSession ? session : null);
-
-      if (session.sendAudio) {
-        for (const chunk of pendingChunks) {
-          session.sendAudio(chunk);
+          pendingChunks.length = 0;
         }
 
-        pendingChunks.length = 0;
-      }
+        // Barge-in applies to any pipeline with voice playback (Gemini + local TTS).
+        const mode = speech.bargeInMode ?? "auto";
+        const t = getTranslateFn();
+        speechState.setVadLoading(mode !== "energy");
+        speechState.clearVadError();
 
-      // Barge-in applies to any pipeline with voice playback (Gemini + local TTS).
-      const mode = speech.bargeInMode ?? "auto";
-      const t = getTranslateFn();
-      speechState.setVadLoading(mode !== "energy");
-      speechState.clearVadError();
+        let activeVAD: VoiceActivityDetector | undefined;
 
-      let activeVAD: VoiceActivityDetector | undefined;
-
-      if (mode === "energy") {
-        // force energy only
-        activeVAD = undefined;
-        speechState.setVadLoading(false);
-      } else {
-        // auto or silero → try Silero
-        try {
-          const silero = await tryCreateSileroVAD();
-          if (silero) {
-            activeVAD = silero;
-          } else {
-            throw new Error(t("speechFlow.error.vadSileroFailed"));
-          }
-        } catch (e) {
-          const msg = e instanceof Error ? e.message : String(e);
-          console.warn(
-            "Silero VAD initialization failed, falling back to energy-based detection.",
-            e,
-          );
-          speechState.setVadError(t("speechFlow.error.vadSileroFallback", { message: msg }));
+        if (mode === "energy") {
+          // force energy only
           activeVAD = undefined;
-        } finally {
           speechState.setVadLoading(false);
-        }
-      }
-
-      if (mode === "silero" && !activeVAD) {
-        speechState.setVadError(t("speechFlow.error.vadSileroFailed"));
-      }
-
-      const playbackAnalyser = getSpeechPlaybackAnalyser();
-      let playbackSampler: ReturnType<typeof createSpeechAudioSampler> | null = null;
-      if (playbackAnalyser) {
-        playbackSampler = createSpeechAudioSampler(playbackAnalyser);
-      }
-
-      // Start client-side barge-in detector.
-      // Phase 2: uses direct low-latency path via capture VAD processors when possible.
-      bargeDetector?.stop();
-      bargeDetector = createBargeInDetector({
-        getIsAiSpeaking: () => !!liveSession?.isAiSpeaking,
-        onBargeIn: () => {
-          // Immediate local stop of AI voice
-          requestBargeInInterrupt();
-
-          // Give user immediate feedback that we heard them
-          speechState.setPartialTranscript("");
-          speechState.setStatus("listening");
-
-          // Notify the UI layer (ChatView) if they provided a handler
-          options.onBargeIn?.();
-        },
-        energyThreshold: 0.105,
-        minSpeakingSamples: 2,
-        getPlaybackEnergy: () => {
-          if (!playbackSampler) {
-            return 0;
-          }
+        } else {
+          // auto or silero → try Silero
           try {
-            return playbackSampler().energy ?? 0;
-          } catch {
-            return 0;
+            const silero = await tryCreateSileroVAD();
+            if (!isCurrent()) {
+              silero?.reset();
+              return;
+            }
+            if (silero) {
+              activeVAD = silero;
+            } else {
+              throw new Error(t("speechFlow.error.vadSileroFailed"));
+            }
+          } catch (e) {
+            if (!isCurrent()) return;
+            const msg = e instanceof Error ? e.message : String(e);
+            console.warn(
+              "Silero VAD initialization failed, falling back to energy-based detection.",
+              e,
+            );
+            speechState.setVadError(t("speechFlow.error.vadSileroFallback", { message: msg }));
+            activeVAD = undefined;
+          } finally {
+            if (isCurrent()) speechState.setVadLoading(false);
           }
-        },
-        vad: activeVAD,
-      });
+        }
 
-      // Attach direct raw-audio VAD path for low latency (preferred)
-      if (audioCapture && bargeDetector.processRawAudio) {
-        const processRawAudio = bargeDetector.processRawAudio.bind(bargeDetector);
-        audioCapture.addVadProcessor(processRawAudio);
+        if (mode === "silero" && !activeVAD) {
+          speechState.setVadError(t("speechFlow.error.vadSileroFailed"));
+        }
+
+        const playbackAnalyser = getSpeechPlaybackAnalyser();
+        let playbackSampler: ReturnType<typeof createSpeechAudioSampler> | null = null;
+        if (playbackAnalyser) {
+          playbackSampler = createSpeechAudioSampler(playbackAnalyser);
+        }
+
+        // Start client-side barge-in detector.
+        // Phase 2: uses direct low-latency path via capture VAD processors when possible.
+        bargeDetector?.stop();
+        bargeDetector = createBargeInDetector({
+          getIsAiSpeaking: () => !!liveSession?.isAiSpeaking,
+          onBargeIn: () => {
+            // Immediate local stop of AI voice
+            requestBargeInInterrupt();
+
+            // Give user immediate feedback that we heard them
+            speechState.setPartialTranscript("");
+            speechState.setStatus("listening");
+
+            // Notify the UI layer (ChatView) if they provided a handler
+            options.onBargeIn?.();
+          },
+          energyThreshold: 0.105,
+          minSpeakingSamples: 2,
+          getPlaybackEnergy: () => {
+            if (!playbackSampler) {
+              return 0;
+            }
+            try {
+              return playbackSampler().energy ?? 0;
+            } catch {
+              return 0;
+            }
+          },
+          vad: activeVAD,
+        });
+
+        // Attach direct raw-audio VAD path for low latency (preferred)
+        if (audioCapture && bargeDetector.processRawAudio) {
+          const processRawAudio = bargeDetector.processRawAudio.bind(bargeDetector);
+          audioCapture.addVadProcessor(processRawAudio);
+        }
+
+        bargeDetector.start();
       }
+    } catch (error) {
+      capture.stop();
+      session.disconnect();
+      if (isCurrent()) {
+        capture.stop();
+        audioCapture = null;
 
-      bargeDetector.start();
+        session.disconnect();
+
+        activeConnectingSession = null;
+        liveSession = null;
+        registerActiveLocalSpeechSession(null);
+
+        speechState.setError(
+          error instanceof Error
+            ? error.message
+            : getTranslateFn()("speechFlow.error.sessionStartFailed"),
+        );
+      }
     }
   } catch (error) {
-    if (activeConnectingSession === session) {
-      capture.stop();
-      audioCapture = null;
-
-      session.disconnect();
-
-      activeConnectingSession = null;
-      registerActiveLocalSpeechSession(null);
-
-      speechState.setError(
-        error instanceof Error
-          ? error.message
-          : getTranslateFn()("speechFlow.error.sessionStartFailed"),
-      );
-    }
+    if (isCurrent()) speechState.setError(error instanceof Error ? error.message : String(error));
+  } finally {
+    if (isCurrent()) starting = false;
   }
 }
 
 export async function stopSpeechSession(): Promise<void> {
+  speechGeneration += 1;
+  starting = false;
   audioCapture?.stop();
 
   audioCapture = null;

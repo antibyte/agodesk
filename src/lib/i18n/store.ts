@@ -1,7 +1,7 @@
 import { derived, writable, get } from "svelte/store";
 import type { UiLocaleSetting } from "./locales";
 import { localeToBcp47, normalizeLocaleSetting, resolveLocale } from "./locales";
-import { loadMessages } from "./loader";
+import { loadMessages, getDeMessages, getEnMessages } from "./loader";
 import type { Messages } from "./types";
 import type { MessageKey } from "./types";
 import { translate, type TranslateParams } from "./translate";
@@ -9,7 +9,10 @@ import { syncTrayLabels } from "../services/tray";
 
 export const localeSetting = writable<UiLocaleSetting>("system");
 export const activeLocale = derived(localeSetting, ($setting) => resolveLocale($setting));
-export const messages = writable<Messages>(loadMessages(resolveLocale("system")));
+export const messages = writable<Messages>(
+  resolveLocale("system") === "de" ? getDeMessages() : getEnMessages(),
+);
+let localeGeneration = 0;
 
 export const i18n = derived([activeLocale, messages], ([, msgs]) => {
   return (key: MessageKey, params?: TranslateParams): string => translate(msgs, key, params);
@@ -18,10 +21,12 @@ export const i18n = derived([activeLocale, messages], ([, msgs]) => {
 export { normalizeLocaleSetting };
 
 export async function initLocale(setting: UiLocaleSetting): Promise<void> {
+  const generation = ++localeGeneration;
   const normalized = normalizeLocaleSetting(setting);
-  localeSetting.set(normalized);
   const locale = resolveLocale(normalized);
-  const msgs = loadMessages(locale);
+  const msgs = await loadMessages(locale);
+  if (generation !== localeGeneration) return;
+  localeSetting.set(normalized);
   messages.set(msgs);
   if (typeof document !== "undefined") {
     document.documentElement.lang = localeToBcp47(locale);
